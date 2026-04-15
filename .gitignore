@@ -43,3 +43,6 @@ Desktop.ini
 
 # Build tools
 .vite/
+
+# Secret / Private Files
+LICENSE_GENERATOR.html

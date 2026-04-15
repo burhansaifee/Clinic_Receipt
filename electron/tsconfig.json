@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "lib": ["ESNext"],
+    "outDir": "../dist-electron",
+    "skipLibCheck": true,
+    "isolatedModules": true
+  },
+  "include": ["main.ts", "preload.ts"]
+}

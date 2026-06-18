@@ -19,6 +19,7 @@ export default defineConfig({
             rollupOptions: {
               external: [
                 'electron',
+                'electron-updater',
                 'node-machine-id',
                 'electron-store',
                 'better-sqlite3',

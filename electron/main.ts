@@ -7,6 +7,8 @@ import crypto from 'node:crypto'
 import { excelStorage } from './excelStorage'
 import { database } from './database'
 import { shell } from 'electron'
+import pkg from 'electron-updater'
+const { autoUpdater } = pkg
 
 const require = createRequire(import.meta.url)
 const { machineIdSync } = require('node-machine-id')
@@ -204,5 +206,15 @@ app.on('activate', () => {
   }
 })
 
-app.whenReady().then(createWindow)
+app.whenReady().then(() => {
+  createWindow()
+  
+  // Check for updates and notify the user using system notifications
+  autoUpdater.checkForUpdatesAndNotify()
+})
+
+// Automatically install the update when downloaded
+autoUpdater.on('update-downloaded', () => {
+  autoUpdater.quitAndInstall()
+})
 

@@ -28,7 +28,7 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate, 
     setEditingId(null);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     const doctor: Doctor = {
       id: editingId || Date.now().toString(),
@@ -38,7 +38,7 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate, 
       phone,
       address
     };
-    storage.saveDoctor(doctor);
+    await storage.saveDoctor(doctor);
     onUpdate();
     resetForm();
   };
@@ -53,9 +53,9 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate, 
     setIsAdding(true);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm('Are you sure you want to delete this doctor?')) {
-      storage.deleteDoctor(id);
+      await storage.deleteDoctor(id);
       onUpdate();
     }
   };

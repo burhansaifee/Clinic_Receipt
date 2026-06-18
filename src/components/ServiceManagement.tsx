@@ -21,14 +21,14 @@ const ServiceManagement: React.FC<ServiceManagementProps> = ({ services, onUpdat
     setEditingId(null);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     const service: Service = {
       id: editingId || Date.now().toString(),
       name,
       amount
     };
-    storage.saveService(service);
+    await storage.saveService(service);
     onUpdate();
     resetForm();
   };
@@ -40,9 +40,9 @@ const ServiceManagement: React.FC<ServiceManagementProps> = ({ services, onUpdat
     setIsAdding(true);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm('Are you sure you want to delete this service?')) {
-      storage.deleteService(id);
+      await storage.deleteService(id);
       onUpdate();
     }
   };

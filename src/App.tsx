@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, Users, Receipt, PlusCircle, Settings, ShieldCheck, Copy, Calendar, TrendingUp, DownloadCloud, UploadCloud, FileText, Activity, Filter, Briefcase, Printer } from 'lucide-react';
+import { format } from 'date-fns';
+import { LayoutDashboard, Users, Receipt, PlusCircle, Settings, ShieldCheck, Copy, Calendar, TrendingUp, DownloadCloud, UploadCloud, FileText, Activity, Filter, Briefcase, Printer, Trash2, Edit2, FolderOpen, Search } from 'lucide-react';
 
 import { storage, type Doctor, type Receipt as ReceiptType, type Service } from './lib/storage';
 import './index.css';
@@ -21,6 +22,7 @@ const App: React.FC = () => {
   const [activationStatus, setActivationStatus] = useState<{status: 'NOT_ACTIVATED' | 'ACTIVATED' | 'EXPIRED' | 'TAMPERED'; expiryDate?: string} | null>(null);
   const [machineId, setMachineId] = useState<string>('');
   const [isDevMode, setIsDevMode] = useState<boolean>(() => {
+    if (window.location.hostname === 'localhost') return true;
     return localStorage.getItem('medflow_dev_mode') === 'true';
   });
   const [logoClicks, setLogoClicks] = useState(0);
@@ -31,14 +33,20 @@ const App: React.FC = () => {
   // History Filters
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [receiptsToPrint, setReceiptsToPrint] = useState<ReceiptType[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [editingReceipt, setEditingReceipt] = useState<ReceiptType | null>(null);
 
   const filteredReceipts = receipts.filter(r => {
     const rDate = r.date.split(' ')[0];
     const afterStart = !startDate || rDate >= startDate;
     const beforeEnd = !endDate || rDate <= endDate;
-    return afterStart && beforeEnd;
+    const matchesSearch = !searchQuery || 
+      r.patientName.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      (r.patientPhone && r.patientPhone.includes(searchQuery)) ||
+      r.receiptNumber.includes(searchQuery);
+    return afterStart && beforeEnd && matchesSearch;
   });
 
   useEffect(() => {
@@ -48,10 +56,26 @@ const App: React.FC = () => {
       setActivationStatus(result);
     };
 
+    const loadInitialData = async () => {
+      // Migrate to SQLite if needed
+      await storage.migrateToSQLite();
+
+      const receipts = await storage.getReceipts();
+      const doctors = await storage.getDoctors();
+
+      // If database is empty, try loading from Excel
+      if (receipts.length === 0 && doctors.length === 0) {
+        // @ts-ignore
+        const excelData = await window.excelStorage?.loadData();
+        if (excelData) {
+          await storage.importData(JSON.stringify(excelData));
+        }
+      }
+      refreshData();
+    };
+
     checkLicense();
-    setDoctors(storage.getDoctors());
-    setServices(storage.getServices());
-    setReceipts(storage.getReceipts());
+    loadInitialData();
   }, []);
 
   useEffect(() => {
@@ -100,13 +124,14 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isDevMode]);
 
-  const handleSyncDoctors = () => {
+  const handleSyncDoctors = async () => {
     if (!syncKeyInput.trim()) return alert('Please enter a Setup Key');
-    if (storage.batchImportDoctors(syncKeyInput.trim())) {
-      alert('Doctors updated successfully!');
-      window.location.reload();
+    if (await storage.batchImportDoctors(syncKeyInput.trim())) {
+      alert('Doctors synchronized successfully!');
+      setSyncKeyInput('');
+      refreshData();
     } else {
-      alert('Invalid Setup Key. Please check with the developer.');
+      alert('Invalid Setup Key. Please contact the developer.');
     }
   };
 
@@ -134,10 +159,34 @@ const App: React.FC = () => {
     handlePrint(receipts);
   };
 
-  const refreshData = () => {
-    setDoctors(storage.getDoctors());
-    setServices(storage.getServices());
-    setReceipts(storage.getReceipts());
+  const refreshData = async () => {
+    const [d, s, r] = await Promise.all([
+      storage.getDoctors(),
+      storage.getServices(),
+      storage.getReceipts()
+    ]);
+    setDoctors(d);
+    setServices(s);
+    setReceipts(r);
+  };
+
+  const handleDeleteReceipt = (id: string) => {
+    if (confirm('Are you sure you want to delete this receipt? This action cannot be undone.')) {
+      storage.deleteReceipt(id);
+      refreshData();
+      if (selectedIds.has(id)) {
+        setSelectedIds(prev => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      }
+    }
+  };
+
+  const handleEditReceipt = (receipt: ReceiptType) => {
+    setEditingReceipt(receipt);
+    setActiveTab('new-receipt');
   };
 
   if (activationStatus === null) {
@@ -159,7 +208,7 @@ const App: React.FC = () => {
       <aside className="sidebar no-print">
         <div className="sidebar-header" onClick={handleLogoClick} style={{ cursor: 'pointer' }}>
           <div className="logo">
-            <div className="logo-icon">+</div>
+            <img src="/icon.png" alt="Logo" className="logo-img" />
             <span>MedFlow</span>
           </div>
         </div>
@@ -175,7 +224,7 @@ const App: React.FC = () => {
           
           <button 
             className={`nav-item ${activeTab === 'new-receipt' ? 'active' : ''}`}
-            onClick={() => setActiveTab('new-receipt')}
+            onClick={() => { setEditingReceipt(null); setActiveTab('new-receipt'); }}
           >
             <PlusCircle size={20} />
             <span>New Receipt</span>
@@ -242,10 +291,10 @@ const App: React.FC = () => {
         </header>
 
         <div className="content-inner">
-          {activeTab === 'dashboard' && <Dashboard doctors={doctors} receipts={receipts} onNewReceipt={() => setActiveTab('new-receipt')} />}
+          {activeTab === 'dashboard' && <Dashboard doctors={doctors} receipts={receipts} onNewReceipt={() => { setEditingReceipt(null); setActiveTab('new-receipt'); }} />}
           {activeTab === 'doctors' && <DoctorManagement doctors={doctors} onUpdate={refreshData} isDevMode={isDevMode} />}
           {activeTab === 'services' && <ServiceManagement services={services} onUpdate={refreshData} />}
-          {activeTab === 'new-receipt' && <ReceiptForm doctors={doctors} onSave={() => { refreshData(); setActiveTab('history'); }} />}
+          {activeTab === 'new-receipt' && <ReceiptForm doctors={doctors} initialData={editingReceipt} onSave={() => { refreshData(); setEditingReceipt(null); setActiveTab('history'); }} />}
           {activeTab === 'history' && (
               <div className="history-page">
                 <div className="card filter-card no-print">
@@ -256,14 +305,23 @@ const App: React.FC = () => {
                       </div>
                       <h3>Records Explorer</h3>
                     </div>
-                    {(startDate || endDate) && (
-                      <button className="btn-reset" onClick={() => { setStartDate(''); setEndDate(''); }}>
+                    {(startDate || endDate || searchQuery) && (
+                      <button className="btn-reset" onClick={() => { setStartDate(''); setEndDate(''); setSearchQuery(''); }}>
                         Show All Records
                       </button>
                     )}
                   </div>
                   <div className="filter-controls">
                     <div className="range-filter-group">
+                      <div className="filter-input-wrapper">
+                        <Search size={16} className="input-icon" />
+                        <input 
+                          type="text" 
+                          placeholder="Search patient, phone, receipt..." 
+                          value={searchQuery} 
+                          onChange={e => setSearchQuery(e.target.value)}
+                        />
+                      </div>
                       <div className="filter-input-wrapper calendar-picker">
                         <span className="input-label-inline">From</span>
                         <Calendar size={14} className="input-icon shifted" />
@@ -301,17 +359,19 @@ const App: React.FC = () => {
                       <div className="metric-icon"><TrendingUp size={20} /></div>
                       <div className="metric-info">
                         <span className="label">Period Collection</span>
-                        <span className="value">₹{filteredReceipts.reduce((sum, r) => sum + (Number(r.total) || 0), 0).toLocaleString()}</span>
+                        <span className="value">₹{filteredReceipts.reduce((sum, r) => sum + (r.paymentMethod === 'FREE' ? 0 : (Number(r.total) || 0)), 0).toLocaleString()}</span>
                         <div className="method-breakdown">
                           <span>Cash: ₹{filteredReceipts.filter(r => (r.paymentMethod || 'CASH') === 'CASH').reduce((sum, r) => sum + (Number(r.total) || 0), 0).toLocaleString()}</span>
                           <span>Online: ₹{filteredReceipts.filter(r => r.paymentMethod === 'ONLINE').reduce((sum, r) => sum + (Number(r.total) || 0), 0).toLocaleString()}</span>
+                          <span>Free: {filteredReceipts.filter(r => r.paymentMethod === 'FREE').length} Visits</span>
                         </div>
                       </div>
                     </div>
                     {Object.entries(
                       filteredReceipts.reduce((acc, r) => {
-                        const name = r.doctorName || 'General';
-                        acc[name] = (acc[name] || 0) + (Number(r.total) || 0);
+                          const name = r.doctorName || 'General';
+                          const amount = r.paymentMethod === 'FREE' ? 0 : (Number(r.total) || 0);
+                          acc[name] = (acc[name] || 0) + amount;
                         return acc;
                       }, {} as Record<string, number>)
                     ).map(([name, total]) => (
@@ -356,7 +416,8 @@ const App: React.FC = () => {
                         .map(([date, dateReceipts]) => {
                           const dailyDoctorTotals = dateReceipts.reduce((acc, r) => {
                             const name = r.doctorName || 'General';
-                            acc[name] = (acc[name] || 0) + (Number(r.total) || 0);
+                            const amount = r.paymentMethod === 'FREE' ? 0 : (Number(r.total) || 0);
+                            acc[name] = (acc[name] || 0) + amount;
                             return acc;
                           }, {} as Record<string, number>);
 
@@ -389,7 +450,7 @@ const App: React.FC = () => {
                                     </div>
                                   ))}
                                   <div className="day-sum">
-                                    Day Total: <strong>₹{dateReceipts.reduce((sum, r) => sum + (Number(r.total) || 0), 0).toLocaleString()}</strong>
+                                    Day Total: <strong>₹{dateReceipts.reduce((sum, r) => sum + (r.paymentMethod === 'FREE' ? 0 : (Number(r.total) || 0)), 0).toLocaleString()}</strong>
                                   </div>
                                 </div>
                               </div>
@@ -433,14 +494,29 @@ const App: React.FC = () => {
                                           <span className="r-amt">₹{(Number(r.total) || 0).toFixed(2)}</span>
                                         </td>
                                         <td className="text-right">
-                                          <button 
-                                            className="btn-icon-xs print-btn" 
-                                            style={{ marginLeft: 'auto' }}
-                                            onClick={() => handlePrint(r)}
-                                            title="Print Receipt"
-                                          >
-                                            <Printer size={14} />
-                                          </button>
+                                           <div className="action-buttons">
+                                              <button 
+                                                className="btn-icon-xs print-btn" 
+                                                onClick={() => handlePrint(r)}
+                                                title="Print Receipt"
+                                              >
+                                                <Printer size={14} />
+                                              </button>
+                                              <button 
+                                                className="btn-icon-xs edit-btn" 
+                                                onClick={() => handleEditReceipt(r)}
+                                                title="Edit Receipt"
+                                              >
+                                                <Edit2 size={14} />
+                                              </button>
+                                              <button 
+                                                className="btn-icon-xs delete-btn" 
+                                                onClick={() => handleDeleteReceipt(r.id)}
+                                                title="Delete Receipt"
+                                              >
+                                                <Trash2 size={14} />
+                                              </button>
+                                           </div>
                                         </td>
                                       </tr>
                                     ))}
@@ -457,108 +533,120 @@ const App: React.FC = () => {
 
           {activeTab === 'settings' && (
             <div className="control-center">
-              <div className="control-header">
+              <div className="control-header center-header">
                 <h2>Control Center</h2>
                 <p className="text-muted">Manage your clinic's database, medical setup, and system license.</p>
               </div>
 
               <div className="control-grid">
+                {/* Data Safety & Backup */}
                 <div className="card control-card">
-                  <div className="card-icon-header">
-                    <div className="icon-box blue"><DownloadCloud size={20} /></div>
+                  <div className="card-icon-header inline">
+                    <div className="header-icon blue"><DownloadCloud size={18} /></div>
                     <h3>Data Safety & Backup</h3>
                   </div>
                   <p className="card-description">Create manual backups of your patient data and doctor configurations for safety or migration.</p>
-                  <div className="card-actions">
-                    <button className="btn-primary w-full" onClick={() => storage.exportData()}>
+                  <div className="card-actions-row">
+                    <button className="btn-primary-sm" onClick={() => storage.exportData()}>
                       <DownloadCloud size={16} /> Export Backup (.json)
                     </button>
-                    <button className="btn-secondary w-full" onClick={() => document.getElementById('import-file')?.click()}>
+                    <button className="btn-secondary-sm" onClick={() => document.getElementById('import-file')?.click()}>
                       <UploadCloud size={16} /> Import Backup (.json)
                     </button>
-                    <input 
-                      type="file" accept=".json" id="import-file" style={{ display: 'none' }}
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        const reader = new FileReader();
-                        reader.onload = (event) => {
-                          if (storage.importData(event.target?.result as string)) {
-                            alert('Data imported successfully! The app will now reload.');
-                            window.location.reload();
-                          } else {
-                            alert('Error: This file is not a valid MedFlow backup.');
-                          }
-                        };
-                        reader.readAsText(file);
-                      }}
-                    />
+                    <button className="btn-ghost-sm" onClick={() => (window as any).database.openFolder()}>
+                      <FolderOpen size={16} /> Show Data Folder
+                    </button>
                   </div>
+                  <input 
+                    type="file" accept=".json" id="import-file" style={{ display: 'none' }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = async (event) => {
+                        if (await storage.importData(event.target?.result as string)) {
+                          alert('Data imported successfully! The app will now reload.');
+                          window.location.reload();
+                        } else {
+                          alert('Error: This file is not a valid MedFlow backup.');
+                        }
+                      };
+                      reader.readAsText(file);
+                    }}
+                  />
                 </div>
 
+                {/* Professional Setup */}
                 <div className="card control-card">
-                  <div className="card-icon-header">
-                    <div className="icon-box purple"><Users size={20} /></div>
+                  <div className="card-icon-header inline">
+                    <div className="header-icon purple"><Users size={18} /></div>
                     <h3>Professional Setup</h3>
                   </div>
                   <p className="card-description">Synchronize your clinic's doctor information using a secure Setup Key provided by the developer.</p>
                   <div className="card-actions-vertical">
                     <input 
-                      type="text" placeholder="Paste Setup Key here..." value={syncKeyInput}
+                      type="text"
+                      placeholder="Paste Setup Key here..." 
+                      value={syncKeyInput}
                       onChange={(e) => setSyncKeyInput(e.target.value)}
-                      className="sync-input-modern"
+                      className="sync-input-line"
                     />
-                    <button className="btn-primary" onClick={handleSyncDoctors} disabled={!syncKeyInput.trim()}>
+                    <button className="btn-primary w-full" onClick={handleSyncDoctors} disabled={!syncKeyInput.trim()}>
                       <Activity size={16} /> Sync Doctors Now
                     </button>
                   </div>
                 </div>
 
+                {/* Reports & Intelligence */}
                 <div className="card control-card">
-                  <div className="card-icon-header">
-                    <div className="icon-box green"><FileText size={20} /></div>
+                  <div className="card-icon-header inline">
+                    <div className="header-icon green"><FileText size={18} /></div>
                     <h3>Reports & Intelligence</h3>
                   </div>
                   <p className="card-description">Generate comprehensive financial reports compatible with Excel for accounting and auditing.</p>
                   <div className="card-actions">
-                    <button className="btn-secondary w-full" onClick={() => storage.exportToExcel()}>
+                    <button className="btn-ghost-bottom w-full" onClick={() => storage.exportToExcel()}>
                       <FileText size={16} /> Download CSV Report
                     </button>
                   </div>
                 </div>
 
-                <div className="card control-card card-span-2">
-                  <div className="card-icon-header">
-                    <div className="icon-box gray"><ShieldCheck size={20} /></div>
-                    <h3>System Registration & License</h3>
+                {/* System License */}
+                <div className="card control-card">
+                  <div className="card-icon-header inline">
+                    <div className="header-icon gray"><ShieldCheck size={18} /></div>
+                    <h3>System License</h3>
                   </div>
-                  <div className="license-info-grid">
-                    <div className="info-block">
-                      <span className="info-label">License Status</span>
-                      <div className="license-status-badge">
-                        <div className="status-dot"></div>
-                        <span>{activationStatus?.status?.toUpperCase() || 'UNKNOWN'}</span>
-                        {activationStatus?.expiryDate && <small className="expiry-tag">(Expires: {activationStatus.expiryDate})</small>}
+                  <p className="card-description">View your system's activation status and copy your machine ID if you require a new license key.</p>
+                  
+                  <div className="license-status-section">
+                    <div className="license-row">
+                      <span className="label-caps">LICENSE STATUS</span>
+                      <div className={`license-badge-modern ${activationStatus?.status === 'ACTIVATED' ? 'active' : ''}`}>
+                        <div className="dot"></div>
+                        <span>{activationStatus?.status === 'ACTIVATED' ? 'ACTIVATED' : activationStatus?.status}</span>
+                        {activationStatus?.expiryDate && <span className="expiry-date">{activationStatus.expiryDate}</span>}
                       </div>
                     </div>
-                    <div className="info-block">
-                      <span className="info-label">Hardware Machine ID</span>
-                      <div className="machine-id-box">
+
+                    <div className="license-row">
+                      <span className="label-caps">MACHINE ID</span>
+                      <div className="machine-id-display">
                         <code>{machineId}</code>
-                        <button className="btn-icon" onClick={() => {
+                        <button className="copy-btn" onClick={() => {
                           navigator.clipboard.writeText(machineId);
-                          alert('Machine ID copied to clipboard!');
+                          alert('Machine ID copied!');
                         }}><Copy size={14} /></button>
                       </div>
                     </div>
-                    <div className="info-block">
-                       <button 
-                        className="btn-ghost text-sm" 
-                        style={{ marginTop: '0.5rem' }}
+
+                    <div className="center-link-container">
+                      <button 
+                        className="btn-link" 
                         onClick={() => {
-                          if (confirm('Are you sure you want to remove the current license? This will lock the app.')) {
+                          if (confirm('Are you sure you want to remove the current license?')) {
                             // @ts-ignore
-                            window.licensing.deactivate(); // Assuming such tool exists or we handle it via reload
+                            window.licensing.deactivate();
                             window.location.reload();
                           }
                         }}
@@ -601,13 +689,19 @@ const App: React.FC = () => {
                 <div className="info-section">
                   <h3>PATIENT DETAILS</h3>
                   <p><strong>Name:</strong> {r.patientName}</p>
-                  <p><strong>Age/Gender:</strong> {r.patientAge}Y / {r.patientGender}</p>
+                  <p><strong>Age/Gender:</strong> {r.patientAge.includes('Y') || r.patientAge.includes('M') ? r.patientAge : `${r.patientAge}Y`} / {r.patientGender}</p>
                   <p><strong>Phone No.:</strong> {r.patientPhone || 'N/A'}</p>
                 </div>
                 <div className="info-section">
                   <h3>BILL DETAILS</h3>
                   <p><strong>Receipt #:</strong> {r.receiptNumber}</p>
-                  <p><strong>Original Date:</strong> {r.date}</p>
+                  <p><strong>Original Date:</strong> {(() => {
+                    try {
+                      return format(new Date(r.date), 'dd MMM yyyy');
+                    } catch (e) {
+                      return r.date || 'N/A';
+                    }
+                  })()}</p>
                   <p><strong>Payment Mode:</strong> {r.paymentMethod || 'CASH'}</p>
                 </div>
               </div>
@@ -625,7 +719,7 @@ const App: React.FC = () => {
                     <tr key={item.id}>
                       <td>{index + 1}</td>
                       <td>{item.description}</td>
-                      <td className="text-right">₹{(Number(item.amount) || 0).toFixed(2)}</td>
+                      <td className="text-right">₹{(r.paymentMethod === 'FREE' ? 0 : (Number(item.amount) || 0)).toFixed(2)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -644,7 +738,13 @@ const App: React.FC = () => {
               <div className="print-footer">
                 <div className="terms">
                   <p>• This is a computer-generated duplicate receipt.</p>
-                  <p>• Original date of service: {r.date}</p>
+                  <p>• Original date of service: {(() => {
+                    try {
+                      return format(new Date(r.date), 'dd MMM yyyy');
+                    } catch (e) {
+                      return r.date || 'N/A';
+                    }
+                  })()}</p>
                   {receiptsToPrint.length > 1 && (
                     <p className="print-page-info">Receipt {idx + 1} of {receiptsToPrint.length}</p>
                   )}
@@ -737,9 +837,20 @@ const App: React.FC = () => {
           font-weight: 700; font-size: 1.5rem; color: var(--primary);
         }
 
-        .logo-icon {
-          background: var(--primary); color: white; width: 32px; height: 32px;
-          display: flex; align-items: center; justify-content: center; border-radius: 8px; font-size: 1.2rem;
+        .logo-img {
+          width: 32px; height: 32px; border-radius: 8px; object-fit: contain;
+        }
+
+        .action-buttons {
+          display: flex; gap: 0.5rem; justify-content: flex-end;
+        }
+
+        .btn-icon-xs.delete-btn:hover {
+          color: #ef4444; border-color: #fee2e2; background: #fef2f2;
+        }
+        
+        .btn-icon-xs.edit-btn:hover {
+          color: var(--primary); border-color: #e0f2fe; background: #f0f9ff;
         }
 
         .nav-menu { display: flex; flex-direction: column; gap: 0.5rem; flex: 1; }
@@ -896,6 +1007,7 @@ const App: React.FC = () => {
         }
 
         .filter-input-wrapper select, 
+        .filter-input-wrapper input, 
         .filter-input-wrapper .date-input {
           padding-left: 2.75rem; width: 100%; border: 1px solid var(--border); border-radius: 8px; height: 44px;
           font-family: 'Outfit', sans-serif; font-size: 0.95rem; color: var(--text-main);
@@ -930,20 +1042,88 @@ const App: React.FC = () => {
           border-radius: 4px; font-weight: 500;
         }
 
-        .control-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; }
-        .control-card { padding: 1.5rem; background: white; border-radius: 16px; border: 1px solid var(--border); }
-        .card-icon-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
-        .icon-box { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
-        .icon-box.blue { background: #eff6ff; color: #3b82f6; }
-        .icon-box.purple { background: #faf5ff; color: #a855f7; }
-        .icon-box.green { background: #f0fdf4; color: #22c55e; }
-        .icon-box.gray { background: #f8fafc; color: #64748b; }
-        .card-actions { display: flex; gap: 0.75rem; }
-        .license-info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem; }
-        .info-block { display: flex; flex-direction: column; gap: 0.25rem; }
-        .info-label { font-size: 0.7rem; color: var(--text-muted); font-weight: 600; }
-        .machine-id-box { display: flex; align-items: center; gap: 0.5rem; background: #f8fafc; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border); }
-        .machine-id-box code { font-family: monospace; font-size: 0.8rem; }
+        .control-grid { 
+          display: grid; 
+          grid-template-columns: repeat(2, 1fr); 
+          grid-auto-rows: 1fr;
+          gap: 2rem; 
+          max-width: 1000px;
+          margin: 0 auto;
+        }
+        .control-card { 
+          padding: 2.5rem; background: white; border-radius: 16px; border: 1px solid var(--border); 
+          display: flex; flex-direction: column; gap: 1rem;
+          transition: all 0.3s ease; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);
+        }
+        .control-card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05); }
+        .card-icon-header.inline { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; }
+        .card-description { font-size: 0.85rem; color: var(--text-muted); line-height: 1.6; margin: 0; }
+        
+        .header-icon { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 8px; }
+        .header-icon.blue { background: #e0f2fe; color: #0284c7; }
+        .header-icon.purple { background: #f3e8ff; color: #9333ea; }
+        .header-icon.green { background: #dcfce7; color: #16a34a; }
+        .header-icon.gray { background: #f1f5f9; color: #475569; }
+
+        .center-header { text-align: center; margin-bottom: 2rem; }
+        .center-header h2 { font-size: 1.75rem; color: #1e293b; margin-bottom: 0.5rem; }
+
+        .card-actions-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: auto; padding-top: 1.5rem; }
+        .btn-primary-sm { 
+          background: #0ea5e9; color: white; padding: 0.75rem; border-radius: 8px; 
+          font-weight: 600; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+        }
+        .btn-secondary-sm { 
+          background: #f8fafc; color: var(--text-main); padding: 0.75rem; border-radius: 8px; 
+          border: 1px solid var(--border); font-weight: 600; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+        }
+        
+        .card-actions-vertical { margin-top: auto; display: flex; flex-direction: column; gap: 0.5rem; padding-top: 1.5rem; }
+        .sync-input-line {
+          width: 100%; padding: 0.85rem 1rem; border: 1px solid var(--border); border-radius: 8px;
+          background: #f8fafc; font-size: 0.9rem; margin-bottom: 0.5rem; font-family: inherit;
+        }
+        .sync-input-line:focus { outline: none; border-color: var(--primary); background: white; }
+
+        .card-actions { margin-top: auto; padding-top: 1.5rem; display: flex; flex-direction: column; }
+        .btn-ghost-bottom {
+          background: transparent; color: #475569; padding: 0.85rem; border-radius: 8px; 
+          border: 1px solid transparent; font-weight: 600; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+          transition: all 0.2s;
+        }
+        .btn-ghost-bottom:hover { background: #f1f5f9; color: #1e293b; }
+
+        .license-status-section { display: flex; flex-direction: column; gap: 1rem; margin-top: auto; padding-top: 1.5rem; }
+        .license-row { display: flex; justify-content: space-between; align-items: center; }
+        .label-caps { font-size: 0.7rem; font-weight: 700; color: #94a3b8; letter-spacing: 0.05em; }
+        
+        .license-badge-modern { 
+          display: flex; align-items: center; gap: 0.75rem; background: #f1f5f9; 
+          padding: 0.5rem 1rem; border-radius: 12px; font-weight: 600; font-size: 0.85rem;
+        }
+        .license-badge-modern.active { background: #ecfdf5; color: #059669; }
+        .license-badge-modern .dot { width: 8px; height: 8px; border-radius: 50%; background: #94a3b8; }
+        .license-badge-modern.active .dot { background: #10b981; box-shadow: 0 0 8px #10b981; }
+        .expiry-date { color: #64748b; font-weight: 500; margin-left: 0.25rem; }
+
+        .machine-id-display { 
+          display: flex; align-items: center; gap: 0.5rem; background: #f8fafc; 
+          padding: 0.5rem 0.75rem; border-radius: 8px; border: 1px solid var(--border);
+          width: 100%; max-width: 200px;
+        }
+        .machine-id-display code { 
+          font-family: monospace; font-size: 0.75rem; color: #475569; 
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;
+        }
+        .copy-btn { background: transparent; color: #64748b; padding: 2px; border-radius: 4px; }
+        .copy-btn:hover { color: var(--primary); background: #f0f9ff; }
+
+        .center-link-container { text-align: center; width: 100%; padding-top: 0.5rem; }
+        .btn-link { 
+          background: transparent; color: var(--text-muted); font-size: 0.75rem; text-align: center; 
+          padding: 0; text-decoration: underline; font-weight: 500;
+        }
+        .btn-link:hover { color: #ef4444; }
 
         .payment-badge {
           font-size: 0.65rem;
@@ -956,6 +1136,7 @@ const App: React.FC = () => {
         }
         .payment-badge.cash { background: #fef3c7; color: #92400e; }
         .payment-badge.online { background: #dcfce7; color: #166534; }
+        .payment-badge.free { background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; }
 
         .method-breakdown {
           display: flex;

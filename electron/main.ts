@@ -4,9 +4,16 @@ import path from 'node:path'
 import { createRequire } from 'node:module'
 import Store from 'electron-store'
 import crypto from 'node:crypto'
+import { excelStorage } from './excelStorage'
+import { database } from './database'
+import { shell } from 'electron'
 
 const require = createRequire(import.meta.url)
 const { machineIdSync } = require('node-machine-id')
+const Database = require('better-sqlite3')
+
+// Initialize Database
+database.init(Database)
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -116,6 +123,42 @@ ipcMain.handle('activate-license', (_, fullKey: string) => {
 // For original developer to generate keys
 ipcMain.handle('dev-generate-key', (_, mid: string, dateStr: string) => {
   return generateDateBoundKey(mid, dateStr)
+})
+
+// Excel Storage IPCs
+ipcMain.handle('save-to-excel', (_, data) => {
+  return excelStorage.saveData(data)
+})
+
+ipcMain.handle('load-from-excel', () => {
+  return excelStorage.loadData()
+})
+
+ipcMain.handle('open-excel-file', () => {
+  shell.openPath(excelStorage.getExcelPath())
+})
+
+// SQLite Database IPCs
+ipcMain.handle('db-get-doctors', () => database.getDoctors())
+ipcMain.handle('db-save-doctor', (_, doctor) => database.saveDoctor(doctor))
+ipcMain.handle('db-delete-doctor', (_, id) => database.deleteDoctor(id))
+
+ipcMain.handle('db-get-services', () => database.getServices())
+ipcMain.handle('db-save-service', (_, service) => database.saveService(service))
+ipcMain.handle('db-delete-service', (_, id) => database.deleteService(id))
+
+ipcMain.handle('db-get-receipts', () => database.getReceipts())
+ipcMain.handle('db-save-receipt', (_, receipt) => database.saveReceipt(receipt))
+ipcMain.handle('db-update-receipt', (_, receipt) => database.updateReceipt(receipt))
+ipcMain.handle('db-delete-receipt', (_, id) => database.deleteReceipt(id))
+
+ipcMain.handle('db-get-metadata', (_, key) => database.getMetadata(key))
+ipcMain.handle('db-set-metadata', (_, key, value) => database.setMetadata(key, value))
+
+ipcMain.handle('db-batch-import-doctors', (_, doctors) => database.batchImportDoctors(doctors))
+
+ipcMain.handle('open-db-folder', () => {
+  shell.showItemInFolder(database.getDbPath())
 })
 
 

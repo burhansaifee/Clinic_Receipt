@@ -6,29 +6,76 @@ import { format } from 'date-fns';
 interface ReceiptFormProps {
   doctors: Doctor[];
   onSave: () => void;
+  initialData?: Receipt | null;
 }
 
-const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave }) => {
-  const [patientName, setPatientName] = useState('');
-  const [patientAge, setPatientAge] = useState('');
-  const [patientGender, setPatientGender] = useState('Male');
-  const [patientPhone, setPatientPhone] = useState('');
-  const [selectedDoctorId, setSelectedDoctorId] = useState('');
-  const [items, setItems] = useState<ReceiptItem[]>([
-    { id: '1', description: 'Consultation Fee', amount: 500 }
-  ]);
-  const [receiptNumber, setReceiptNumber] = useState('');
+const parseAge = (ageStr: string) => {
+  const yearsMatch = ageStr.match(/(\d+)\s*y/i);
+  const monthsMatch = ageStr.match(/(\d+)\s*m/i);
+  
+  const years = yearsMatch ? yearsMatch[1] : '';
+  const months = monthsMatch ? monthsMatch[1] : '';
+  
+  if (!years && !months && /^\d+$/.test(ageStr.trim())) {
+    return { years: ageStr.trim(), months: '' };
+  }
+  
+  return { years, months };
+};
+
+const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, initialData }) => {
+  const [patientName, setPatientName] = useState(initialData?.patientName || '');
+  const [ageYears, setAgeYears] = useState(() => {
+    if (initialData?.patientAge) {
+      return parseAge(initialData.patientAge).years;
+    }
+    return '';
+  });
+  const [ageMonths, setAgeMonths] = useState(() => {
+    if (initialData?.patientAge) {
+      return parseAge(initialData.patientAge).months;
+    }
+    return '';
+  });
+  const [patientAge, setPatientAge] = useState(initialData?.patientAge || '');
+  const [patientGender, setPatientGender] = useState(initialData?.patientGender || 'Male');
+  const [patientPhone, setPatientPhone] = useState(initialData?.patientPhone || '');
+  const [selectedDoctorId, setSelectedDoctorId] = useState(initialData?.doctorId || '');
+  const [items, setItems] = useState<ReceiptItem[]>(
+    initialData?.items || [{ id: '1', description: 'Consultation Fee', amount: 500 }]
+  );
+  const [receiptNumber, setReceiptNumber] = useState(initialData?.receiptNumber || '');
   const [availableServices, setAvailableServices] = useState<Service[]>([]);
   const [isReturningPatient, setIsReturningPatient] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'ONLINE'>('CASH');
+  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'ONLINE' | 'FREE'>(initialData?.paymentMethod || 'CASH');
+  const [appointmentDate, setAppointmentDate] = useState(initialData?.date || format(new Date(), 'yyyy-MM-dd'));
+
+  const handleYearsChange = (val: string) => {
+    setAgeYears(val);
+    const yStr = val ? `${val} Y` : '';
+    const mStr = ageMonths ? `${ageMonths} M` : '';
+    setPatientAge([yStr, mStr].filter(Boolean).join(' '));
+  };
+
+  const handleMonthsChange = (val: string) => {
+    setAgeMonths(val);
+    const yStr = ageYears ? `${ageYears} Y` : '';
+    const mStr = val ? `${val} M` : '';
+    setPatientAge([yStr, mStr].filter(Boolean).join(' '));
+  };
 
   useEffect(() => {
-    setReceiptNumber(storage.getNextReceiptNumber());
-    setAvailableServices(storage.getServices());
-    if (doctors.length > 0) {
-      setSelectedDoctorId(doctors[0].id);
-    }
-  }, [doctors]);
+    const init = async () => {
+      if (!initialData) {
+        setReceiptNumber(await storage.getNextReceiptNumber(paymentMethod === 'FREE'));
+        if (doctors.length > 0 && !selectedDoctorId) {
+          setSelectedDoctorId(doctors[0].id);
+        }
+      }
+      setAvailableServices(await storage.getServices());
+    };
+    init();
+  }, [doctors, initialData, paymentMethod]);
 
   const addItem = () => {
     setItems([...items, { id: Date.now().toString(), description: '', amount: 0 }]);
@@ -38,18 +85,21 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave }) => {
     setItems(items.filter(item => item.id !== id));
   };
 
-  const handlePhoneChange = (value: string) => {
+  const handlePhoneChange = async (value: string) => {
     setPatientPhone(value);
     
     // Auto-fill logic when phone is 10 digits
     if (value.length === 10) {
-      const allReceipts = storage.getReceipts();
+      const allReceipts = await storage.getReceipts();
       // Find the most recent receipt with this phone number
       const match = allReceipts.slice().reverse().find(r => r.patientPhone === value);
       
       if (match) {
         setPatientName(match.patientName);
         setPatientAge(match.patientAge);
+        const { years, months } = parseAge(match.patientAge);
+        setAgeYears(years);
+        setAgeMonths(months);
         setPatientGender(match.patientGender);
         setIsReturningPatient(true);
         // Reset the indicator after a few seconds
@@ -85,9 +135,9 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave }) => {
     }));
   };
 
-  const total = items.reduce((sum, item) => sum + Number(item.amount), 0);
+  const total = paymentMethod === 'FREE' ? 0 : items.reduce((sum, item) => sum + Number(item.amount), 0);
 
-  const handleSave = (e: React.FormEvent, shouldPrint: boolean = true) => {
+  const handleSave = async (e: React.FormEvent, shouldPrint: boolean = true) => {
     e.preventDefault();
     if (!selectedDoctorId) {
       alert('Please select a doctor');
@@ -97,9 +147,9 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave }) => {
     const doctor = doctors.find(d => d.id === selectedDoctorId);
     
     const receipt: Receipt = {
-      id: Date.now().toString(),
+      id: initialData?.id || Date.now().toString(),
       receiptNumber,
-      date: format(new Date(), 'yyyy-MM-dd HH:mm'),
+      date: appointmentDate,
       patientName,
       patientAge,
       patientGender,
@@ -111,7 +161,11 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave }) => {
       paymentMethod
     };
 
-    storage.saveReceipt(receipt);
+    if (initialData) {
+      await storage.updateReceipt(receipt);
+    } else {
+      await storage.saveReceipt(receipt);
+    }
     if (shouldPrint) {
       triggerPrint(receipt);
     }
@@ -135,7 +189,24 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave }) => {
               </div>
               <div className="form-group">
                 <label>Age</label>
-                <input value={patientAge} onChange={e => setPatientAge(e.target.value)} required placeholder="Years" type="number" />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                  <input 
+                    value={ageYears} 
+                    onChange={e => handleYearsChange(e.target.value)} 
+                    required={!ageMonths} 
+                    placeholder="Years" 
+                    type="number" 
+                    min="0"
+                  />
+                  <input 
+                    value={ageMonths} 
+                    onChange={e => handleMonthsChange(e.target.value)} 
+                    placeholder="Months" 
+                    type="number" 
+                    min="0"
+                    max="11"
+                  />
+                </div>
               </div>
               <div className="form-group">
                 <label>Gender</label>
@@ -180,7 +251,11 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave }) => {
               </div>
               <div className="form-group">
                 <label>Date</label>
-                <div className="fake-input">{format(new Date(), 'dd MMM yyyy')}</div>
+                <input 
+                  type="date" 
+                  value={appointmentDate} 
+                  onChange={e => setAppointmentDate(e.target.value)} 
+                />
               </div>
               <div className="form-group full-width" style={{ gridColumn: 'span 2' }}>
                 <label>Payment Mode</label>
@@ -198,6 +273,13 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave }) => {
                     onClick={() => setPaymentMethod('ONLINE')}
                   >
                     ONLINE
+                  </button>
+                  <button 
+                    type="button" 
+                    className={paymentMethod === 'FREE' ? 'active' : ''} 
+                    onClick={() => setPaymentMethod('FREE')}
+                  >
+                    FREE
                   </button>
                 </div>
               </div>
@@ -300,13 +382,19 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave }) => {
             <div className="info-section">
               <h3>PATIENT DETAILS</h3>
               <p><strong>Name:</strong> {patientName}</p>
-              <p><strong>Age/Gender:</strong> {patientAge}Y / {patientGender}</p>
+              <p><strong>Age/Gender:</strong> {patientAge.includes('Y') || patientAge.includes('M') ? patientAge : `${patientAge}Y`} / {patientGender}</p>
               <p><strong>Phone No.:</strong> {patientPhone || 'N/A'}</p>
             </div>
             <div className="info-section">
               <h3>BILL DETAILS</h3>
               <p><strong>Receipt #:</strong> {receiptNumber}</p>
-              <p><strong>Date:</strong> {format(new Date(), 'dd MMM yyyy, hh:mm a')}</p>
+              <p><strong>Date:</strong> {(() => {
+                try {
+                  return format(new Date(appointmentDate), 'dd MMM yyyy');
+                } catch (e) {
+                  return appointmentDate || 'N/A';
+                }
+              })()}</p>
               <p><strong>Payment Mode:</strong> {paymentMethod}</p>
             </div>
           </div>
@@ -324,7 +412,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave }) => {
                 <tr key={item.id}>
                   <td>{index + 1}</td>
                   <td>{item.description}</td>
-                  <td className="text-right">₹{item.amount.toFixed(2)}</td>
+                  <td className="text-right">₹{(paymentMethod === 'FREE' ? 0 : item.amount).toFixed(2)}</td>
                 </tr>
               ))}
             </tbody>
@@ -504,7 +592,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave }) => {
 
         .payment-method-toggle {
           display: grid;
-          grid-template-columns: 1fr 1fr;
+          grid-template-columns: 1fr 1fr 1fr;
           background: #f1f5f9;
           padding: 4px;
           border-radius: 8px;

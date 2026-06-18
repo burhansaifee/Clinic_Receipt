@@ -13,8 +13,21 @@ export default defineConfig({
         entry: 'electron/main.ts',
         vite: {
           build: {
+            commonjsOptions: {
+              ignoreDynamicRequires: true
+            },
             rollupOptions: {
-              external: ['node-machine-id', 'electron-store'],
+              external: [
+                'electron',
+                'node-machine-id',
+                'electron-store',
+                'better-sqlite3',
+                'node:path',
+                'node:fs',
+                'node:module',
+                'node:url',
+                'node:crypto'
+              ],
             },
           },
         },

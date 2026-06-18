@@ -33,85 +33,190 @@ export interface Receipt {
   doctorName: string;
   items: ReceiptItem[];
   total: number;
-  paymentMethod: 'CASH' | 'ONLINE';
+  paymentMethod: 'CASH' | 'ONLINE' | 'FREE';
 }
 
 const STORAGE_KEYS = {
   DOCTORS: 'clinic_doctors',
   SERVICES: 'clinic_services',
   RECEIPTS: 'clinic_receipts',
-  LAST_RECEIPT_NUM: 'clinic_last_receipt_num'
+  LAST_RECEIPT_NUM: 'clinic_last_receipt_num',
+  LAST_FREE_RECEIPT_NUM: 'clinic_last_free_receipt_num',
+  SQLITE_MIGRATED: 'clinic_sqlite_migrated'
 };
 
 export const storage = {
-  getDoctors: (): Doctor[] => {
-    const data = localStorage.getItem(STORAGE_KEYS.DOCTORS);
-    return data ? JSON.parse(data) : [];
+  // Migration logic
+  migrateToSQLite: async () => {
+    if (localStorage.getItem(STORAGE_KEYS.SQLITE_MIGRATED) === 'true') {
+      console.log('Already migrated to SQLite');
+      return;
+    }
+
+    console.log('Starting Migration to SQLite...');
+    
+    try {
+      // Get data from localStorage
+      const doctorsStr = localStorage.getItem(STORAGE_KEYS.DOCTORS);
+      const servicesStr = localStorage.getItem(STORAGE_KEYS.SERVICES);
+      const receiptsStr = localStorage.getItem(STORAGE_KEYS.RECEIPTS);
+      const lastNum = localStorage.getItem(STORAGE_KEYS.LAST_RECEIPT_NUM);
+      const lastFreeNum = localStorage.getItem(STORAGE_KEYS.LAST_FREE_RECEIPT_NUM);
+
+      // Save to SQLite via bridge
+      if (doctorsStr) {
+        const doctors = JSON.parse(doctorsStr);
+        console.log(`Migrating ${doctors.length} doctors...`);
+        // @ts-ignore
+        await window.database.batchImportDoctors(doctors);
+      }
+      
+      if (servicesStr) {
+        const services = JSON.parse(servicesStr);
+        console.log(`Migrating ${services.length} services...`);
+        for (const s of services) {
+          // @ts-ignore
+          await window.database.saveService(s);
+        }
+      }
+
+      if (receiptsStr) {
+        const receipts = JSON.parse(receiptsStr);
+        console.log(`Migrating ${receipts.length} receipts...`);
+        for (const r of receipts) {
+          // @ts-ignore
+          await window.database.saveReceipt(r);
+        }
+      }
+
+      if (lastNum) {
+        // @ts-ignore
+        await window.database.setMetadata('last_receipt_num', lastNum);
+      }
+
+      if (lastFreeNum) {
+        // @ts-ignore
+        await window.database.setMetadata('last_free_receipt_num', lastFreeNum);
+      }
+
+      localStorage.setItem(STORAGE_KEYS.SQLITE_MIGRATED, 'true');
+      console.log('Migration successfully completed!');
+      
+      // Perform a single sync to Excel after full migration
+      await storage.syncToExcel();
+    } catch (error) {
+      console.error('Migration failed:', error);
+      // We don't set the flag so it tries again next time
+    }
+  },
+
+  getDoctors: async (): Promise<Doctor[]> => {
+    // @ts-ignore
+    return window.database.getDoctors();
   },
   
-  saveDoctor: (doctor: Doctor) => {
-    const doctors = storage.getDoctors();
-    const index = doctors.findIndex(d => d.id === doctor.id);
-    if (index >= 0) {
-      doctors[index] = doctor;
-    } else {
-      doctors.push(doctor);
-    }
-    localStorage.setItem(STORAGE_KEYS.DOCTORS, JSON.stringify(doctors));
+  saveDoctor: async (doctor: Doctor) => {
+    // @ts-ignore
+    await window.database.saveDoctor(doctor);
+    await storage.syncToExcel();
   },
 
-  deleteDoctor: (id: string) => {
-    const doctors = storage.getDoctors().filter(d => d.id !== id);
-    localStorage.setItem(STORAGE_KEYS.DOCTORS, JSON.stringify(doctors));
+  deleteDoctor: async (id: string) => {
+    // @ts-ignore
+    await window.database.deleteDoctor(id);
+    await storage.syncToExcel();
   },
 
-  getServices: (): Service[] => {
-    const data = localStorage.getItem(STORAGE_KEYS.SERVICES);
-    return data ? JSON.parse(data) : [];
+  getServices: async (): Promise<Service[]> => {
+    // @ts-ignore
+    return window.database.getServices();
   },
 
-  saveService: (service: Service) => {
-    const services = storage.getServices();
-    const index = services.findIndex(s => s.id === service.id);
-    if (index >= 0) {
-      services[index] = service;
-    } else {
-      services.push(service);
-    }
-    localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(services));
+  saveService: async (service: Service) => {
+    // @ts-ignore
+    await window.database.saveService(service);
+    await storage.syncToExcel();
   },
 
-  deleteService: (id: string) => {
-    const services = storage.getServices().filter(s => s.id !== id);
-    localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(services));
+  deleteService: async (id: string) => {
+    // @ts-ignore
+    await window.database.deleteService(id);
+    await storage.syncToExcel();
   },
 
-  getReceipts: (): Receipt[] => {
-    const data = localStorage.getItem(STORAGE_KEYS.RECEIPTS);
-    return data ? JSON.parse(data) : [];
+  getReceipts: async (): Promise<Receipt[]> => {
+    // @ts-ignore
+    return window.database.getReceipts();
   },
 
-  saveReceipt: (receipt: Receipt) => {
-    const receipts = storage.getReceipts();
-    receipts.push(receipt);
-    localStorage.setItem(STORAGE_KEYS.RECEIPTS, JSON.stringify(receipts));
+  saveReceipt: async (receipt: Receipt) => {
+    // @ts-ignore
+    await window.database.saveReceipt(receipt);
     
-    // Increment receipt number
-    const nextNum = parseInt(receipt.receiptNumber) + 1;
-    localStorage.setItem(STORAGE_KEYS.LAST_RECEIPT_NUM, nextNum.toString());
+    // Increment correct receipt number
+    const isFree = receipt.paymentMethod === 'FREE';
+    const key = isFree ? 'last_free_receipt_num' : 'last_receipt_num';
+    const nextNum = parseInt(receipt.receiptNumber.replace(/\D/g, '')) + 1;
+    const prefix = isFree ? 'F' : '';
+    // @ts-ignore
+    await window.database.setMetadata(key, prefix + nextNum.toString());
+    
+    await storage.syncToExcel();
   },
 
-  getNextReceiptNumber: (): string => {
-    const lastNum = localStorage.getItem(STORAGE_KEYS.LAST_RECEIPT_NUM);
-    return lastNum || '1001';
+  deleteReceipt: async (id: string) => {
+    // @ts-ignore
+    await window.database.deleteReceipt(id);
+    await storage.syncToExcel();
   },
 
-  exportData: () => {
+  updateReceipt: async (receipt: Receipt) => {
+    // @ts-ignore
+    await window.database.updateReceipt(receipt);
+    await storage.syncToExcel();
+    return true;
+  },
+
+  getNextReceiptNumber: async (isFree: boolean = false): Promise<string> => {
+    const key = isFree ? 'last_free_receipt_num' : 'last_receipt_num';
+    // @ts-ignore
+    const meta = await window.database.getMetadata(key);
+    if (meta) return meta.value;
+    return isFree ? 'F1001' : '1001';
+  },
+
+  syncToExcel: async () => {
+    const doctors = await storage.getDoctors();
+    const services = await storage.getServices();
+    const receipts = await storage.getReceipts();
+    const lastNum = await storage.getNextReceiptNumber(false);
+    
+    // Safety check: Don't sync if everything is empty but we have a flag
+    // (This avoids overwriting Excel with empty data if SQLite fails to load)
+    if (doctors.length === 0 && receipts.length === 0 && localStorage.getItem(STORAGE_KEYS.SQLITE_MIGRATED) === 'true') {
+      console.warn('Sync aborted: SQLite returned empty data. Not overwriting Excel.');
+      return;
+    }
+
     const data = {
-      doctors: storage.getDoctors(),
-      services: storage.getServices(),
-      receipts: storage.getReceipts(),
-      lastReceiptNum: storage.getNextReceiptNumber()
+      doctors,
+      services,
+      receipts: receipts.map(r => ({
+        ...r,
+        items: JSON.stringify(r.items)
+      })),
+      lastReceiptNum: lastNum
+    };
+    // @ts-ignore
+    window.excelStorage?.saveData(data);
+  },
+
+  exportData: async () => {
+    const data = {
+      doctors: await storage.getDoctors(),
+      services: await storage.getServices(),
+      receipts: await storage.getReceipts(),
+      lastReceiptNum: await storage.getNextReceiptNumber(false)
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -122,13 +227,30 @@ export const storage = {
     URL.revokeObjectURL(url);
   },
 
-  importData: (jsonData: string): boolean => {
+  importData: async (jsonData: string): Promise<boolean> => {
     try {
       const data = JSON.parse(jsonData);
-      if (data.doctors) localStorage.setItem(STORAGE_KEYS.DOCTORS, JSON.stringify(data.doctors));
-      if (data.services) localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(data.services));
-      if (data.receipts) localStorage.setItem(STORAGE_KEYS.RECEIPTS, JSON.stringify(data.receipts));
-      if (data.lastReceiptNum) localStorage.setItem(STORAGE_KEYS.LAST_RECEIPT_NUM, data.lastReceiptNum);
+      if (data.doctors) {
+        // @ts-ignore
+        await window.database.batchImportDoctors(data.doctors);
+      }
+      if (data.services) {
+        for (const s of data.services) {
+          // @ts-ignore
+          await window.database.saveService(s);
+        }
+      }
+      if (data.receipts) {
+        for (const r of data.receipts) {
+          // @ts-ignore
+          await window.database.saveReceipt(r);
+        }
+      }
+      if (data.lastReceiptNum) {
+        // @ts-ignore
+        await window.database.setMetadata('last_receipt_num', data.lastReceiptNum);
+      }
+      await storage.syncToExcel();
       return true;
     } catch (e) {
       console.error('Failed to import data:', e);
@@ -136,34 +258,35 @@ export const storage = {
     }
   },
 
-  exportToExcel: () => {
-    const receipts = storage.getReceipts();
+  exportToExcel: async () => {
+    const receipts = await storage.getReceipts();
     if (receipts.length === 0) {
       alert('No receipts found to export.');
       return;
     }
 
-    // CSV Headers
-    const headers = ['Date', 'Receipt #', 'Patient Name', 'Phone No.', 'Doctor Name', 'Total Amount (₹)', 'Payment Method'];
+    const paidReceipts = receipts.filter(r => r.paymentMethod !== 'FREE');
+    const freeReceipts = receipts.filter(r => r.paymentMethod === 'FREE');
+
+    const headers = ['Date', 'Receipt #', 'Patient Name', 'Phone No.', 'Doctor Name', 'Services', 'Total Amount (₹)', 'Payment Method'];
     
-    // CSV Rows
-    const rows = receipts.map(r => [
+    const formatRow = (r: any) => [
       r.date,
       `#${r.receiptNumber}`,
       r.patientName,
       r.patientPhone || 'N/A',
       r.doctorName,
-      r.total.toFixed(2),
+      (r.items || []).map((item: any) => item.description).join('; '),
+      (Number(r.total) || 0).toFixed(2),
       r.paymentMethod || 'CASH'
-    ]);
+    ].map(cell => `"${cell}"`).join(',');
 
-    // Combine headers and rows
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
-    ].join('\n');
+    let csvContent = "PAID PATIENT RECORDS\n" + headers.join(',') + '\n';
+    csvContent += paidReceipts.map(formatRow).join('\n');
+    
+    csvContent += "\n\nFREE PATIENT RECORDS\n" + headers.join(',') + '\n';
+    csvContent += freeReceipts.map(formatRow).join('\n');
 
-    // Create and download the file
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -173,25 +296,14 @@ export const storage = {
     URL.revokeObjectURL(url);
   },
 
-  batchImportDoctors: (syncKey: string): boolean => {
+  batchImportDoctors: async (syncKey: string): Promise<boolean> => {
     try {
-      // Decode base64
       const jsonStr = atob(syncKey);
       const newDoctors = JSON.parse(jsonStr);
-      
       if (Array.isArray(newDoctors)) {
-        const existingDoctors = storage.getDoctors();
-        const merged = [...existingDoctors];
-
-        newDoctors.forEach(newDoc => {
-          // Avoid duplicates by checking name (case insensitive)
-          const exists = merged.some(d => d.name.toLowerCase().trim() === newDoc.name.toLowerCase().trim());
-          if (!exists) {
-            merged.push(newDoc);
-          }
-        });
-
-        localStorage.setItem(STORAGE_KEYS.DOCTORS, JSON.stringify(merged));
+        // @ts-ignore
+        await window.database.batchImportDoctors(newDoctors);
+        await storage.syncToExcel();
         return true;
       }
       return false;
@@ -200,5 +312,4 @@ export const storage = {
       return false;
     }
   }
-
 };

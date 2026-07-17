@@ -52,7 +52,7 @@
         "provider": "github",
         "owner": "burhansaifee",
         "repo": "Clinic_Receipt",
-        "private": "true"
+        "private": "false"
       }
     ],
     "directories": {

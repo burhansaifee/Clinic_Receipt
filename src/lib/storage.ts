@@ -36,6 +36,29 @@ export interface Receipt {
   paymentMethod: 'CASH' | 'ONLINE' | 'FREE';
 }
 
+export interface PrescribedMedicine {
+  name: string;
+  dosage: string;
+  duration: string;
+  instructions: string;
+}
+
+export interface Prescription {
+  id: string;
+  receiptId?: string;
+  date: string;
+  patientName: string;
+  patientAge: string;
+  patientGender: string;
+  patientPhone: string;
+  doctorId: string;
+  doctorName: string;
+  symptoms: string;
+  diagnosis: string;
+  medicines: PrescribedMedicine[];
+  notes: string;
+}
+
 const STORAGE_KEYS = {
   DOCTORS: 'clinic_doctors',
   SERVICES: 'clinic_services',
@@ -311,5 +334,20 @@ export const storage = {
       console.error('Failed to batch import doctors:', e);
       return false;
     }
+  },
+
+  getPrescriptions: async (): Promise<Prescription[]> => {
+    // @ts-ignore
+    return window.database.getPrescriptions();
+  },
+
+  savePrescription: async (prescription: Prescription) => {
+    // @ts-ignore
+    await window.database.savePrescription(prescription);
+  },
+
+  deletePrescription: async (id: string) => {
+    // @ts-ignore
+    await window.database.deletePrescription(id);
   }
 };

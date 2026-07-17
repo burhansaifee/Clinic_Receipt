@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
-import { LayoutDashboard, Users, Receipt, PlusCircle, Settings, ShieldCheck, Copy, Calendar, TrendingUp, DownloadCloud, UploadCloud, FileText, Activity, Filter, Briefcase, Printer, Trash2, Edit2, FolderOpen, Search } from 'lucide-react';
+import { LayoutDashboard, Users, Receipt, PlusCircle, Settings, ShieldCheck, Copy, Calendar, TrendingUp, DownloadCloud, UploadCloud, FileText, Activity, Filter, Briefcase, Printer, Trash2, Edit2, FolderOpen, Search, LogOut, KeyRound, Server } from 'lucide-react';
 
 import { storage, type Doctor, type Receipt as ReceiptType, type Service } from './lib/storage';
 import './index.css';
@@ -11,8 +11,10 @@ import DoctorManagement from './components/DoctorManagement';
 import ServiceManagement from './components/ServiceManagement';
 import ReceiptForm from './components/ReceiptForm';
 import ActivationScreen from './components/ActivationScreen';
+import UserConnectionScreen from './components/UserConnectionScreen';
+import DoctorWorkstation from './components/DoctorWorkstation';
 
-type Tab = 'dashboard' | 'doctors' | 'services' | 'new-receipt' | 'history' | 'settings';
+type Tab = 'dashboard' | 'doctors' | 'services' | 'new-receipt' | 'history' | 'prescriptions' | 'settings';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
@@ -30,6 +32,23 @@ const App: React.FC = () => {
   const [showDevLogin, setShowDevLogin] = useState(false);
   const [devPinInput, setDevPinInput] = useState('');
   
+  // User Management State
+  const [currentUser, setCurrentUser] = useState<string | null>(null);
+  const [currentUserRole, setCurrentUserRole] = useState<string>('reception');
+  const [currentUserDoctorId, setCurrentUserDoctorId] = useState<string | null>(null);
+  const [knownUsers, setKnownUsers] = useState<{ id: string, role: string, doctorId?: string }[]>([]);
+  const [newUserIdInput, setNewUserIdInput] = useState('');
+  const [newUserRole, setNewUserRole] = useState<'reception' | 'doctor'>('reception');
+  const [selectedDoctorIdForUser, setSelectedDoctorIdForUser] = useState<string>('');
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  // Workstation Connection State
+  const [workstationMode, setWorkstationMode] = useState<'standalone' | 'host' | 'client'>('standalone');
+  const [hostIp, setHostIp] = useState('127.0.0.1');
+  const [hostPort, setHostPort] = useState(49152);
+  const [localIp, setLocalIp] = useState('');
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
+  
   // History Filters
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
@@ -37,6 +56,9 @@ const App: React.FC = () => {
   const [receiptsToPrint, setReceiptsToPrint] = useState<ReceiptType[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [editingReceipt, setEditingReceipt] = useState<ReceiptType | null>(null);
+  const [prescriptions, setPrescriptions] = useState<any[]>([]);
+  const [activePrintPrescription, setActivePrintPrescription] = useState<any | null>(null);
+  const [rxSearchQuery, setRxSearchQuery] = useState<string>('');
 
   const filteredReceipts = receipts.filter(r => {
     const rDate = r.date.split(' ')[0];
@@ -49,6 +71,25 @@ const App: React.FC = () => {
     return afterStart && beforeEnd && matchesSearch;
   });
 
+  const refreshData = React.useCallback(async () => {
+    const [d, s, r, p] = await Promise.all([
+      storage.getDoctors(),
+      storage.getServices(),
+      storage.getReceipts(),
+      storage.getPrescriptions()
+    ]);
+    setDoctors(d);
+    setServices(s);
+    setReceipts(r);
+    setPrescriptions(p);
+  }, []);
+
+  useEffect(() => {
+    if (!currentUser || currentUserRole === 'doctor') return;
+    const interval = setInterval(refreshData, 3000);
+    return () => clearInterval(interval);
+  }, [currentUser, currentUserRole, refreshData]);
+
   useEffect(() => {
     const checkLicense = async () => {
       // @ts-ignore
@@ -56,7 +97,79 @@ const App: React.FC = () => {
       setActivationStatus(result);
     };
 
-    const loadInitialData = async () => {
+    const checkActiveUser = async () => {
+      try {
+        // @ts-ignore
+        const user = await window.users.getCurrentUser();
+        if (user) {
+          setCurrentUser(user);
+          // @ts-ignore
+          const role = await window.users.getCurrentUserRole();
+          setCurrentUserRole(role);
+          // @ts-ignore
+          const doctorId = await window.users.getCurrentUserDoctorId();
+          setCurrentUserDoctorId(doctorId || null);
+        }
+      } catch (err) {
+        console.error('Failed to get active user:', err);
+      }
+    };
+
+    const loadUsers = async () => {
+      try {
+        // @ts-ignore
+        const users = await window.users.getKnownUsers();
+        setKnownUsers(users);
+      } catch (err) {
+        console.error('Failed to get recognized users:', err);
+      }
+    };
+
+    const loadConnectionSettings = async () => {
+      try {
+        // @ts-ignore
+        if (window.connection) {
+          // @ts-ignore
+          const settings = await window.connection.getSettings();
+          setWorkstationMode(settings.mode);
+          setHostIp(settings.hostIp);
+          setHostPort(settings.hostPort);
+          setLocalIp(settings.localIp);
+        }
+      } catch (err) {
+        console.error('Failed to load connection settings:', err);
+      }
+    };
+
+    checkLicense();
+    checkActiveUser();
+    loadUsers();
+    loadConnectionSettings();
+  }, []);
+
+  useEffect(() => {
+    const handleStatusChange = () => setIsOnline(navigator.onLine);
+    window.addEventListener('online', handleStatusChange);
+    window.addEventListener('offline', handleStatusChange);
+    return () => {
+      window.removeEventListener('online', handleStatusChange);
+      window.removeEventListener('offline', handleStatusChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleAfterPrint = () => {
+      setReceiptsToPrint([]);
+      setActivePrintPrescription(null);
+    };
+    window.addEventListener('afterprint', handleAfterPrint);
+    return () => window.removeEventListener('afterprint', handleAfterPrint);
+  }, []);
+
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const loadUserData = async () => {
       // Migrate to SQLite if needed
       await storage.migrateToSQLite();
 
@@ -74,9 +187,8 @@ const App: React.FC = () => {
       refreshData();
     };
 
-    checkLicense();
-    loadInitialData();
-  }, []);
+    loadUserData();
+  }, [currentUser, refreshData]);
 
   useEffect(() => {
     if (activeTab === 'settings' && !machineId) {
@@ -135,6 +247,98 @@ const App: React.FC = () => {
     }
   };
 
+  const handleLogout = async () => {
+    if (confirm('Are you sure you want to disconnect from this profile? Your local SQLite database will remain secure on this device.')) {
+      // @ts-ignore
+      await window.users.disconnectUser();
+      setCurrentUser(null);
+      setCurrentUserRole('reception');
+      setCurrentUserDoctorId(null);
+      setDoctors([]);
+      setServices([]);
+      setReceipts([]);
+      setActiveTab('dashboard');
+    }
+  };
+
+  const handleTestConnection = async () => {
+    if (!hostIp.trim()) {
+      alert('Please enter a Host IP Address');
+      return;
+    }
+    setIsTestingConnection(true);
+    try {
+      // @ts-ignore
+      const result = await window.connection.testConnection(hostIp.trim(), hostPort);
+      if (result.success) {
+        alert('Connection Successful! The Host server is reachable.');
+      } else {
+        alert(`Connection Failed: ${result.error || 'Check server status and IP address.'}`);
+      }
+    } catch (e: any) {
+      alert(`Connection Error: ${e.message}`);
+    } finally {
+      setIsTestingConnection(false);
+    }
+  };
+
+  const handleSaveConnectionSettings = async () => {
+    if (workstationMode === 'client' && !hostIp.trim()) {
+      alert('Please enter a Host IP Address');
+      return;
+    }
+    if (confirm('MedFlow Clinic needs to relaunch to apply these network connection settings. Proceed?')) {
+      try {
+        // @ts-ignore
+        await window.connection.saveSettings({
+          mode: workstationMode,
+          hostIp: hostIp.trim(),
+          hostPort: hostPort
+        });
+      } catch (err: any) {
+        alert(`Failed to save settings: ${err.message}`);
+      }
+    }
+  };
+
+  const handleAddUser = async () => {
+    const userId = newUserIdInput.trim().toLowerCase();
+    if (!userId) return;
+    
+    // @ts-ignore
+    const result = await window.users.addKnownUser(userId, newUserRole, newUserRole === 'doctor' ? selectedDoctorIdForUser : undefined);
+    if (result.success) {
+      setNewUserIdInput('');
+      setNewUserRole('reception');
+      setSelectedDoctorIdForUser('');
+      // @ts-ignore
+      const users = await window.users.getKnownUsers();
+      setKnownUsers(users);
+      alert(`User ID "${userId}" has been successfully registered!`);
+    } else {
+      alert(result.error || 'Failed to add user.');
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    if (userId === 'default') return;
+    if (confirm(`Are you sure you want to delete the User ID "${userId}"? This will lock access to this profile's database, though the database files will remain on disk.`)) {
+      // @ts-ignore
+      const result = await window.users.deleteKnownUser(userId);
+      if (result.success) {
+        // @ts-ignore
+        const users = await window.users.getKnownUsers();
+        setKnownUsers(users);
+        if (currentUser === userId) {
+          setCurrentUser(null);
+        }
+        alert(`User ID "${userId}" has been removed.`);
+      } else {
+        alert(result.error || 'Failed to delete user.');
+      }
+    }
+  };
+
   const handlePrint = (input: ReceiptType | ReceiptType[]) => {
     const receipts = Array.isArray(input) ? input : [input];
     setReceiptsToPrint(receipts);
@@ -159,15 +363,11 @@ const App: React.FC = () => {
     handlePrint(receipts);
   };
 
-  const refreshData = async () => {
-    const [d, s, r] = await Promise.all([
-      storage.getDoctors(),
-      storage.getServices(),
-      storage.getReceipts()
-    ]);
-    setDoctors(d);
-    setServices(s);
-    setReceipts(r);
+  const handlePrintRx = (rx: any) => {
+    setActivePrintPrescription(rx);
+    setTimeout(() => {
+      window.print();
+    }, 150);
   };
 
   const handleDeleteReceipt = (id: string) => {
@@ -199,6 +399,26 @@ const App: React.FC = () => {
         status={activationStatus.status} 
         expiryDate={activationStatus.expiryDate}
         onActivated={() => window.location.reload()} 
+      />
+    );
+  }
+
+  if (currentUser === null) {
+    return <UserConnectionScreen onConnected={(userId, role, doctorId) => {
+      setCurrentUser(userId);
+      setCurrentUserRole(role);
+      setCurrentUserDoctorId(doctorId || null);
+      // @ts-ignore
+      window.users.getKnownUsers().then((users: { id: string, role: string, doctorId?: string }[]) => setKnownUsers(users));
+    }} />;
+  }
+
+  if (currentUserRole === 'doctor') {
+    return (
+      <DoctorWorkstation 
+        currentUser={currentUser}
+        currentUserDoctorId={currentUserDoctorId}
+        onLogout={handleLogout}
       />
     );
   }
@@ -239,6 +459,14 @@ const App: React.FC = () => {
           </button>
 
           <button 
+            className={`nav-item ${activeTab === 'prescriptions' ? 'active' : ''}`}
+            onClick={() => setActiveTab('prescriptions')}
+          >
+            <FileText size={20} />
+            <span>Prescriptions</span>
+          </button>
+
+          <button 
             className={`nav-item ${activeTab === 'doctors' ? 'active' : ''}`}
             onClick={() => setActiveTab('doctors')}
           >
@@ -273,9 +501,19 @@ const App: React.FC = () => {
               <ShieldCheck size={14} />
               Exit Developer Mode
             </button>
+          ) : (currentUser && currentUser !== 'default' && isOnline) ? (
+            <div className="status-badge online">
+              <div className="dot green"></div>
+              Online Mode Active
+            </div>
+          ) : (currentUser && currentUser !== 'default' && !isOnline) ? (
+            <div className="status-badge offline">
+              <div className="dot amber"></div>
+              Offline (No Network)
+            </div>
           ) : (
-            <div className="status-badge">
-              <div className="dot"></div>
+            <div className="status-badge offline">
+              <div className="dot amber"></div>
               Offline Mode Active
             </div>
           )}
@@ -285,8 +523,15 @@ const App: React.FC = () => {
       <main className="main-content">
         <header className="content-header no-print">
           <h1>{activeTab.replace('-', ' ').toUpperCase()}</h1>
-          <div className="user-profile">
-            <span>Admin</span>
+          <div className="user-profile-container">
+            <div className="user-profile">
+              <KeyRound size={14} style={{ marginRight: '6px', color: '#0ea5e9' }} />
+              <span>Workstation: <strong>{currentUser}</strong></span>
+            </div>
+            <button className="btn-logout" onClick={handleLogout} title="Sign Out Profile">
+              <LogOut size={15} />
+              <span>Disconnect</span>
+            </button>
           </div>
         </header>
 
@@ -531,6 +776,109 @@ const App: React.FC = () => {
                   </div>
                 )}
 
+          {activeTab === 'prescriptions' && (
+            <div className="prescriptions-page tab-pane">
+              <div className="card filter-card no-print">
+                <div className="filter-header" style={{ marginBottom: '0px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div className="filter-title" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <div className="filter-icon-bg" style={{ background: '#e0f2fe', color: '#0369a1', padding: '0.5rem', borderRadius: '8px', display: 'flex', alignItems: 'center' }}>
+                      <FileText size={18} />
+                    </div>
+                    <div>
+                      <h3 style={{ margin: '0', fontSize: '1.25rem', fontFamily: 'Outfit, sans-serif' }}>Prescription Explorer</h3>
+                      <p style={{ margin: '0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Quick access to print prescriptions created by doctors</p>
+                    </div>
+                  </div>
+                  <div className="search-bar" style={{ position: 'relative', width: '320px' }}>
+                    <Search size={18} className="search-icon" style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                    <input 
+                      type="text" 
+                      placeholder="Search patient name, phone, doctor..." 
+                      value={rxSearchQuery}
+                      onChange={e => setRxSearchQuery(e.target.value)}
+                      className="sync-input-line"
+                      style={{ paddingLeft: '2.5rem', width: '100%' }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="history-list no-print" style={{ marginTop: '1.5rem' }}>
+                {prescriptions.filter(p => {
+                  const query = rxSearchQuery.toLowerCase();
+                  return !query || 
+                    p.patientName.toLowerCase().includes(query) ||
+                    p.patientPhone.includes(query) ||
+                    p.doctorName.toLowerCase().includes(query) ||
+                    (p.diagnosis && p.diagnosis.toLowerCase().includes(query));
+                }).length === 0 ? (
+                  <div className="card empty-state" style={{ textAlign: 'center', padding: '3rem' }}>
+                    <FileText size={48} style={{ color: 'var(--text-muted)', marginBottom: '1rem', opacity: 0.5 }} />
+                    <p className="text-muted">No prescriptions written yet or matches found.</p>
+                  </div>
+                ) : (
+                  <div className="history-table-wrapper" style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden' }}>
+                    <table className="history-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ padding: '1rem', background: '#f8fafc', fontWeight: 600, color: '#475569', fontSize: '0.875rem', borderBottom: '1px solid var(--border)' }}>Date</th>
+                          <th style={{ padding: '1rem', background: '#f8fafc', fontWeight: 600, color: '#475569', fontSize: '0.875rem', borderBottom: '1px solid var(--border)' }}>Patient Details</th>
+                          <th style={{ padding: '1rem', background: '#f8fafc', fontWeight: 600, color: '#475569', fontSize: '0.875rem', borderBottom: '1px solid var(--border)' }}>Age / Gender</th>
+                          <th style={{ padding: '1rem', background: '#f8fafc', fontWeight: 600, color: '#475569', fontSize: '0.875rem', borderBottom: '1px solid var(--border)' }}>Prescribed By</th>
+                          <th style={{ padding: '1rem', background: '#f8fafc', fontWeight: 600, color: '#475569', fontSize: '0.875rem', borderBottom: '1px solid var(--border)' }}>Diagnosis</th>
+                          <th style={{ padding: '1rem', background: '#f8fafc', fontWeight: 600, color: '#475569', fontSize: '0.875rem', borderBottom: '1px solid var(--border)' }}>Medicines</th>
+                          <th className="text-center" style={{ padding: '1rem', background: '#f8fafc', fontWeight: 600, color: '#475569', fontSize: '0.875rem', borderBottom: '1px solid var(--border)', width: '100px' }}>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {prescriptions
+                          .filter(p => {
+                            const query = rxSearchQuery.toLowerCase();
+                            return !query || 
+                              p.patientName.toLowerCase().includes(query) ||
+                              p.patientPhone.includes(query) ||
+                              p.doctorName.toLowerCase().includes(query) ||
+                              (p.diagnosis && p.diagnosis.toLowerCase().includes(query));
+                          })
+                          .map(p => (
+                            <tr key={p.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                              <td style={{ padding: '1rem', fontSize: '0.875rem', whiteSpace: 'nowrap' }}>{p.date}</td>
+                              <td style={{ padding: '1rem', fontSize: '0.875rem' }}>
+                                <strong style={{ color: 'var(--text-main)' }}>{p.patientName}</strong><br/>
+                                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{p.patientPhone || 'No Phone'}</span>
+                              </td>
+                              <td style={{ padding: '1rem', fontSize: '0.875rem' }}>{p.patientAge.includes('Y') ? p.patientAge : `${p.patientAge}Y`} / {p.patientGender}</td>
+                              <td style={{ padding: '1rem', fontSize: '0.875rem', whiteSpace: 'nowrap' }}>Dr. {p.doctorName}</td>
+                              <td style={{ padding: '1rem', fontSize: '0.875rem' }}>{p.diagnosis || 'N/A'}</td>
+                              <td style={{ padding: '1rem', fontSize: '0.875rem' }}>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                                  {(p.medicines || []).map((m: any, idx: number) => (
+                                    <span key={idx} style={{ background: '#f1f5f9', color: '#475569', padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 500 }}>
+                                      {m.name}
+                                    </span>
+                                  ))}
+                                </div>
+                              </td>
+                              <td className="text-center" style={{ padding: '1rem' }}>
+                                <button 
+                                  className="btn-icon-xs print-rx-btn" 
+                                  onClick={() => handlePrintRx(p)}
+                                  title="Print Prescription (Rx)"
+                                  style={{ color: '#0ea5e9', background: '#f0f9ff', borderColor: '#e0f2fe', padding: '0.4rem', borderRadius: '6px', cursor: 'pointer', border: '1px solid #cbd5e1', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                >
+                                  <Printer size={15} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {activeTab === 'settings' && (
             <div className="control-center">
               <div className="control-header center-header">
@@ -594,6 +942,217 @@ const App: React.FC = () => {
                     <button className="btn-primary w-full" onClick={handleSyncDoctors} disabled={!syncKeyInput.trim()}>
                       <Activity size={16} /> Sync Doctors Now
                     </button>
+                  </div>
+                </div>
+
+                {/* Clinic Profiles & Users */}
+                <div className="card control-card">
+                  <div className="card-icon-header inline">
+                    <div className="header-icon red"><KeyRound size={18} /></div>
+                    <h3>Clinic Profiles & Users</h3>
+                  </div>
+                  <p className="card-description">Manage User IDs allowed to mount workspace databases on this workstation.</p>
+                  
+                  <div className="user-management-section">
+                    <div className="add-user-row" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '1rem' }}>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <input 
+                          type="text" 
+                          placeholder="Register User ID..." 
+                          value={newUserIdInput}
+                          onChange={e => setNewUserIdInput(e.target.value)}
+                          className="sync-input-line"
+                          style={{ flex: 2, minWidth: 0 }}
+                        />
+                        <select
+                          value={newUserRole}
+                          onChange={e => {
+                            setNewUserRole(e.target.value as 'reception' | 'doctor');
+                            if (e.target.value === 'doctor' && doctors.length > 0) {
+                              setSelectedDoctorIdForUser(doctors[0].id);
+                            }
+                          }}
+                          className="select-profile-dropdown"
+                          style={{ flex: 1.2, padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
+                        >
+                          <option value="reception">Reception</option>
+                          <option value="doctor">Doctor</option>
+                        </select>
+                      </div>
+
+                      {newUserRole === 'doctor' && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Link Doctor Profile:</label>
+                          <select
+                            value={selectedDoctorIdForUser}
+                            onChange={e => setSelectedDoctorIdForUser(e.target.value)}
+                            className="select-profile-dropdown"
+                            style={{ flex: 1, padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
+                          >
+                            <option value="">-- Choose Doctor Registry --</option>
+                            {doctors.map(d => (
+                              <option key={d.id} value={d.id}>{d.name} ({d.specialization})</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
+                      <button 
+                        className="btn-primary" 
+                        onClick={handleAddUser}
+                        disabled={!newUserIdInput.trim() || (newUserRole === 'doctor' && !selectedDoctorIdForUser)}
+                        style={{ padding: '0.6rem 1.25rem', width: '100%' }}
+                      >
+                        Add Clinic User ID
+                      </button>
+                    </div>
+
+                    <div className="users-list-container">
+                      <span className="label-caps" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>REGISTERED PROFILES</span>
+                      <div className="users-list" style={{ maxHeight: '140px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '8px' }}>
+                        {knownUsers.map(user => (
+                          <div key={user.id} className="user-list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0.75rem', borderBottom: '1px solid var(--border)' }}>
+                            <span className="user-list-name" style={{ fontSize: '0.9rem', color: 'var(--text-main)' }}>
+                              <strong>{user.id}</strong> <span style={{ opacity: 0.65, fontSize: '0.75rem', marginLeft: '4px' }}>({user.role})</span> {user.id === currentUser && <span style={{ color: '#0ea5e9', fontSize: '0.75rem', marginLeft: '6px', fontWeight: 600 }}>(active)</span>}
+                            </span>
+                            {user.id !== 'default' && (
+                              <button 
+                                className="btn-delete-user"
+                                onClick={() => handleDeleteUser(user.id)}
+                                title="Remove User ID"
+                                style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Workstation Connection Settings */}
+                <div className="card control-card">
+                  <div className="card-icon-header inline">
+                    <div className="header-icon green"><Server size={18} /></div>
+                    <h3>Workstation Connection</h3>
+                  </div>
+                  <p className="card-description">Configure whether this machine runs independently, acts as the central server (Host), or connects to a central server (Client) in the clinic.</p>
+                  
+                  <div className="connection-settings-section" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: 'auto', paddingTop: '1rem' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>CONNECTION MODE</label>
+                      <select 
+                        value={workstationMode}
+                        onChange={(e) => setWorkstationMode(e.target.value as any)}
+                        className="select-profile-dropdown"
+                        style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
+                      >
+                        <option value="standalone">Standalone (Local DB)</option>
+                        <option value="host">Host / Server (Expose DB)</option>
+                        <option value="client">Client (Connect to Host)</option>
+                      </select>
+                    </div>
+
+                    {workstationMode === 'client' && (
+                      <>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <div style={{ flex: 2, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>HOST IP ADDRESS</label>
+                            <input 
+                              type="text"
+                              value={hostIp}
+                              onChange={(e) => setHostIp(e.target.value)}
+                              placeholder="e.g. 192.168.1.50"
+                              className="sync-input-line"
+                              style={{ margin: 0, padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
+                            />
+                          </div>
+                          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>PORT</label>
+                            <input 
+                              type="number"
+                              value={hostPort}
+                              onChange={(e) => setHostPort(Number(e.target.value))}
+                              placeholder="49152"
+                              className="sync-input-line"
+                              style={{ margin: 0, padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
+                            />
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                          <button 
+                            type="button" 
+                            className="btn-secondary-sm" 
+                            style={{ flex: 1, padding: '0.6rem', fontSize: '0.8rem' }} 
+                            onClick={handleTestConnection}
+                            disabled={isTestingConnection}
+                          >
+                            {isTestingConnection ? 'Testing...' : 'Test Connection'}
+                          </button>
+                          <button 
+                            type="button" 
+                            className="btn-primary-sm" 
+                            style={{ flex: 1, padding: '0.6rem', fontSize: '0.8rem' }} 
+                            onClick={handleSaveConnectionSettings}
+                          >
+                            Save & Relaunch
+                          </button>
+                        </div>
+                      </>
+                    )}
+
+                    {workstationMode === 'host' && (
+                      <>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>PORT</label>
+                            <input 
+                              type="number"
+                              value={hostPort}
+                              onChange={(e) => setHostPort(Number(e.target.value))}
+                              placeholder="49152"
+                              className="sync-input-line"
+                              style={{ margin: 0, padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
+                            />
+                          </div>
+                        </div>
+
+                        {localIp && (
+                          <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '0.75rem', fontSize: '0.8rem', color: '#166534', lineHeight: '1.4' }}>
+                            <div style={{ fontWeight: 600, marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e', display: 'inline-block' }}></span>
+                              Server Active
+                            </div>
+                            <div>Workstation IP: <strong style={{ fontFamily: 'monospace' }}>{localIp}</strong></div>
+                            <div>Port: <strong style={{ fontFamily: 'monospace' }}>{hostPort}</strong></div>
+                            <div style={{ marginTop: '4px', fontSize: '0.72rem', opacity: 0.85 }}>Other computers can connect using this IP and Port.</div>
+                          </div>
+                        )}
+
+                        <button 
+                          type="button" 
+                          className="btn-primary-sm" 
+                          style={{ width: '100%', padding: '0.6rem', fontSize: '0.8rem', marginTop: '4px' }} 
+                          onClick={handleSaveConnectionSettings}
+                        >
+                          Save & Relaunch
+                        </button>
+                      </>
+                    )}
+
+                    {workstationMode === 'standalone' && (
+                      <button 
+                        type="button" 
+                        className="btn-primary-sm" 
+                        style={{ width: '100%', padding: '0.6rem', fontSize: '0.8rem', marginTop: '4px' }} 
+                        onClick={handleSaveConnectionSettings}
+                      >
+                        Save & Relaunch
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -759,6 +1318,298 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {activePrintPrescription && (
+        <div id="prescription-print-template" className="print-only">
+          <div className="print-container">
+            {/* Header / Clinic Doctor Info */}
+            <div className="print-header">
+              <div className="print-clinic-branding">
+                <h2>Dr. {activePrintPrescription.doctorName.replace(/^Dr\.?\s+/i, '')}</h2>
+                <p className="qualifications">{doctors.find(d => d.id === activePrintPrescription.doctorId)?.qualifications || ''}</p>
+                <p className="specialization">{doctors.find(d => d.id === activePrintPrescription.doctorId)?.specialization || 'Consulting Physician'}</p>
+              </div>
+              <div className="print-clinic-address">
+                <p className="address-text">{doctors.find(d => d.id === activePrintPrescription.doctorId)?.address || ''}</p>
+                {doctors.find(d => d.id === activePrintPrescription.doctorId)?.phone && (
+                  <p className="phone-text"><strong>Ph:</strong> {doctors.find(d => d.id === activePrintPrescription.doctorId)?.phone}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Patient Info */}
+            <div className="print-patient-meta-grid">
+              <div>
+                <span className="meta-label">Patient Name</span>
+                <strong className="meta-value">{activePrintPrescription.patientName}</strong>
+              </div>
+              <div>
+                <span className="meta-label">Age / Gender</span>
+                <strong className="meta-value">{activePrintPrescription.patientAge.includes('Y') ? activePrintPrescription.patientAge : `${activePrintPrescription.patientAge}Y`} / {activePrintPrescription.patientGender}</strong>
+              </div>
+              <div>
+                <span className="meta-label">Date</span>
+                <strong className="meta-value">{(() => {
+                  try {
+                    return format(new Date(activePrintPrescription.date.split(' ')[0]), 'dd MMM yyyy');
+                  } catch (e) {
+                    return activePrintPrescription.date;
+                  }
+                })()}</strong>
+              </div>
+              <div>
+                <span className="meta-label">Phone No</span>
+                <strong className="meta-value">{activePrintPrescription.patientPhone || 'N/A'}</strong>
+              </div>
+            </div>
+
+            {/* Symptoms & Diagnosis */}
+            {(activePrintPrescription.symptoms || activePrintPrescription.diagnosis) && (
+              <div className="print-clinical-grid">
+                {activePrintPrescription.symptoms && (
+                  <div className="clinical-card">
+                    <span className="clinical-label">Chief Complaints / Symptoms</span>
+                    <p className="clinical-text">{activePrintPrescription.symptoms}</p>
+                  </div>
+                )}
+                {activePrintPrescription.diagnosis && (
+                  <div className="clinical-card">
+                    <span className="clinical-label">Diagnosis</span>
+                    <p className="clinical-text">{activePrintPrescription.diagnosis}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Rx Symbol & Medicines */}
+            <div className="print-rx-section">
+              <div className="rx-symbol">Rₓ</div>
+              
+              <table className="print-meds-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '40px' }}>Sr.</th>
+                    <th>Medicine Description</th>
+                    <th style={{ width: '120px' }}>Dosage</th>
+                    <th style={{ width: '100px' }}>Duration</th>
+                    <th>Instructions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(activePrintPrescription.medicines || []).map((m: any, idx: number) => (
+                    <tr key={idx}>
+                      <td>{idx + 1}</td>
+                      <td><strong>{m.name}</strong></td>
+                      <td>{m.dosage}</td>
+                      <td>{m.duration}</td>
+                      <td>{m.instructions}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {activePrintPrescription.notes && (
+              <div className="print-notes-section">
+                <span className="notes-label">Advice / Notes</span>
+                <p className="notes-text" style={{ whiteSpace: 'pre-wrap' }}>{activePrintPrescription.notes}</p>
+              </div>
+            )}
+
+            {/* Signature Box */}
+            <div className="print-footer">
+              <div className="signature-box" style={{ marginLeft: 'auto', textAlign: 'center' }}>
+                <div className="signature-line"></div>
+                <p style={{ margin: '0 0 2px 0', fontWeight: '700' }}>Dr. {activePrintPrescription.doctorName.replace(/^Dr\.?\s+/i, '')}</p>
+                <p className="subtitle">Authorized Signature</p>
+              </div>
+            </div>
+          </div>
+          <style>{`
+            #prescription-print-template {
+              font-family: 'Outfit', 'Inter', sans-serif;
+              color: #1e293b;
+            }
+            #prescription-print-template .print-container {
+              max-width: 800px;
+              margin: 0 auto;
+              padding: 2.5rem;
+              background: white;
+              border-top: 6px solid #0284c7;
+            }
+            #prescription-print-template .print-header {
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-start;
+              margin-bottom: 1.5rem;
+              padding-bottom: 1rem;
+              border-bottom: 1px solid #e2e8f0;
+            }
+            #prescription-print-template .print-clinic-branding {
+              max-width: 60%;
+            }
+            #prescription-print-template .print-clinic-branding h2 {
+              font-size: 1.6rem;
+              font-weight: 800;
+              color: #0f172a;
+              margin: 0 0 0.35rem 0;
+              font-family: 'Outfit', sans-serif;
+              letter-spacing: -0.02em;
+            }
+            #prescription-print-template .qualifications {
+              font-size: 0.8rem;
+              font-weight: 700;
+              color: #475569;
+              margin: 0 0 0.2rem 0;
+              letter-spacing: 0.05em;
+              text-transform: uppercase;
+            }
+            #prescription-print-template .specialization {
+              font-size: 0.85rem;
+              color: #0284c7;
+              font-weight: 600;
+              margin: 0;
+              letter-spacing: 0.05em;
+              text-transform: uppercase;
+            }
+            #prescription-print-template .print-clinic-address {
+              text-align: right;
+              max-width: 38%;
+              font-size: 0.8rem;
+              color: #475569;
+              line-height: 1.4;
+            }
+            #prescription-print-template .print-clinic-address p {
+              margin: 0 0 0.2rem 0;
+            }
+            #prescription-print-template .print-clinic-address .address-text {
+              white-space: pre-wrap;
+            }
+            #prescription-print-template .print-divider {
+              display: none;
+            }
+            #prescription-print-template .print-patient-meta-grid {
+              display: grid;
+              grid-template-columns: repeat(4, 1fr);
+              gap: 1rem;
+              background: #f8fafc;
+              border: 1px solid #e2e8f0;
+              padding: 1rem;
+              border-radius: 8px;
+              margin-bottom: 1.5rem;
+            }
+            #prescription-print-template .meta-label {
+              display: block;
+              font-size: 0.7rem;
+              text-transform: uppercase;
+              color: #64748b;
+              font-weight: 700;
+              margin-bottom: 2px;
+              letter-spacing: 0.05em;
+            }
+            #prescription-print-template .meta-value {
+              display: block;
+              font-size: 0.9rem;
+              color: #0f172a;
+              font-weight: 600;
+            }
+            #prescription-print-template .print-clinical-grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 1.5rem;
+              margin-bottom: 1.5rem;
+              border-bottom: 1px dashed #e2e8f0;
+              padding-bottom: 1.5rem;
+            }
+            #prescription-print-template .clinical-card {
+              background: #ffffff;
+            }
+            #prescription-print-template .clinical-label {
+              display: block;
+              font-size: 0.75rem;
+              text-transform: uppercase;
+              color: #64748b;
+              font-weight: 700;
+              margin-bottom: 4px;
+              letter-spacing: 0.05em;
+            }
+            #prescription-print-template .clinical-text {
+              font-size: 0.95rem;
+              color: #1e293b;
+              margin: 0;
+              line-height: 1.4;
+            }
+            #prescription-print-template .print-rx-section {
+              margin-bottom: 2rem;
+            }
+            #prescription-print-template .rx-symbol {
+              font-size: 2.5rem;
+              font-family: 'Times New Roman', Georgia, serif;
+              font-style: italic;
+              font-weight: bold;
+              color: #0284c7;
+              margin-bottom: 0.5rem;
+              line-height: 1;
+            }
+            #prescription-print-template .print-meds-table {
+              width: 100%;
+              border-collapse: collapse;
+            }
+            #prescription-print-template .print-meds-table th {
+              background: #f8fafc;
+              color: #475569;
+              font-size: 0.75rem;
+              text-transform: uppercase;
+              font-weight: 700;
+              letter-spacing: 0.05em;
+              padding: 0.6rem 0.75rem;
+              border-bottom: 2px solid #e2e8f0;
+              text-align: left;
+            }
+            #prescription-print-template .print-meds-table td {
+              padding: 0.75rem;
+              border-bottom: 1px solid #f1f5f9;
+              font-size: 0.9rem;
+              color: #334155;
+              vertical-align: middle;
+            }
+            #prescription-print-template .print-notes-section {
+              font-size: 0.85rem;
+              margin-bottom: 3rem;
+              background: #f0f9ff;
+              padding: 1rem;
+              border-radius: 8px;
+              border-left: 4px solid #0284c7;
+            }
+            #prescription-print-template .notes-label {
+              font-size: 0.75rem;
+              text-transform: uppercase;
+              color: #0369a1;
+              font-weight: 700;
+              letter-spacing: 0.05em;
+              margin-bottom: 0.25rem;
+              display: block;
+            }
+            #prescription-print-template .notes-text {
+              color: #0c4a6e;
+              font-size: 0.9rem;
+              line-height: 1.4;
+            }
+            #prescription-print-template .signature-line {
+              width: 180px;
+              height: 1px;
+              background: #cbd5e1;
+              margin-bottom: 0.5rem;
+              margin-top: 2rem;
+            }
+            #prescription-print-template .print-footer .subtitle {
+              font-size: 0.75rem;
+              color: #64748b;
+              margin: 0;
+            }
+          `}</style>
+        </div>
+      )}
+
       {showDevLogin && (
         <div className="dev-overlay">
           <div className="dev-modal">
@@ -865,10 +1716,19 @@ const App: React.FC = () => {
 
         .status-badge {
           display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;
-          color: var(--secondary); background: #f0fdfa; padding: 0.5rem; border-radius: 20px;
+          color: var(--secondary); background: #f0fdfa; padding: 0.5rem 0.75rem; border-radius: 20px;
+          justify-content: center; width: 100%;
+        }
+        .status-badge.online {
+          color: #0f766e; background: #f0fdfa; border: 1px solid #ccfbf1;
+        }
+        .status-badge.offline {
+          color: #b45309; background: #fffbeb; border: 1px solid #fef3c7;
         }
 
         .dot { width: 8px; height: 8px; background: var(--secondary); border-radius: 50%; animation: pulse 2s infinite; }
+        .dot.green { background: #14b8a6; }
+        .dot.amber { background: #f59e0b; }
         @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
 
         .main-content { flex: 1; display: flex; flex-direction: column; }
@@ -1064,6 +1924,22 @@ const App: React.FC = () => {
         .header-icon.purple { background: #f3e8ff; color: #9333ea; }
         .header-icon.green { background: #dcfce7; color: #16a34a; }
         .header-icon.gray { background: #f1f5f9; color: #475569; }
+        .header-icon.red { background: #fee2e2; color: #ef4444; }
+
+        .user-profile-container { display: flex; align-items: center; gap: 0.75rem; }
+        .user-profile {
+          display: inline-flex; align-items: center; background: #f1f5f9; color: #475569;
+          font-size: 0.85rem; font-weight: 500; padding: 0.4rem 0.875rem; border-radius: 9999px;
+          border: 1px solid var(--border);
+        }
+        .btn-logout {
+          display: inline-flex; align-items: center; gap: 0.375rem; background: #ffffff;
+          border: 1px solid var(--border); color: #64748b; font-size: 0.85rem; font-weight: 600;
+          padding: 0.4rem 0.875rem; border-radius: 9999px; cursor: pointer; transition: all 0.2s;
+        }
+        .btn-logout:hover {
+          background: #fef2f2; border-color: #fee2e2; color: #ef4444;
+        }
 
         .center-header { text-align: center; margin-bottom: 2rem; }
         .center-header h2 { font-size: 1.75rem; color: #1e293b; margin-bottom: 0.5rem; }

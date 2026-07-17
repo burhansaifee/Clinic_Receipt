@@ -4,14 +4,23 @@ import * as XLSX from 'xlsx';
 import { app } from 'electron';
 
 const DATA_DIR = path.join(app.getPath('userData'), 'ClinicData');
-const EXCEL_PATH = path.join(DATA_DIR, 'MedFlow_Database.xlsx');
 
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
+let currentUserId: string | null = null;
+
+const getExcelPath = () => {
+  return path.join(DATA_DIR, 'MedFlow_Database.xlsx');
+};
+
 export const excelStorage = {
+  setUserId: (userId: string | null) => {
+    currentUserId = userId;
+  },
   saveData: (data: any) => {
+    const EXCEL_PATH = getExcelPath();
     try {
       const workbook = XLSX.utils.book_new();
 
@@ -44,6 +53,7 @@ export const excelStorage = {
 
   loadData: () => {
     try {
+      const EXCEL_PATH = getExcelPath();
       if (!fs.existsSync(EXCEL_PATH)) return null;
 
       const workbook = XLSX.readFile(EXCEL_PATH);
@@ -68,5 +78,5 @@ export const excelStorage = {
     }
   },
 
-  getExcelPath: () => EXCEL_PATH
+  getExcelPath: () => getExcelPath()
 };

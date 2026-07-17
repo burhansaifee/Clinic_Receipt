@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { storage, type Doctor, type Receipt, type ReceiptItem, type Service } from '../lib/storage';
 import { Plus, Trash2, Save, User, CreditCard } from 'lucide-react';
 import { format } from 'date-fns';
@@ -49,6 +49,8 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, initialData 
   const [isReturningPatient, setIsReturningPatient] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'ONLINE' | 'FREE'>(initialData?.paymentMethod || 'CASH');
   const [appointmentDate, setAppointmentDate] = useState(initialData?.date || format(new Date(), 'yyyy-MM-dd'));
+  const shouldFocusLastItem = useRef(false);
+  const formRef = useRef<HTMLFormElement>(null);
 
   const handleYearsChange = (val: string) => {
     setAgeYears(val);
@@ -77,7 +79,19 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, initialData 
     init();
   }, [doctors, initialData, paymentMethod]);
 
+  useEffect(() => {
+    if (shouldFocusLastItem.current && formRef.current) {
+      const inputs = formRef.current.querySelectorAll('.description-selector input');
+      if (inputs.length > 0) {
+        const lastInput = inputs[inputs.length - 1] as HTMLInputElement;
+        lastInput.focus();
+      }
+      shouldFocusLastItem.current = false;
+    }
+  }, [items]);
+
   const addItem = () => {
+    shouldFocusLastItem.current = true;
     setItems([...items, { id: Date.now().toString(), description: '', amount: 0 }]);
   };
 
@@ -178,7 +192,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, initialData 
 
   return (
     <div className="receipt-form-container">
-      <form onSubmit={(e) => e.preventDefault()} className="receipt-form no-print">
+      <form ref={formRef} onSubmit={(e) => e.preventDefault()} className="receipt-form no-print">
         <div className="form-grid">
           <div className="card">
             <h3><User size={18} /> Patient Information</h3>

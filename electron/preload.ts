@@ -51,5 +51,27 @@ contextBridge.exposeInMainWorld('database', {
   setMetadata: (key: string, value: string) => ipcRenderer.invoke('db-set-metadata', key, value),
   batchImportDoctors: (doctors: any[]) => ipcRenderer.invoke('db-batch-import-doctors', doctors),
   openFolder: () => ipcRenderer.invoke('open-db-folder'),
+  getPrescriptions: () => ipcRenderer.invoke('db-get-prescriptions'),
+  savePrescription: (prescription: any) => ipcRenderer.invoke('db-save-prescription', prescription),
+  deletePrescription: (id: string) => ipcRenderer.invoke('db-delete-prescription', id),
+})
+
+contextBridge.exposeInMainWorld('users', {
+  getKnownUsers: () => ipcRenderer.invoke('get-known-users'),
+  addKnownUser: (userId: string, role: string, doctorId?: string) => ipcRenderer.invoke('add-known-user', userId, role, doctorId),
+  deleteKnownUser: (userId: string) => ipcRenderer.invoke('delete-known-user', userId),
+  connectUser: (userId: string, password?: string) => ipcRenderer.invoke('connect-user', userId, password),
+  setUserPassword: (userId: string, password?: string) => ipcRenderer.invoke('set-user-password', userId, password),
+  getCurrentUser: () => ipcRenderer.invoke('get-current-user'),
+  getCurrentUserRole: () => ipcRenderer.invoke('get-current-user-role'),
+  getCurrentUserDoctorId: () => ipcRenderer.invoke('get-current-user-doctor-id'),
+  disconnectUser: () => ipcRenderer.invoke('disconnect-user'),
+})
+
+contextBridge.exposeInMainWorld('connection', {
+  getSettings: () => ipcRenderer.invoke('get-connection-settings'),
+  saveSettings: (settings: any) => ipcRenderer.invoke('save-connection-settings', settings),
+  getServerStatus: () => ipcRenderer.invoke('get-server-status'),
+  testConnection: (hostIp: string, hostPort: number) => ipcRenderer.invoke('test-connection', hostIp, hostPort),
 })
 

@@ -3,14 +3,25 @@ import fs from 'node:fs';
 import { app } from 'electron';
 
 let db: any;
+let currentUserId: string | null = null;
 
 export const database = {
-  init: (Database: any) => {
+  init: (Database: any, userId?: string) => {
+    currentUserId = userId || null;
     const DATA_DIR = path.join(app.getPath('userData'), 'ClinicData');
     const DB_PATH = path.join(DATA_DIR, 'medflow.db');
 
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+
+    if (db) {
+      try {
+        db.close();
+        console.log('Closed previous database connection.');
+      } catch (err) {
+        console.error('Failed to close previous database connection:', err);
+      }
     }
 
     db = new Database(DB_PATH);
@@ -46,6 +57,22 @@ export const database = {
         items TEXT, -- JSON string
         total REAL,
         paymentMethod TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS prescriptions (
+        id TEXT PRIMARY KEY,
+        receiptId TEXT,
+        date TEXT NOT NULL,
+        patientName TEXT NOT NULL,
+        patientAge TEXT,
+        patientGender TEXT,
+        patientPhone TEXT,
+        doctorId TEXT,
+        doctorName TEXT,
+        symptoms TEXT,
+        diagnosis TEXT,
+        medicines TEXT, -- JSON string
+        notes TEXT
       );
 
       CREATE TABLE IF NOT EXISTS metadata (
@@ -159,5 +186,44 @@ export const database = {
       for (const doc of docs) insert.run(doc);
     });
     transaction(doctors);
-  }
+  },
+
+  // Prescriptions
+  getPrescriptions: () => {
+    const prescriptions = db.prepare('SELECT * FROM prescriptions ORDER BY date DESC').all() as any[];
+    return prescriptions.map(p => {
+      try {
+        return {
+          ...p,
+          medicines: JSON.parse(p.medicines || '[]')
+        };
+      } catch (e) {
+        console.error('Failed to parse prescription medicines:', p.id, e);
+        return {
+          ...p,
+          medicines: []
+        };
+      }
+    });
+  },
+  savePrescription: (prescription: any) => {
+    const stmt = db.prepare(`
+      INSERT OR REPLACE INTO prescriptions (id, receiptId, date, patientName, patientAge, patientGender, patientPhone, doctorId, doctorName, symptoms, diagnosis, medicines, notes)
+      VALUES (@id, @receiptId, @date, @patientName, @patientAge, @patientGender, @patientPhone, @doctorId, @doctorName, @symptoms, @diagnosis, @medicines, @notes)
+    `);
+    return stmt.run({
+      receiptId: '',
+      patientAge: '',
+      patientGender: 'Male',
+      patientPhone: '',
+      doctorId: '',
+      doctorName: '',
+      symptoms: '',
+      diagnosis: '',
+      notes: '',
+      ...prescription,
+      medicines: JSON.stringify(prescription.medicines || [])
+    });
+  },
+  deletePrescription: (id: string) => db.prepare('DELETE FROM prescriptions WHERE id = ?').run(id)
 };

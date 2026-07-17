@@ -27,7 +27,9 @@ export default defineConfig({
                 'node:fs',
                 'node:module',
                 'node:url',
-                'node:crypto'
+                'node:crypto',
+                'node:http',
+                'node:os'
               ],
             },
           },

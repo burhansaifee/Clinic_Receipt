@@ -1,7 +1,7 @@
 {
   "name": "clinic",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.2",
   "main": "dist-electron/main.js",
   "type": "module",
   "scripts": {
@@ -50,8 +50,9 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "YOUR_GITHUB_USERNAME",
-        "repo": "YOUR_GITHUB_REPO"
+        "owner": "burhansaifee",
+        "repo": "Clinic_Receipt",
+        "private": "true"
       }
     ],
     "directories": {

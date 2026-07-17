@@ -60,8 +60,14 @@ input:focus, select:focus {
 
 /* Print Styles */
 @media print {
-  body {
-    background: white;
+  html, body, #root, .app-container {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    background: white !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
   }
   .no-print {
     display: none !important;

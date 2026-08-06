@@ -10,7 +10,6 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ doctors, receipts, onNewReceipt }) => {
   const totalRevenue = receipts.reduce((sum, r) => sum + (r.paymentMethod === 'FREE' ? 0 : r.total), 0);
-  const recentReceipts = receipts.slice(-5).reverse();
 
   return (
     <div className="dashboard no-print">
@@ -102,27 +101,7 @@ const Dashboard: React.FC<DashboardProps> = ({ doctors, receipts, onNewReceipt }
           </div>
         </div>
 
-        <div className="card recent-activity">
-          <h3>Recent Receipts</h3>
-          <div className="activity-list">
-            {recentReceipts.length === 0 ? (
-              <p className="text-muted">No recent activity</p>
-            ) : (
-              recentReceipts.map(r => (
-                <div key={r.id} className="activity-item">
-                  <div className="activity-main">
-                    <strong>{r.patientName}</strong>
-                    <span className="text-muted">#{r.receiptNumber}</span>
-                  </div>
-                  <div className="activity-meta">
-                    <span className="amount">₹{r.total}</span>
-                    <span className="date">{r.date}</span>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+
       </div>
 
       <style>{`
@@ -228,7 +207,7 @@ const Dashboard: React.FC<DashboardProps> = ({ doctors, receipts, onNewReceipt }
 
         .dashboard-grid {
           display: grid;
-          grid-template-columns: 1fr 2fr;
+          grid-template-columns: 1fr;
           gap: 1.5rem;
         }
 
@@ -267,44 +246,7 @@ const Dashboard: React.FC<DashboardProps> = ({ doctors, receipts, onNewReceipt }
           box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
         }
 
-        .activity-list {
-          margin-top: 1rem;
-        }
 
-        .activity-item {
-          display: flex;
-          justify-content: space-between;
-          padding: 1.25rem 0;
-          border-bottom: 1px solid var(--border);
-        }
-
-        .activity-item:last-child { border-bottom: none; }
-
-        .activity-main {
-          display: flex;
-          flex-direction: column;
-          gap: 0.25rem;
-        }
-
-        .activity-main strong { font-size: 1.05rem; }
-
-        .activity-meta {
-          display: flex;
-          flex-direction: column;
-          align-items: flex-end;
-          gap: 0.25rem;
-        }
-
-        .amount {
-          font-weight: 700;
-          color: var(--primary);
-          font-size: 1.1rem;
-        }
-
-        .date {
-          font-size: 0.75rem;
-          color: var(--text-muted);
-        }
       `}</style>
     </div>
   );

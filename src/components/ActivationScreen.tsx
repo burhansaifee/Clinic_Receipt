@@ -114,15 +114,7 @@ const ActivationScreen: React.FC<ActivationScreenProps> = ({ onActivated, status
             {isActivating ? 'Verifying...' : (status === 'EXPIRED' ? 'Renew License' : 'Activate Now')}
           </button>
 
-          {window.location.hostname === 'localhost' && (
-            <button 
-              className="btn-ghost-sm w-full" 
-              style={{ marginTop: '-0.5rem', marginBottom: '1.5rem', fontSize: '0.75rem', opacity: 0.6 }}
-              onClick={onActivated}
-            >
-              Skip Activation (Dev Only)
-            </button>
-          )}
+
 
           <div className="activation-footer">
             <p>Need a key? Contact: <strong>support@medflow.com</strong></p>

@@ -21,20 +21,40 @@ const SECRET_SALT = 'MEDFLOW-OFFLINE-LICENSE-2024-X99'
 
 // Seed or migrate default known users
 const rawUsers = store.get('known_users');
+let knownUsersList: any[] = [];
+
 if (!rawUsers) {
-  store.set('known_users', [
+  knownUsersList = [
     { id: 'default', role: 'reception' },
     { id: 'admin', role: 'reception' },
     { id: 'reception1', role: 'reception' },
     { id: 'doctor1', role: 'doctor' },
     { id: 'doctor2', role: 'doctor' }
-  ]);
-} else if (Array.isArray(rawUsers) && rawUsers.length > 0 && typeof rawUsers[0] === 'string') {
-  const migrated = (rawUsers as string[]).map(u => ({
-    id: u.toLowerCase(),
-    role: u.toLowerCase().includes('doctor') ? 'doctor' : 'reception'
-  }));
-  store.set('known_users', migrated);
+  ];
+  store.set('known_users', knownUsersList);
+} else if (Array.isArray(rawUsers)) {
+  if (rawUsers.length > 0 && typeof rawUsers[0] === 'string') {
+    knownUsersList = (rawUsers as string[]).map(u => ({
+      id: u.toLowerCase(),
+      role: u.toLowerCase().includes('doctor') ? 'doctor' : 'reception'
+    }));
+  } else {
+    knownUsersList = rawUsers;
+  }
+  
+  // Ensure 'admin' user profile is always present
+  const hasAdmin = knownUsersList.some(u => u && u.id === 'admin');
+  if (!hasAdmin) {
+    knownUsersList.push({ id: 'admin', role: 'reception' });
+  }
+
+  // Ensure 'default' user profile is always present
+  const hasDefault = knownUsersList.some(u => u && u.id === 'default');
+  if (!hasDefault) {
+    knownUsersList.unshift({ id: 'default', role: 'reception' });
+  }
+
+  store.set('known_users', knownUsersList);
 }
 
 // Workstation Mode Configuration
@@ -313,9 +333,10 @@ ipcMain.handle('activate-license', (_, fullKey: string) => {
   return { success: false, message: 'Invalid License Key' }
 })
 
-// For original developer to generate keys
-ipcMain.handle('dev-generate-key', (_, mid: string, dateStr: string) => {
-  return generateDateBoundKey(mid, dateStr)
+ipcMain.handle('deactivate-license', () => {
+  store.delete('license_key')
+  store.delete('last_seen_date')
+  return { success: true }
 })
 
 // Excel Storage IPCs
@@ -416,6 +437,11 @@ ipcMain.handle('get-known-users', async () => {
 });
 
 ipcMain.handle('add-known-user', (_, userId: string, role: string, doctorId?: string) => {
+  const activeUser = store.get('current_user') as string || '';
+  if (activeUser.toLowerCase() !== 'admin') {
+    return { success: false, error: 'Unauthorized: Only the "admin" profile can add users.' };
+  }
+
   if (workstationMode === 'client') return clientRequest('add-known-user', userId, role, doctorId);
 
   const cleanId = userId.trim().toLowerCase();
@@ -432,6 +458,11 @@ ipcMain.handle('add-known-user', (_, userId: string, role: string, doctorId?: st
 });
 
 ipcMain.handle('delete-known-user', (_, userId: string) => {
+  const activeUser = store.get('current_user') as string || '';
+  if (activeUser.toLowerCase() !== 'admin') {
+    return { success: false, error: 'Unauthorized: Only the "admin" profile can delete users.' };
+  }
+
   if (workstationMode === 'client') return clientRequest('delete-known-user', userId);
 
   const cleanId = userId.trim().toLowerCase();
@@ -473,17 +504,15 @@ ipcMain.handle('connect-user', async (_, userId: string, password?: string) => {
     return { success: false, error: 'Access Denied: User ID is not recognized.' };
   }
   
-  // Doctor role password check
-  if (user.role === 'doctor') {
-    if (!user.password) {
-      return { success: true, requirePasswordSetup: true, role: user.role, doctorId: user.doctorId };
-    }
-    if (password === undefined) {
-      return { success: false, requirePasswordInput: true };
-    }
-    if (user.password !== password) {
-      return { success: false, error: 'Incorrect password' };
-    }
+  // Enforce password check for all workstation user profiles
+  if (!user.password) {
+    return { success: true, requirePasswordSetup: true, role: user.role, doctorId: user.doctorId };
+  }
+  if (password === undefined) {
+    return { success: false, requirePasswordInput: true };
+  }
+  if (user.password !== password) {
+    return { success: false, error: 'Incorrect password' };
   }
   
   if (workstationMode !== 'client') {

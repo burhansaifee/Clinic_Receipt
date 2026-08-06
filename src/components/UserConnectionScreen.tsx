@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, AlertCircle, RefreshCw, KeyRound, Server, HelpCircle, Settings } from 'lucide-react';
+import { User, AlertCircle, RefreshCw, KeyRound, Server, Settings } from 'lucide-react';
 
 interface UserConnectionScreenProps {
   onConnected: (userId: string, role: string, doctorId?: string) => void;
@@ -12,8 +12,7 @@ const UserConnectionScreen: React.FC<UserConnectionScreenProps> = ({ onConnected
   const [passwordMode, setPasswordMode] = useState<'none' | 'input' | 'setup'>('none');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [knownUsers, setKnownUsers] = useState<{ id: string, role: string, doctorId?: string }[]>([]);
-  const [showHelp, setShowHelp] = useState(false);
+
 
   // Network Connection Settings
   const [showNetworkSettings, setShowNetworkSettings] = useState(false);
@@ -25,13 +24,6 @@ const UserConnectionScreen: React.FC<UserConnectionScreenProps> = ({ onConnected
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
   useEffect(() => {
-    // Load known users to display as hints if needed (e.g. for development or easy demo)
-    // @ts-ignore
-    window.users.getKnownUsers().then((users: { id: string, role: string, doctorId?: string }[]) => {
-      setKnownUsers(users);
-    }).catch((err: any) => {
-      console.warn('Failed to load known users from host server:', err);
-    });
 
     // Load connection settings
     // @ts-ignore
@@ -550,38 +542,7 @@ const UserConnectionScreen: React.FC<UserConnectionScreenProps> = ({ onConnected
           )}
         </form>
 
-        <div className="help-section">
-          <button 
-            type="button" 
-            className="help-toggle" 
-            onClick={() => setShowHelp(!showHelp)}
-          >
-            <HelpCircle size={14} />
-            <span>Need help connecting?</span>
-          </button>
 
-          {showHelp && (
-            <div className="help-content animate-fade-in">
-              <p>Recognized User IDs on this workstation:</p>
-              <div className="hints-row">
-                {knownUsers.map(user => (
-                  <button
-                    key={user.id}
-                    type="button"
-                    className="hint-badge"
-                    onClick={() => setUserIdInput(user.id)}
-                    title={`Role: ${user.role}`}
-                  >
-                    {user.id} <span style={{ opacity: 0.65, fontSize: '0.65rem', marginLeft: '3px' }}>
-                      ({user.role}{user.role === 'doctor' && !user.doctorId ? ' - unlinked' : ''})
-                    </span>
-                  </button>
-                ))}
-              </div>
-              <p className="help-note">You can add new User IDs from the Control Center once connected.</p>
-            </div>
-          )}
-        </div>
 
         <div className="connection-footer">
           <div className="status-indicator">
@@ -794,73 +755,7 @@ const UserConnectionScreen: React.FC<UserConnectionScreenProps> = ({ onConnected
           box-shadow: none;
         }
 
-        .help-section {
-          border-top: 1px solid rgba(255, 255, 255, 0.05);
-          padding-top: 1.25rem;
-          margin-top: 1rem;
-        }
 
-        .help-toggle {
-          background: transparent;
-          border: none;
-          color: #64748b;
-          font-size: 0.8rem;
-          display: flex;
-          align-items: center;
-          gap: 0.375rem;
-          cursor: pointer;
-          padding: 0;
-          margin: 0 auto;
-          transition: color 0.2s;
-        }
-
-        .help-toggle:hover {
-          color: #94a3b8;
-        }
-
-        .help-content {
-          margin-top: 0.75rem;
-          background: rgba(15, 23, 42, 0.4);
-          border: 1px solid rgba(255, 255, 255, 0.03);
-          border-radius: 10px;
-          padding: 0.75rem;
-          font-size: 0.775rem;
-          color: #94a3b8;
-        }
-
-        .help-content p {
-          margin-bottom: 0.5rem;
-        }
-
-        .hints-row {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 0.375rem;
-          margin-bottom: 0.5rem;
-        }
-
-        .hint-badge {
-          background: rgba(14, 165, 233, 0.1);
-          color: #38bdf8;
-          border: 1px solid rgba(14, 165, 233, 0.2);
-          border-radius: 6px;
-          padding: 0.2rem 0.5rem;
-          font-size: 0.75rem;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-
-        .hint-badge:hover {
-          background: rgba(14, 165, 233, 0.2);
-          border-color: #0ea5e9;
-          transform: translateY(-0.5px);
-        }
-
-        .help-note {
-          font-size: 0.7rem;
-          color: #64748b;
-          margin: 0;
-        }
 
         .connection-footer {
           margin-top: 2rem;

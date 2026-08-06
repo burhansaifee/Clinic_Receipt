@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
-import { LayoutDashboard, Users, Receipt, PlusCircle, Settings, ShieldCheck, Copy, Calendar, TrendingUp, DownloadCloud, UploadCloud, FileText, Activity, Filter, Briefcase, Printer, Trash2, Edit2, FolderOpen, Search, LogOut, KeyRound, Server } from 'lucide-react';
+import { LayoutDashboard, Users, Receipt, PlusCircle, Settings, ShieldCheck, Copy, Calendar, DownloadCloud, UploadCloud, FileText, Activity, Filter, Briefcase, Printer, Trash2, Edit2, FolderOpen, Search, LogOut, KeyRound, Server, AlertCircle } from 'lucide-react';
 
 import { storage, type Doctor, type Receipt as ReceiptType, type Service } from './lib/storage';
 import './index.css';
@@ -23,14 +23,7 @@ const App: React.FC = () => {
   const [receipts, setReceipts] = useState<ReceiptType[]>([]);
   const [activationStatus, setActivationStatus] = useState<{status: 'NOT_ACTIVATED' | 'ACTIVATED' | 'EXPIRED' | 'TAMPERED'; expiryDate?: string} | null>(null);
   const [machineId, setMachineId] = useState<string>('');
-  const [isDevMode, setIsDevMode] = useState<boolean>(() => {
-    if (window.location.hostname === 'localhost') return true;
-    return localStorage.getItem('medflow_dev_mode') === 'true';
-  });
-  const [logoClicks, setLogoClicks] = useState(0);
   const [syncKeyInput, setSyncKeyInput] = useState('');
-  const [showDevLogin, setShowDevLogin] = useState(false);
-  const [devPinInput, setDevPinInput] = useState('');
   
   // User Management State
   const [currentUser, setCurrentUser] = useState<string | null>(null);
@@ -197,44 +190,7 @@ const App: React.FC = () => {
     }
   }, [activeTab]);
 
-  const handleLogoClick = () => {
-    const newClicks = logoClicks + 1;
-    if (newClicks >= 5) {
-      setShowDevLogin(true);
-      setLogoClicks(0);
-    } else {
-      setLogoClicks(newClicks);
-      setTimeout(() => setLogoClicks(0), 3000);
-    }
-  };
 
-  const handleDevLogin = () => {
-    if (devPinInput === 'Burhan2003') {
-      setIsDevMode(true);
-      localStorage.setItem('medflow_dev_mode', 'true');
-      setShowDevLogin(false);
-      setDevPinInput('');
-      alert('Developer Mode Unlocked!');
-    } else {
-      alert('Incorrect Password');
-    }
-  };
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.shiftKey && e.key === 'D') {
-        if (isDevMode) {
-          setIsDevMode(false);
-          localStorage.removeItem('medflow_dev_mode');
-          alert('Developer Tools Locked');
-        } else {
-          setShowDevLogin(true);
-        }
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isDevMode]);
 
   const handleSyncDoctors = async () => {
     if (!syncKeyInput.trim()) return alert('Please enter a Setup Key');
@@ -426,9 +382,18 @@ const App: React.FC = () => {
   return (
     <div className="app-container">
       <aside className="sidebar no-print">
-        <div className="sidebar-header" onClick={handleLogoClick} style={{ cursor: 'pointer' }}>
+        <div className="sidebar-header">
           <div className="logo">
-            <img src="/icon.png" alt="Logo" className="logo-img" />
+            <svg className="logo-svg" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="logoGrad" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stopColor="#0ea5e9" />
+                  <stop offset="100%" stopColor="#14b8a6" />
+                </linearGradient>
+              </defs>
+              <rect x="32" y="32" width="448" height="448" rx="110" fill="url(#logoGrad)" />
+              <path d="M256 128 V384 M128 256 H384" stroke="#ffffff" strokeWidth="64" strokeLinecap="round" />
+            </svg>
             <span>MedFlow</span>
           </div>
         </div>
@@ -492,16 +457,17 @@ const App: React.FC = () => {
         </nav>
 
         <div className="sidebar-footer">
-          {isDevMode ? (
-            <button className="status-badge dev-active" onClick={() => {
-              setIsDevMode(false);
-              localStorage.removeItem('medflow_dev_mode');
-              alert('Developer Tools Locked');
-            }}>
-              <ShieldCheck size={14} />
-              Exit Developer Mode
+          <div className="user-profile-container" style={{ flexDirection: 'column', width: '100%', marginBottom: '1rem' }}>
+            <div className="user-profile" style={{ width: '100%', justifyContent: 'center' }}>
+              <KeyRound size={14} style={{ marginRight: '6px', color: '#0ea5e9' }} />
+              <span>Workstation: <strong>{currentUser}</strong></span>
+            </div>
+            <button className="btn-logout" onClick={handleLogout} title="Sign Out Profile" style={{ width: '100%', justifyContent: 'center' }}>
+              <LogOut size={15} />
+              <span>Disconnect</span>
             </button>
-          ) : (currentUser && currentUser !== 'default' && isOnline) ? (
+          </div>
+          {(currentUser && currentUser !== 'default' && isOnline) ? (
             <div className="status-badge online">
               <div className="dot green"></div>
               Online Mode Active
@@ -523,21 +489,11 @@ const App: React.FC = () => {
       <main className="main-content">
         <header className="content-header no-print">
           <h1>{activeTab.replace('-', ' ').toUpperCase()}</h1>
-          <div className="user-profile-container">
-            <div className="user-profile">
-              <KeyRound size={14} style={{ marginRight: '6px', color: '#0ea5e9' }} />
-              <span>Workstation: <strong>{currentUser}</strong></span>
-            </div>
-            <button className="btn-logout" onClick={handleLogout} title="Sign Out Profile">
-              <LogOut size={15} />
-              <span>Disconnect</span>
-            </button>
-          </div>
         </header>
 
         <div className="content-inner">
           {activeTab === 'dashboard' && <Dashboard doctors={doctors} receipts={receipts} onNewReceipt={() => { setEditingReceipt(null); setActiveTab('new-receipt'); }} />}
-          {activeTab === 'doctors' && <DoctorManagement doctors={doctors} onUpdate={refreshData} isDevMode={isDevMode} />}
+          {activeTab === 'doctors' && <DoctorManagement doctors={doctors} onUpdate={refreshData} />}
           {activeTab === 'services' && <ServiceManagement services={services} onUpdate={refreshData} />}
           {activeTab === 'new-receipt' && <ReceiptForm doctors={doctors} initialData={editingReceipt} onSave={() => { refreshData(); setEditingReceipt(null); setActiveTab('history'); }} />}
           {activeTab === 'history' && (
@@ -600,18 +556,7 @@ const App: React.FC = () => {
                   </div>
 
                   <div className="summary-grid">
-                    <div className="metric-card main">
-                      <div className="metric-icon"><TrendingUp size={20} /></div>
-                      <div className="metric-info">
-                        <span className="label">Period Collection</span>
-                        <span className="value">₹{filteredReceipts.reduce((sum, r) => sum + (r.paymentMethod === 'FREE' ? 0 : (Number(r.total) || 0)), 0).toLocaleString()}</span>
-                        <div className="method-breakdown">
-                          <span>Cash: ₹{filteredReceipts.filter(r => (r.paymentMethod || 'CASH') === 'CASH').reduce((sum, r) => sum + (Number(r.total) || 0), 0).toLocaleString()}</span>
-                          <span>Online: ₹{filteredReceipts.filter(r => r.paymentMethod === 'ONLINE').reduce((sum, r) => sum + (Number(r.total) || 0), 0).toLocaleString()}</span>
-                          <span>Free: {filteredReceipts.filter(r => r.paymentMethod === 'FREE').length} Visits</span>
-                        </div>
-                      </div>
-                    </div>
+
                     {Object.entries(
                       filteredReceipts.reduce((acc, r) => {
                           const name = r.doctorName || 'General';
@@ -953,83 +898,90 @@ const App: React.FC = () => {
                   </div>
                   <p className="card-description">Manage User IDs allowed to mount workspace databases on this workstation.</p>
                   
-                  <div className="user-management-section">
-                    <div className="add-user-row" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '1rem' }}>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <input 
-                          type="text" 
-                          placeholder="Register User ID..." 
-                          value={newUserIdInput}
-                          onChange={e => setNewUserIdInput(e.target.value)}
-                          className="sync-input-line"
-                          style={{ flex: 2, minWidth: 0 }}
-                        />
-                        <select
-                          value={newUserRole}
-                          onChange={e => {
-                            setNewUserRole(e.target.value as 'reception' | 'doctor');
-                            if (e.target.value === 'doctor' && doctors.length > 0) {
-                              setSelectedDoctorIdForUser(doctors[0].id);
-                            }
-                          }}
-                          className="select-profile-dropdown"
-                          style={{ flex: 1.2, padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
-                        >
-                          <option value="reception">Reception</option>
-                          <option value="doctor">Doctor</option>
-                        </select>
-                      </div>
-
-                      {newUserRole === 'doctor' && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Link Doctor Profile:</label>
+                  {currentUser === 'admin' ? (
+                    <div className="user-management-section">
+                      <div className="add-user-row" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '1rem' }}>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <input 
+                            type="text" 
+                            placeholder="Register User ID..." 
+                            value={newUserIdInput}
+                            onChange={e => setNewUserIdInput(e.target.value)}
+                            className="sync-input-line"
+                            style={{ flex: 2, minWidth: 0 }}
+                          />
                           <select
-                            value={selectedDoctorIdForUser}
-                            onChange={e => setSelectedDoctorIdForUser(e.target.value)}
+                            value={newUserRole}
+                            onChange={e => {
+                              setNewUserRole(e.target.value as 'reception' | 'doctor');
+                              if (e.target.value === 'doctor' && doctors.length > 0) {
+                                setSelectedDoctorIdForUser(doctors[0].id);
+                              }
+                            }}
                             className="select-profile-dropdown"
-                            style={{ flex: 1, padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
+                            style={{ flex: 1.2, padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
                           >
-                            <option value="">-- Choose Doctor Registry --</option>
-                            {doctors.map(d => (
-                              <option key={d.id} value={d.id}>{d.name} ({d.specialization})</option>
-                            ))}
+                            <option value="reception">Reception</option>
+                            <option value="doctor">Doctor</option>
                           </select>
                         </div>
-                      )}
 
-                      <button 
-                        className="btn-primary" 
-                        onClick={handleAddUser}
-                        disabled={!newUserIdInput.trim() || (newUserRole === 'doctor' && !selectedDoctorIdForUser)}
-                        style={{ padding: '0.6rem 1.25rem', width: '100%' }}
-                      >
-                        Add Clinic User ID
-                      </button>
-                    </div>
-
-                    <div className="users-list-container">
-                      <span className="label-caps" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>REGISTERED PROFILES</span>
-                      <div className="users-list" style={{ maxHeight: '140px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '8px' }}>
-                        {knownUsers.map(user => (
-                          <div key={user.id} className="user-list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0.75rem', borderBottom: '1px solid var(--border)' }}>
-                            <span className="user-list-name" style={{ fontSize: '0.9rem', color: 'var(--text-main)' }}>
-                              <strong>{user.id}</strong> <span style={{ opacity: 0.65, fontSize: '0.75rem', marginLeft: '4px' }}>({user.role})</span> {user.id === currentUser && <span style={{ color: '#0ea5e9', fontSize: '0.75rem', marginLeft: '6px', fontWeight: 600 }}>(active)</span>}
-                            </span>
-                            {user.id !== 'default' && (
-                              <button 
-                                className="btn-delete-user"
-                                onClick={() => handleDeleteUser(user.id)}
-                                title="Remove User ID"
-                                style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            )}
+                        {newUserRole === 'doctor' && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Link Doctor Profile:</label>
+                            <select
+                              value={selectedDoctorIdForUser}
+                              onChange={e => setSelectedDoctorIdForUser(e.target.value)}
+                              className="select-profile-dropdown"
+                              style={{ flex: 1, padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
+                            >
+                              <option value="">-- Choose Doctor Registry --</option>
+                              {doctors.map(d => (
+                                <option key={d.id} value={d.id}>{d.name} ({d.specialization})</option>
+                              ))}
+                            </select>
                           </div>
-                        ))}
+                        )}
+
+                        <button 
+                          className="btn-primary" 
+                          onClick={handleAddUser}
+                          disabled={!newUserIdInput.trim() || (newUserRole === 'doctor' && !selectedDoctorIdForUser)}
+                          style={{ padding: '0.6rem 1.25rem', width: '100%' }}
+                        >
+                          Add Clinic User ID
+                        </button>
+                      </div>
+
+                      <div className="users-list-container">
+                        <span className="label-caps" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>REGISTERED PROFILES</span>
+                        <div className="users-list" style={{ maxHeight: '140px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '8px' }}>
+                          {knownUsers.map(user => (
+                            <div key={user.id} className="user-list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0.75rem', borderBottom: '1px solid var(--border)' }}>
+                              <span className="user-list-name" style={{ fontSize: '0.9rem', color: 'var(--text-main)' }}>
+                                <strong>{user.id}</strong> <span style={{ opacity: 0.65, fontSize: '0.75rem', marginLeft: '4px' }}>({user.role})</span> {user.id === currentUser && <span style={{ color: '#0ea5e9', fontSize: '0.75rem', marginLeft: '6px', fontWeight: 600 }}>(active)</span>}
+                              </span>
+                              {user.id !== 'default' && (
+                                <button 
+                                  className="btn-delete-user"
+                                  onClick={() => handleDeleteUser(user.id)}
+                                  title="Remove User ID"
+                                  style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div style={{ padding: '0.75rem 1rem', background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: '8px', color: '#b45309', fontSize: '0.825rem', display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
+                      <AlertCircle size={16} />
+                      <span>Only the administrator (<strong>admin</strong> profile) is authorized to manage clinic user accounts.</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Workstation Connection Settings */}
@@ -1610,54 +1562,14 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {showDevLogin && (
-        <div className="dev-overlay">
-          <div className="dev-modal">
-            <h3>Developer Access</h3>
-            <p>Enter password to unlock manage doctors tab.</p>
-            <input 
-              type="password" 
-              placeholder="••••••••"
-              value={devPinInput}
-              onChange={(e) => setDevPinInput(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleDevLogin()}
-              autoFocus
-            />
-            <div className="dev-modal-actions">
-              <button className="btn-ghost" onClick={() => {
-                setShowDevLogin(false);
-                setDevPinInput('');
-              }}>Cancel</button>
-              <button className="btn-primary" onClick={handleDevLogin}>Unlock</button>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       <style>{`
         .loading-screen {
           height: 100vh; display: flex; align-items: center; justify-content: center;
           background: #f8fafc; color: var(--primary); font-family: 'Outfit', sans-serif; font-size: 1.5rem; font-weight: 600;
         }
-        .dev-overlay {
-          position: fixed;
-          top: 0; left: 0; right: 0; bottom: 0;
-          background: rgba(0,0,0,0.5);
-          display: flex; align-items: center; justify-content: center;
-          z-index: 9999;
-          backdrop-filter: blur(4px);
-        }
-        .dev-modal {
-          background: white; border-radius: 1rem; padding: 2rem;
-          width: 320px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
-        }
-        .dev-modal h3 { margin: 0 0 0.5rem; color: var(--primary); }
-        .dev-modal p { font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1.5rem; }
-        .dev-modal input {
-          width: 100%; padding: 0.75rem; border: 1px solid var(--border);
-          border-radius: 0.5rem; margin-bottom: 1.5rem; font-size: 1rem;
-        }
-        .dev-modal-actions { display: flex; justify-content: flex-end; gap: 0.75rem; }
+
         
         .sync-input-modern {
           padding: 0.75rem; border: 1px solid var(--border); border-radius: 0.5rem;
@@ -1669,12 +1581,7 @@ const App: React.FC = () => {
           padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.875rem; font-weight: 600;
         }
 
-        .status-badge.dev-active {
-          background: #fef2f2; color: #ef4444; border: 1px solid #fee2e2; cursor: pointer;
-          width: 100%; justify-content: center; transition: all 0.2s;
-        }
-        
-        .status-badge.dev-active:hover { background: #fee2e2; transform: translateY(-1px); }
+
 
         .app-container { display: flex; min-height: 100vh; }
 
@@ -1688,8 +1595,8 @@ const App: React.FC = () => {
           font-weight: 700; font-size: 1.5rem; color: var(--primary);
         }
 
-        .logo-img {
-          width: 32px; height: 32px; border-radius: 8px; object-fit: contain;
+        .logo-img, .logo-svg {
+          width: 32px; height: 32px; border-radius: 8px; object-fit: contain; flex-shrink: 0;
         }
 
         .action-buttons {

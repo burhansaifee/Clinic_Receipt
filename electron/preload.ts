@@ -27,7 +27,7 @@ contextBridge.exposeInMainWorld('licensing', {
   getMachineID: () => ipcRenderer.invoke('get-machine-id'),
   checkActivation: () => ipcRenderer.invoke('check-activation'),
   activateLicense: (key: string) => ipcRenderer.invoke('activate-license', key),
-  devGenerateKey: (mid: string) => ipcRenderer.invoke('dev-generate-key', mid),
+  deactivate: () => ipcRenderer.invoke('deactivate-license'),
 })
 
 contextBridge.exposeInMainWorld('excelStorage', {

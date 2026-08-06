@@ -5,10 +5,9 @@ import { Trash2, Edit2, UserPlus } from 'lucide-react';
 interface DoctorManagementProps {
   doctors: Doctor[];
   onUpdate: () => void;
-  isDevMode?: boolean;
 }
 
-const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate, isDevMode = false }) => {
+const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   
@@ -17,6 +16,8 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate, 
   const [phone, setPhone] = useState('');
   const [qualifications, setQualifications] = useState('');
   const [address, setAddress] = useState('');
+  const [printHeader, setPrintHeader] = useState(true);
+  const [customTopMargin, setCustomTopMargin] = useState(0);
 
   const resetForm = () => {
     setName('');
@@ -24,6 +25,8 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate, 
     setPhone('');
     setQualifications('');
     setAddress('');
+    setPrintHeader(true);
+    setCustomTopMargin(0);
     setIsAdding(false);
     setEditingId(null);
   };
@@ -36,7 +39,9 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate, 
       specialization,
       qualifications,
       phone,
-      address
+      address,
+      printHeader,
+      customTopMargin
     };
     await storage.saveDoctor(doctor);
     onUpdate();
@@ -49,6 +54,8 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate, 
     setPhone(doctor.phone);
     setQualifications(doctor.qualifications || '');
     setAddress(doctor.address || '');
+    setPrintHeader(doctor.printHeader !== false);
+    setCustomTopMargin(doctor.customTopMargin || 0);
     setEditingId(doctor.id);
     setIsAdding(true);
   };
@@ -63,16 +70,14 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate, 
   return (
     <div className="doctor-management no-print">
       <div className="section-header">
-        <h2>{isDevMode ? 'Manage Doctors (Dev)' : 'Our Doctors'}</h2>
-        {isDevMode && (
-          <button className="btn-primary flex items-center gap-2" onClick={() => setIsAdding(true)}>
-            <UserPlus size={18} />
-            Add New Doctor
-          </button>
-        )}
+        <h2>Manage Doctors</h2>
+        <button className="btn-primary flex items-center gap-2" onClick={() => setIsAdding(true)}>
+          <UserPlus size={18} />
+          Add New Doctor
+        </button>
       </div>
 
-      {isAdding && isDevMode && (
+      {isAdding && (
         <div className="card form-card">
           <h3>{editingId ? 'Edit Doctor' : 'Add New Doctor'}</h3>
           <form onSubmit={handleSave} className="doctor-form">
@@ -119,6 +124,41 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate, 
                 rows={2}
               />
             </div>
+            
+            <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', gridColumn: '1 / -1', margin: '0.25rem 0' }}>
+              <input 
+                type="checkbox"
+                id="print-header-checkbox"
+                checked={printHeader}
+                onChange={e => setPrintHeader(e.target.checked)}
+                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+              />
+              <label htmlFor="print-header-checkbox" style={{ margin: 0, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
+                Print Doctor Branding & Address Header on Prescription
+              </label>
+            </div>
+
+            {!printHeader && (
+              <div className="form-group" style={{ gridColumn: '1 / -1', background: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontWeight: 600, fontSize: '0.825rem', marginBottom: 0 }}>
+                  Pre-Printed Pad Top Margin (in millimeters)
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <input 
+                    type="number"
+                    value={customTopMargin}
+                    onChange={e => setCustomTopMargin(Math.max(0, parseInt(e.target.value) || 0))}
+                    placeholder="e.g. 45"
+                    style={{ width: '100px', padding: '0.4rem 0.5rem', fontSize: '0.85rem' }}
+                    min="0"
+                  />
+                  <span style={{ fontSize: '0.775rem', color: '#64748b' }}>
+                    Leave this much blank space at the top of the print page so MedFlow text does not overlap your pad's pre-printed letterhead.
+                  </span>
+                </div>
+              </div>
+            )}
+
             <div className="form-actions">
               <button type="button" className="btn-ghost" onClick={resetForm}>Cancel</button>
               <button type="submit" className="btn-primary">Save Doctor</button>
@@ -130,7 +170,7 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate, 
       <div className="doctor-grid">
         {doctors.length === 0 ? (
           <div className="card empty-state">
-            <p className="text-muted">No doctors found. {isDevMode ? 'Use the button above to add one.' : 'Please contact the developer to add doctors.'}</p>
+            <p className="text-muted">No doctors found. Use the button above to add one.</p>
           </div>
         ) : (
           doctors.map(doctor => (
@@ -140,16 +180,19 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate, 
                 <div className="doctor-badges">
                   <span className="badge">{doctor.specialization}</span>
                   {doctor.qualifications && <span className="badge secondary">{doctor.qualifications}</span>}
+                  {doctor.printHeader === false && (
+                    <span className="badge" style={{ background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0' }}>
+                      Pre-Printed Pad ({doctor.customTopMargin || 0}mm margin)
+                    </span>
+                  )}
                 </div>
                 <p className="text-muted">{doctor.phone}</p>
                 {doctor.address && <p className="text-muted small-address">{doctor.address}</p>}
               </div>
-              {isDevMode && (
-                <div className="doctor-actions">
-                  <button onClick={() => handleEdit(doctor)} className="btn-icon"><Edit2 size={16} /></button>
-                  <button onClick={() => handleDelete(doctor.id)} className="btn-icon text-danger"><Trash2 size={16} /></button>
-                </div>
-              )}
+              <div className="doctor-actions">
+                <button onClick={() => handleEdit(doctor)} className="btn-icon"><Edit2 size={16} /></button>
+                <button onClick={() => handleDelete(doctor.id)} className="btn-icon text-danger"><Trash2 size={16} /></button>
+              </div>
             </div>
           ))
         )}

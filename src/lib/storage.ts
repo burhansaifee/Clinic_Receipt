@@ -7,6 +7,8 @@ export interface Doctor {
   qualifications: string;
   phone: string;
   address: string;
+  printHeader?: boolean;
+  customTopMargin?: number;
 }
 
 export interface ReceiptItem {

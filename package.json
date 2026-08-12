@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build && electron-builder",
+    "build:mac": "tsc -b && vite build && electron-builder --mac --dir && hdiutil create -volname \"MedFlow Clinic\" -srcfolder release/1.0.2/mac-arm64 -ov -format UDZO release/1.0.2/MedFlow_Clinic-1.0.2-mac.dmg",
     "build:win": "tsc -b && vite build && electron-builder --windows",
     "lint": "eslint .",
     "preview": "vite preview"

@@ -832,23 +832,29 @@ const App: React.FC = () => {
               </div>
 
               <div className="control-grid">
-                {/* Data Safety & Backup */}
-                <div className="card control-card">
+                {/* Data Safety, Backup & Reports */}
+                <div className="card control-card" style={{ padding: '1.5rem', gap: '0.75rem' }}>
                   <div className="card-icon-header inline">
                     <div className="header-icon blue"><DownloadCloud size={18} /></div>
-                    <h3>Data Safety & Backup</h3>
+                    <h3>Data & Reports</h3>
                   </div>
-                  <p className="card-description">Create manual backups of your patient data and doctor configurations for safety or migration.</p>
-                  <div className="card-actions-row">
-                    <button className="btn-primary-sm" onClick={() => storage.exportData()}>
-                      <DownloadCloud size={16} /> Export Backup (.json)
-                    </button>
-                    <button className="btn-secondary-sm" onClick={() => document.getElementById('import-file')?.click()}>
-                      <UploadCloud size={16} /> Import Backup (.json)
-                    </button>
-                    <button className="btn-ghost-sm" onClick={() => (window as any).database.openFolder()}>
-                      <FolderOpen size={16} /> Show Data Folder
-                    </button>
+                  <div className="card-actions-row" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.5rem', marginTop: 'auto', paddingTop: '0' }}>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button className="btn-primary-sm" style={{ flex: 1 }} onClick={() => storage.exportData()}>
+                        <DownloadCloud size={16} /> Export DB
+                      </button>
+                      <button className="btn-secondary-sm" style={{ flex: 1 }} onClick={() => document.getElementById('import-file')?.click()}>
+                        <UploadCloud size={16} /> Import DB
+                      </button>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button className="btn-ghost-sm" style={{ flex: 1, border: '1px solid var(--border)', padding: '0.75rem', borderRadius: '8px', color: 'var(--text-main)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }} onClick={() => storage.exportToExcel()}>
+                        <FileText size={16} /> Export CSV
+                      </button>
+                      <button className="btn-ghost-sm" style={{ flex: 1, border: '1px solid var(--border)', padding: '0.75rem', borderRadius: '8px', color: 'var(--text-main)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }} onClick={() => (window as any).database.openFolder()}>
+                        <FolderOpen size={16} /> Data Folder
+                      </button>
+                    </div>
                   </div>
                   <input 
                     type="file" accept=".json" id="import-file" style={{ display: 'none' }}
@@ -869,24 +875,48 @@ const App: React.FC = () => {
                   />
                 </div>
 
-                {/* Professional Setup */}
-                <div className="card control-card">
+                {/* System License */}
+                <div className="card control-card" style={{ padding: '1.5rem', gap: '0.5rem' }}>
                   <div className="card-icon-header inline">
-                    <div className="header-icon purple"><Users size={18} /></div>
-                    <h3>Professional Setup</h3>
+                    <div className="header-icon gray"><ShieldCheck size={18} /></div>
+                    <h3>System License</h3>
                   </div>
-                  <p className="card-description">Synchronize your clinic's doctor information using a secure Setup Key provided by the developer.</p>
-                  <div className="card-actions-vertical">
-                    <input 
-                      type="text"
-                      placeholder="Paste Setup Key here..." 
-                      value={syncKeyInput}
-                      onChange={(e) => setSyncKeyInput(e.target.value)}
-                      className="sync-input-line"
-                    />
-                    <button className="btn-primary w-full" onClick={handleSyncDoctors} disabled={!syncKeyInput.trim()}>
-                      <Activity size={16} /> Sync Doctors Now
-                    </button>
+                  
+                  <div className="license-status-section" style={{ paddingTop: '0.5rem', gap: '0.75rem' }}>
+                    <div className="license-row">
+                      <span className="label-caps">STATUS</span>
+                      <div className={`license-badge-modern ${activationStatus?.status === 'ACTIVATED' ? 'active' : ''}`} style={{ padding: '0.25rem 0.75rem' }}>
+                        <div className="dot"></div>
+                        <span>{activationStatus?.status === 'ACTIVATED' ? 'ACTIVATED' : activationStatus?.status}</span>
+                        {activationStatus?.expiryDate && <span className="expiry-date">{activationStatus.expiryDate}</span>}
+                      </div>
+                    </div>
+
+                    <div className="license-row">
+                      <span className="label-caps">MACHINE ID</span>
+                      <div className="machine-id-display" style={{ padding: '0.25rem 0.5rem', maxWidth: '160px' }}>
+                        <code>{machineId}</code>
+                        <button className="copy-btn" onClick={() => {
+                          navigator.clipboard.writeText(machineId);
+                          alert('Machine ID copied!');
+                        }}><Copy size={14} /></button>
+                      </div>
+                    </div>
+
+                    <div className="center-link-container" style={{ paddingTop: '0' }}>
+                      <button 
+                        className="btn-link" 
+                        onClick={() => {
+                          if (confirm('Are you sure you want to remove the current license?')) {
+                            // @ts-ignore
+                            window.licensing.deactivate();
+                            window.location.reload();
+                          }
+                        }}
+                      >
+                        Change / Renew License
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -1108,65 +1138,7 @@ const App: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Reports & Intelligence */}
-                <div className="card control-card">
-                  <div className="card-icon-header inline">
-                    <div className="header-icon green"><FileText size={18} /></div>
-                    <h3>Reports & Intelligence</h3>
-                  </div>
-                  <p className="card-description">Generate comprehensive financial reports compatible with Excel for accounting and auditing.</p>
-                  <div className="card-actions">
-                    <button className="btn-ghost-bottom w-full" onClick={() => storage.exportToExcel()}>
-                      <FileText size={16} /> Download CSV Report
-                    </button>
-                  </div>
-                </div>
 
-                {/* System License */}
-                <div className="card control-card">
-                  <div className="card-icon-header inline">
-                    <div className="header-icon gray"><ShieldCheck size={18} /></div>
-                    <h3>System License</h3>
-                  </div>
-                  <p className="card-description">View your system's activation status and copy your machine ID if you require a new license key.</p>
-                  
-                  <div className="license-status-section">
-                    <div className="license-row">
-                      <span className="label-caps">LICENSE STATUS</span>
-                      <div className={`license-badge-modern ${activationStatus?.status === 'ACTIVATED' ? 'active' : ''}`}>
-                        <div className="dot"></div>
-                        <span>{activationStatus?.status === 'ACTIVATED' ? 'ACTIVATED' : activationStatus?.status}</span>
-                        {activationStatus?.expiryDate && <span className="expiry-date">{activationStatus.expiryDate}</span>}
-                      </div>
-                    </div>
-
-                    <div className="license-row">
-                      <span className="label-caps">MACHINE ID</span>
-                      <div className="machine-id-display">
-                        <code>{machineId}</code>
-                        <button className="copy-btn" onClick={() => {
-                          navigator.clipboard.writeText(machineId);
-                          alert('Machine ID copied!');
-                        }}><Copy size={14} /></button>
-                      </div>
-                    </div>
-
-                    <div className="center-link-container">
-                      <button 
-                        className="btn-link" 
-                        onClick={() => {
-                          if (confirm('Are you sure you want to remove the current license?')) {
-                            // @ts-ignore
-                            window.licensing.deactivate();
-                            window.location.reload();
-                          }
-                        }}
-                      >
-                        Change / Renew License
-                      </button>
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
           )}
@@ -1812,10 +1784,10 @@ const App: React.FC = () => {
         .control-grid { 
           display: grid; 
           grid-template-columns: repeat(2, 1fr); 
-          grid-auto-rows: 1fr;
           gap: 2rem; 
           max-width: 1000px;
           margin: 0 auto;
+          align-items: start;
         }
         .control-card { 
           padding: 2.5rem; background: white; border-radius: 16px; border: 1px solid var(--border); 

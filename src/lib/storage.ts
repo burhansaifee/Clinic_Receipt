@@ -61,6 +61,24 @@ export interface Prescription {
   notes: string;
 }
 
+export type AppointmentStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED';
+
+export interface Appointment {
+  id: string;
+  patientName: string;
+  patientPhone: string;
+  patientAge?: string;
+  patientGender?: string;
+  doctorId: string;
+  doctorName: string;
+  appointmentDate: string; // YYYY-MM-DD
+  appointmentTime: string; // e.g. 10:30 AM
+  notes?: string;
+  source?: 'WHATSAPP' | 'MANUAL';
+  status: AppointmentStatus;
+  createdAt: string;
+}
+
 const STORAGE_KEYS = {
   DOCTORS: 'clinic_doctors',
   SERVICES: 'clinic_services',
@@ -351,5 +369,38 @@ export const storage = {
   deletePrescription: async (id: string) => {
     // @ts-ignore
     await window.database.deletePrescription(id);
+  },
+
+  getAppointments: async (): Promise<Appointment[]> => {
+    // @ts-ignore
+    if (window.database?.getAppointments) {
+      // @ts-ignore
+      return window.database.getAppointments();
+    }
+    return [];
+  },
+
+  saveAppointment: async (appointment: Appointment) => {
+    // @ts-ignore
+    if (window.database?.saveAppointment) {
+      // @ts-ignore
+      await window.database.saveAppointment(appointment);
+    }
+  },
+
+  updateAppointmentStatus: async (id: string, status: AppointmentStatus) => {
+    // @ts-ignore
+    if (window.database?.updateAppointmentStatus) {
+      // @ts-ignore
+      await window.database.updateAppointmentStatus(id, status);
+    }
+  },
+
+  deleteAppointment: async (id: string) => {
+    // @ts-ignore
+    if (window.database?.deleteAppointment) {
+      // @ts-ignore
+      await window.database.deleteAppointment(id);
+    }
   }
 };

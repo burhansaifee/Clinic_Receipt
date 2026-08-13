@@ -68,11 +68,13 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, initialData 
 
   useEffect(() => {
     const init = async () => {
-      if (!initialData) {
+      if (!initialData || !initialData.id || !initialData.receiptNumber) {
         setReceiptNumber(await storage.getNextReceiptNumber(paymentMethod === 'FREE'));
         if (doctors.length > 0 && !selectedDoctorId) {
           setSelectedDoctorId(doctors[0].id);
         }
+      } else {
+        setReceiptNumber(initialData.receiptNumber);
       }
       setAvailableServices(await storage.getServices());
     };
@@ -159,9 +161,10 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, initialData 
     }
 
     const doctor = doctors.find(d => d.id === selectedDoctorId);
+    const isNew = !initialData || !initialData.id;
     
     const receipt: Receipt = {
-      id: initialData?.id || Date.now().toString(),
+      id: isNew ? Date.now().toString() : initialData.id,
       receiptNumber,
       date: appointmentDate,
       patientName,
@@ -175,10 +178,10 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, initialData 
       paymentMethod
     };
 
-    if (initialData) {
-      await storage.updateReceipt(receipt);
-    } else {
+    if (isNew) {
       await storage.saveReceipt(receipt);
+    } else {
+      await storage.updateReceipt(receipt);
     }
     if (shouldPrint) {
       triggerPrint(receipt);

@@ -77,6 +77,22 @@ export const database = {
         notes TEXT
       );
 
+      CREATE TABLE IF NOT EXISTS appointments (
+        id TEXT PRIMARY KEY,
+        patientName TEXT NOT NULL,
+        patientPhone TEXT NOT NULL,
+        patientAge TEXT,
+        patientGender TEXT,
+        doctorId TEXT NOT NULL,
+        doctorName TEXT NOT NULL,
+        appointmentDate TEXT NOT NULL,
+        appointmentTime TEXT NOT NULL,
+        notes TEXT,
+        source TEXT DEFAULT 'WHATSAPP',
+        status TEXT DEFAULT 'PENDING',
+        createdAt TEXT NOT NULL
+      );
+
       CREATE TABLE IF NOT EXISTS metadata (
         key TEXT PRIMARY KEY,
         value TEXT
@@ -90,6 +106,37 @@ export const database = {
     try {
       db.exec('ALTER TABLE doctors ADD COLUMN customTopMargin INTEGER DEFAULT 0;');
     } catch (e) {}
+
+    // Appointments Migrations
+    const aptCols = [
+      'patientName TEXT NOT NULL DEFAULT ""',
+      'patientPhone TEXT NOT NULL DEFAULT ""',
+      'patientAge TEXT',
+      'patientGender TEXT',
+      'doctorId TEXT NOT NULL DEFAULT ""',
+      'doctorName TEXT NOT NULL DEFAULT ""',
+      'appointmentDate TEXT NOT NULL DEFAULT ""',
+      'appointmentTime TEXT NOT NULL DEFAULT ""',
+      'notes TEXT',
+      'source TEXT DEFAULT "WHATSAPP"',
+      'status TEXT DEFAULT "PENDING"',
+      'createdAt TEXT'
+    ];
+    for (const col of aptCols) {
+      try {
+        db.exec(`ALTER TABLE appointments ADD COLUMN ${col};`);
+      } catch (e) {}
+    }
+
+    try {
+      const columnsInfo = db.prepare("PRAGMA table_info(appointments)").all();
+      console.log("[DB] Appointments Table Columns:", columnsInfo.map((c: any) => c.name));
+      const rows = db.prepare("SELECT * FROM appointments").all();
+      console.log(`[DB] Appointments Row Count: ${rows.length}`);
+      console.log("[DB] Appointments Rows:", JSON.stringify(rows));
+    } catch (e) {
+      console.error("[DB] Failed to query table_info/rows for appointments:", e);
+    }
   },
 
   getDbPath: () => {
@@ -251,5 +298,44 @@ export const database = {
       medicines: JSON.stringify(prescription.medicines || [])
     });
   },
-  deletePrescription: (id: string) => db.prepare('DELETE FROM prescriptions WHERE id = ?').run(id)
+  deletePrescription: (id: string) => db.prepare('DELETE FROM prescriptions WHERE id = ?').run(id),
+
+  // Appointments
+  getAppointments: () => {
+    try {
+      return db.prepare(`
+        SELECT * FROM appointments 
+        ORDER BY 
+          CASE WHEN status = 'PENDING' THEN 0 ELSE 1 END,
+          appointmentDate ASC, 
+          appointmentTime ASC
+      `).all() as any[];
+    } catch (e) {
+      return db.prepare('SELECT * FROM appointments').all() as any[];
+    }
+  },
+  saveAppointment: (appointment: any) => {
+    console.log(`[DB] saveAppointment called for ID: ${appointment.id}`);
+    const stmt = db.prepare(`
+      INSERT OR REPLACE INTO appointments (id, patientName, patientPhone, patientAge, patientGender, doctorId, doctorName, appointmentDate, appointmentTime, date, timeSlot, notes, source, status, createdAt)
+      VALUES (@id, @patientName, @patientPhone, @patientAge, @patientGender, @doctorId, @doctorName, @appointmentDate, @appointmentTime, @date, @timeSlot, @notes, @source, @status, @createdAt)
+    `);
+    const res = stmt.run({
+      patientAge: '30',
+      patientGender: 'Male',
+      notes: '',
+      source: 'WHATSAPP',
+      status: 'PENDING',
+      createdAt: new Date().toISOString(),
+      date: appointment.appointmentDate || new Date().toISOString().split('T')[0],
+      timeSlot: appointment.appointmentTime || 'Anytime',
+      ...appointment
+    });
+    console.log(`[DB] saveAppointment completed successfully. Changes: ${res.changes}`);
+    return res;
+  },
+  updateAppointmentStatus: (id: string, status: string) => {
+    return db.prepare('UPDATE appointments SET status = ? WHERE id = ?').run(status, id);
+  },
+  deleteAppointment: (id: string) => db.prepare('DELETE FROM appointments WHERE id = ?').run(id)
 };

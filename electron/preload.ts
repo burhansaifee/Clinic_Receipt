@@ -54,6 +54,27 @@ contextBridge.exposeInMainWorld('database', {
   getPrescriptions: () => ipcRenderer.invoke('db-get-prescriptions'),
   savePrescription: (prescription: any) => ipcRenderer.invoke('db-save-prescription', prescription),
   deletePrescription: (id: string) => ipcRenderer.invoke('db-delete-prescription', id),
+  getAppointments: () => ipcRenderer.invoke('db-get-appointments'),
+  saveAppointment: (appointment: any) => ipcRenderer.invoke('db-save-appointment', appointment),
+  updateAppointmentStatus: (id: string, status: string) => ipcRenderer.invoke('db-update-appointment-status', id, status),
+  deleteAppointment: (id: string) => ipcRenderer.invoke('db-delete-appointment', id),
+})
+
+contextBridge.exposeInMainWorld('whatsappBot', {
+  start: () => ipcRenderer.invoke('whatsapp-start'),
+  stop: () => ipcRenderer.invoke('whatsapp-stop'),
+  getStatus: () => ipcRenderer.invoke('whatsapp-get-status'),
+  toggleAutoReply: (enabled: boolean) => ipcRenderer.invoke('whatsapp-toggle-autoreply', enabled),
+  sendMessage: (phone: string, message: string) => ipcRenderer.invoke('whatsapp-send-message', phone, message),
+  getSchedule: () => ipcRenderer.invoke('whatsapp-get-schedule'),
+  saveSchedule: (schedule: any) => ipcRenderer.invoke('whatsapp-save-schedule', schedule),
+  onStatusChange: (callback: (state: any) => void) => {
+    const subscription = (_event: any, state: any) => callback(state);
+    ipcRenderer.on('whatsapp-state-update', subscription);
+    return () => {
+      ipcRenderer.removeListener('whatsapp-state-update', subscription);
+    };
+  }
 })
 
 contextBridge.exposeInMainWorld('users', {

@@ -8,6 +8,7 @@ import http from 'node:http'
 import os from 'node:os'
 import { excelStorage } from './excelStorage'
 import { database } from './database'
+import { whatsappBot } from './whatsappBot'
 import { shell } from 'electron'
 import pkg from 'electron-updater'
 const { autoUpdater } = pkg
@@ -173,6 +174,24 @@ function startHostServer() {
             } else {
               result = { success: false, error: 'User ID not found' };
             }
+          } else if (method === 'whatsapp-get-schedule') {
+            result = store.get('whatsapp_schedule') || {
+              allowedDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+              timeSlots: [
+                '09:00 AM - 10:00 AM',
+                '10:00 AM - 11:00 AM',
+                '11:00 AM - 12:00 PM',
+                '12:00 PM - 01:00 PM',
+                '04:00 PM - 05:00 PM',
+                '05:00 PM - 06:00 PM',
+                '06:00 PM - 07:00 PM',
+                '07:00 PM - 08:00 PM'
+              ]
+            };
+          } else if (method === 'whatsapp-save-schedule') {
+            const [schedule] = args;
+            store.set('whatsapp_schedule', schedule);
+            result = { success: true };
           } else if (method === 'ping') {
             result = { pong: true };
           } else {
@@ -413,9 +432,62 @@ ipcMain.handle('db-batch-import-doctors', (_, doctors) => {
   return database.batchImportDoctors(doctors);
 })
 
-ipcMain.handle('open-db-folder', () => {
-  if (workstationMode === 'client') return;
-  shell.showItemInFolder(database.getDbPath())
+ipcMain.handle('db-get-appointments', () => {
+  if (workstationMode === 'client') return clientRequest('db-get-appointments');
+  return database.getAppointments();
+})
+ipcMain.handle('db-save-appointment', (_, appointment) => {
+  if (workstationMode === 'client') return clientRequest('db-save-appointment', appointment);
+  return database.saveAppointment(appointment);
+})
+ipcMain.handle('db-update-appointment-status', (_, id, status) => {
+  if (workstationMode === 'client') return clientRequest('db-update-appointment-status', id, status);
+  return database.updateAppointmentStatus(id, status);
+})
+ipcMain.handle('db-delete-appointment', (_, id) => {
+  if (workstationMode === 'client') return clientRequest('db-delete-appointment', id);
+  return database.deleteAppointment(id);
+})
+
+// WhatsApp Bot IPCs
+ipcMain.handle('whatsapp-start', async () => {
+  return whatsappBot.start((state) => {
+    if (win) win.webContents.send('whatsapp-state-update', state);
+  });
+})
+ipcMain.handle('whatsapp-stop', async () => {
+  return whatsappBot.stop();
+})
+ipcMain.handle('whatsapp-get-status', () => {
+  return whatsappBot.getStatus();
+})
+ipcMain.handle('whatsapp-toggle-autoreply', (_, enabled: boolean) => {
+  return whatsappBot.toggleAutoReply(enabled);
+})
+ipcMain.handle('whatsapp-send-message', (_, phone: string, message: string) => {
+  return whatsappBot.sendMessage(phone, message);
+})
+ipcMain.handle('whatsapp-get-schedule', () => {
+  if (workstationMode === 'client') return clientRequest('whatsapp-get-schedule');
+  const schedule = store.get('whatsapp_schedule');
+  return schedule || {
+    allowedDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+    timeSlots: [
+      '09:00 AM - 10:00 AM',
+      '10:00 AM - 11:00 AM',
+      '11:00 AM - 12:00 PM',
+      '12:00 PM - 01:00 PM',
+      '04:00 PM - 05:00 PM',
+      '05:00 PM - 06:00 PM',
+      '06:00 PM - 07:00 PM',
+      '07:00 PM - 08:00 PM'
+    ]
+  };
+})
+ipcMain.handle('whatsapp-save-schedule', (_, schedule) => {
+  if (workstationMode === 'client') return clientRequest('whatsapp-save-schedule', schedule);
+  store.set('whatsapp_schedule', schedule);
+  return { success: true };
 })
 
 // User Profile Management IPCs

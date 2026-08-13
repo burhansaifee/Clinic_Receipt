@@ -541,17 +541,15 @@ const UserConnectionScreen: React.FC<UserConnectionScreenProps> = ({ onConnected
             </div>
           )}
         </form>
-
-
-
-        <div className="connection-footer">
-          <div className="status-indicator">
-            <div className="status-dot green animate-ping-slow"></div>
-            <span>Workstation Offline-Ready (SQLite Local Data)</span>
-          </div>
+        <div className="connection-footer" style={{ marginTop: '1.75rem', paddingTop: '1rem', borderTop: '1px solid rgba(255, 255, 255, 0.08)', textAlign: 'center' }}>
+          <p style={{ margin: 0, fontSize: '0.78rem', color: '#94a3b8', lineHeight: '1.5' }}>
+            Software Developed by <strong style={{ color: '#38bdf8', fontWeight: 600 }}>Burhanuddin</strong>
+            <br />
+            Email:- <span style={{ color: '#cbd5e1' }}>[EMAIL_ADDRESS]</span>
+          </p>
         </div>
       </>
-    )}
+    )}        
   </div>
 
       <style>{`

@@ -259,6 +259,11 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
               <LogOut size={15} />
               <span>Disconnect</span>
             </button>
+            <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #e2e8f0', textAlign: 'center', width: '100%' }}>
+              <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Software Developed by</div>
+              <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Burhanuddin</div>
+              <div style={{ fontSize: '0.7rem', color: '#64748b' }}>Email:- burhansaifee2003@gmail.com</div>
+            </div>
           </div>
         </aside>
 

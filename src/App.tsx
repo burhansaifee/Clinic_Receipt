@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
-import { LayoutDashboard, Users, Receipt, PlusCircle, Settings, ShieldCheck, Copy, Calendar, DownloadCloud, UploadCloud, FileText, Activity, Filter, Briefcase, Printer, Trash2, Edit2, FolderOpen, Search, LogOut, KeyRound, Server, AlertCircle } from 'lucide-react';
+import { LayoutDashboard, Users, Receipt, PlusCircle, Settings, ShieldCheck, Copy, Calendar, DownloadCloud, UploadCloud, FileText, Filter, Briefcase, Printer, Trash2, Edit2, FolderOpen, Search, LogOut, KeyRound, Server, AlertCircle, MessageSquare, Bot } from 'lucide-react';
 
 import { storage, type Doctor, type Receipt as ReceiptType, type Service } from './lib/storage';
 import './index.css';
@@ -13,8 +13,9 @@ import ReceiptForm from './components/ReceiptForm';
 import ActivationScreen from './components/ActivationScreen';
 import UserConnectionScreen from './components/UserConnectionScreen';
 import DoctorWorkstation from './components/DoctorWorkstation';
+import AppointmentManagement from './components/AppointmentManagement';
 
-type Tab = 'dashboard' | 'doctors' | 'services' | 'new-receipt' | 'history' | 'prescriptions' | 'settings';
+type Tab = 'dashboard' | 'doctors' | 'services' | 'new-receipt' | 'history' | 'prescriptions' | 'appointments' | 'settings';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
@@ -23,7 +24,6 @@ const App: React.FC = () => {
   const [receipts, setReceipts] = useState<ReceiptType[]>([]);
   const [activationStatus, setActivationStatus] = useState<{status: 'NOT_ACTIVATED' | 'ACTIVATED' | 'EXPIRED' | 'TAMPERED'; expiryDate?: string} | null>(null);
   const [machineId, setMachineId] = useState<string>('');
-  const [syncKeyInput, setSyncKeyInput] = useState('');
   
   // User Management State
   const [currentUser, setCurrentUser] = useState<string | null>(null);
@@ -34,6 +34,7 @@ const App: React.FC = () => {
   const [newUserRole, setNewUserRole] = useState<'reception' | 'doctor'>('reception');
   const [selectedDoctorIdForUser, setSelectedDoctorIdForUser] = useState<string>('');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [botStatus, setBotStatus] = useState<any>({ status: 'DISCONNECTED', qrCodeDataUrl: null });
 
   // Workstation Connection State
   const [workstationMode, setWorkstationMode] = useState<'standalone' | 'host' | 'client'>('standalone');
@@ -160,6 +161,20 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if ((window as any).whatsappBot) {
+      (window as any).whatsappBot.getStatus().then((status: any) => {
+        setBotStatus(status);
+      });
+      const unsubscribe = (window as any).whatsappBot.onStatusChange((status: any) => {
+        setBotStatus(status);
+      });
+      return () => {
+        unsubscribe();
+      };
+    }
+  }, []);
+
+  useEffect(() => {
     if (!currentUser) return;
 
     const loadUserData = async () => {
@@ -192,16 +207,7 @@ const App: React.FC = () => {
 
 
 
-  const handleSyncDoctors = async () => {
-    if (!syncKeyInput.trim()) return alert('Please enter a Setup Key');
-    if (await storage.batchImportDoctors(syncKeyInput.trim())) {
-      alert('Doctors synchronized successfully!');
-      setSyncKeyInput('');
-      refreshData();
-    } else {
-      alert('Invalid Setup Key. Please contact the developer.');
-    }
-  };
+
 
   const handleLogout = async () => {
     if (confirm('Are you sure you want to disconnect from this profile? Your local SQLite database will remain secure on this device.')) {
@@ -432,6 +438,14 @@ const App: React.FC = () => {
           </button>
 
           <button 
+            className={`nav-item ${activeTab === 'appointments' ? 'active' : ''}`}
+            onClick={() => setActiveTab('appointments')}
+          >
+            <Calendar size={20} />
+            <span>Appointments</span>
+          </button>
+
+          <button 
             className={`nav-item ${activeTab === 'doctors' ? 'active' : ''}`}
             onClick={() => setActiveTab('doctors')}
           >
@@ -483,6 +497,11 @@ const App: React.FC = () => {
               Offline Mode Active
             </div>
           )}
+          <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255, 255, 255, 0.08)', textAlign: 'center', width: '100%' }}>
+            <div style={{ fontSize: '0.7rem', color: '#64748b' }}>Software Developed by</div>
+            <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#94a3b8' }}>Burhanuddin</div>
+            <div style={{ fontSize: '0.7rem', color: '#64748b' }}>Email:- burhansaifee2003@gmail.com</div>
+          </div>
         </div>
       </aside>
 
@@ -824,35 +843,66 @@ const App: React.FC = () => {
             </div>
           )}
 
+          {activeTab === 'appointments' && (
+            <AppointmentManagement
+              doctors={doctors}
+              onConvertToReceipt={(apt) => {
+                setEditingReceipt({
+                  id: '',
+                  receiptNumber: '',
+                  date: format(new Date(), 'yyyy-MM-dd HH:mm'),
+                  patientName: apt.patientName,
+                  patientAge: apt.patientAge || '30',
+                  patientGender: apt.patientGender || 'Male',
+                  patientPhone: apt.patientPhone || '',
+                  doctorId: apt.doctorId,
+                  doctorName: apt.doctorName,
+                  items: [],
+                  total: 0,
+                  paymentMethod: 'CASH',
+                });
+                setActiveTab('new-receipt');
+              }}
+            />
+          )}
+
           {activeTab === 'settings' && (
             <div className="control-center">
-              <div className="control-header center-header">
-                <h2>Control Center</h2>
-                <p className="text-muted">Manage your clinic's database, medical setup, and system license.</p>
+              <div className="control-header-banner" style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', color: 'white', padding: '1.75rem 2rem', borderRadius: '16px', marginBottom: '2rem', boxShadow: '0 10px 25px -5px rgba(15,23,42,0.15)', position: 'relative', overflow: 'hidden' }}>
+                <div style={{ position: 'absolute', right: '-20px', top: '-20px', width: '150px', height: '150px', background: 'radial-gradient(circle, rgba(14,165,233,0.2) 0%, transparent 70%)', borderRadius: '50%', pointerEvents: 'none' }} />
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(14,165,233,0.15)', color: '#38bdf8', fontSize: '0.725rem', fontWeight: 700, padding: '0.25rem 0.75rem', borderRadius: '9999px', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.65rem', border: '1px solid rgba(56,189,248,0.25)' }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#38bdf8' }} /> CONTROL CENTER & CONFIGURATION
+                </div>
+                <h2 style={{ fontSize: '1.65rem', margin: '0 0 0.4rem 0', fontWeight: 700, fontFamily: 'Outfit, sans-serif', color: 'white' }}>System Control Center</h2>
+                <p style={{ margin: 0, fontSize: '0.875rem', color: '#94a3b8', maxWidth: '640px', lineHeight: 1.5 }}>
+                  Manage your clinic's database backups, system license, automated WhatsApp booking bot, workstation user profiles, and local network sync.
+                </p>
               </div>
 
               <div className="control-grid">
                 {/* Data Safety, Backup & Reports */}
-                <div className="card control-card" style={{ padding: '1.5rem', gap: '0.75rem' }}>
+                <div className="card control-card" style={{ padding: '1.5rem', gap: '0.85rem' }}>
                   <div className="card-icon-header inline">
-                    <div className="header-icon blue"><DownloadCloud size={18} /></div>
-                    <h3>Data & Reports</h3>
+                    <div className="header-icon blue" style={{ background: 'linear-gradient(135deg, #0ea5e9, #2563eb)', color: 'white', boxShadow: '0 4px 10px rgba(14,165,233,0.3)' }}><DownloadCloud size={18} /></div>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Data Safety & Reports</h3>
                   </div>
-                  <div className="card-actions-row" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.5rem', marginTop: 'auto', paddingTop: '0' }}>
+                  <p className="card-description">Export SQLite database backups, import backup files, view raw data folders, or download CSV reports.</p>
+                  
+                  <div className="card-actions-row" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.5rem', marginTop: 'auto', paddingTop: '0.5rem' }}>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button className="btn-primary-sm" style={{ flex: 1 }} onClick={() => storage.exportData()}>
-                        <DownloadCloud size={16} /> Export DB
+                      <button className="btn-primary-sm" style={{ flex: 1, padding: '0.65rem 0.75rem' }} onClick={() => storage.exportData()}>
+                        <DownloadCloud size={15} /> Export DB
                       </button>
-                      <button className="btn-secondary-sm" style={{ flex: 1 }} onClick={() => document.getElementById('import-file')?.click()}>
-                        <UploadCloud size={16} /> Import DB
+                      <button className="btn-secondary-sm" style={{ flex: 1, padding: '0.65rem 0.75rem' }} onClick={() => document.getElementById('import-file')?.click()}>
+                        <UploadCloud size={15} /> Import DB
                       </button>
                     </div>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button className="btn-ghost-sm" style={{ flex: 1, border: '1px solid var(--border)', padding: '0.75rem', borderRadius: '8px', color: 'var(--text-main)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }} onClick={() => storage.exportToExcel()}>
-                        <FileText size={16} /> Export CSV
+                      <button className="btn-ghost-sm" style={{ flex: 1, border: '1px solid var(--border)', padding: '0.65rem 0.75rem', borderRadius: '8px', color: 'var(--text-main)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontWeight: 600 }} onClick={() => storage.exportToExcel()}>
+                        <FileText size={15} /> Export CSV
                       </button>
-                      <button className="btn-ghost-sm" style={{ flex: 1, border: '1px solid var(--border)', padding: '0.75rem', borderRadius: '8px', color: 'var(--text-main)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }} onClick={() => (window as any).database.openFolder()}>
-                        <FolderOpen size={16} /> Data Folder
+                      <button className="btn-ghost-sm" style={{ flex: 1, border: '1px solid var(--border)', padding: '0.65rem 0.75rem', borderRadius: '8px', color: 'var(--text-main)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontWeight: 600 }} onClick={() => (window as any).database.openFolder()}>
+                        <FolderOpen size={15} /> Data Folder
                       </button>
                     </div>
                   </div>
@@ -875,154 +925,75 @@ const App: React.FC = () => {
                   />
                 </div>
 
-                {/* System License */}
-                <div className="card control-card" style={{ padding: '1.5rem', gap: '0.5rem' }}>
+                {/* WhatsApp Bot Setup */}
+                <div className="card control-card" style={{ padding: '1.5rem', gap: '0.85rem' }}>
                   <div className="card-icon-header inline">
-                    <div className="header-icon gray"><ShieldCheck size={18} /></div>
-                    <h3>System License</h3>
+                    <div className="header-icon green" style={{ background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', boxShadow: '0 4px 10px rgba(16,185,129,0.3)' }}><MessageSquare size={18} /></div>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>WhatsApp Bot Setup</h3>
                   </div>
+                  <p className="card-description">Enable automated patient appointment booking and instant WhatsApp notifications for your clinic.</p>
                   
-                  <div className="license-status-section" style={{ paddingTop: '0.5rem', gap: '0.75rem' }}>
-                    <div className="license-row">
-                      <span className="label-caps">STATUS</span>
-                      <div className={`license-badge-modern ${activationStatus?.status === 'ACTIVATED' ? 'active' : ''}`} style={{ padding: '0.25rem 0.75rem' }}>
-                        <div className="dot"></div>
-                        <span>{activationStatus?.status === 'ACTIVATED' ? 'ACTIVATED' : activationStatus?.status}</span>
-                        {activationStatus?.expiryDate && <span className="expiry-date">{activationStatus.expiryDate}</span>}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: 'auto' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '0.6rem 0.85rem', borderRadius: '10px', border: '1px solid var(--border)' }}>
+                      <span className="label-caps" style={{ color: '#64748b' }}>STATUS</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '0.825rem' }}>
+                        <div className={`dot ${botStatus?.status === 'CONNECTED' ? 'green' : botStatus?.status === 'QR_READY' ? 'amber' : ''}`} />
+                        <span style={{ color: botStatus?.status === 'CONNECTED' ? '#047857' : botStatus?.status === 'QR_READY' ? '#b45309' : '#64748b' }}>
+                          {botStatus?.status || 'DISCONNECTED'}
+                        </span>
                       </div>
                     </div>
 
-                    <div className="license-row">
-                      <span className="label-caps">MACHINE ID</span>
-                      <div className="machine-id-display" style={{ padding: '0.25rem 0.5rem', maxWidth: '160px' }}>
-                        <code>{machineId}</code>
-                        <button className="copy-btn" onClick={() => {
-                          navigator.clipboard.writeText(machineId);
-                          alert('Machine ID copied!');
-                        }}><Copy size={14} /></button>
+                    {botStatus?.status === 'QR_READY' && botStatus?.qrCodeDataUrl && (
+                      <div style={{ textAlign: 'center', background: '#f0f9ff', padding: '1rem', borderRadius: '12px', border: '1px solid #bae6fd' }}>
+                        <p style={{ fontSize: '0.8rem', color: '#0369a1', fontWeight: 600, marginBottom: '0.5rem' }}>
+                          📱 Scan with WhatsApp (Settings → Linked Devices)
+                        </p>
+                        <img src={botStatus.qrCodeDataUrl} alt="WhatsApp QR Code" style={{ width: '170px', height: '170px', margin: '0 auto', display: 'block', borderRadius: '8px', border: '2px solid white' }} />
                       </div>
-                    </div>
+                    )}
 
-                    <div className="center-link-container" style={{ paddingTop: '0' }}>
-                      <button 
-                        className="btn-link" 
-                        onClick={() => {
-                          if (confirm('Are you sure you want to remove the current license?')) {
-                            // @ts-ignore
-                            window.licensing.deactivate();
-                            window.location.reload();
-                          }
-                        }}
-                      >
-                        Change / Renew License
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Clinic Profiles & Users */}
-                <div className="card control-card">
-                  <div className="card-icon-header inline">
-                    <div className="header-icon red"><KeyRound size={18} /></div>
-                    <h3>Clinic Profiles & Users</h3>
-                  </div>
-                  <p className="card-description">Manage User IDs allowed to mount workspace databases on this workstation.</p>
-                  
-                  {currentUser === 'admin' ? (
-                    <div className="user-management-section">
-                      <div className="add-user-row" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '1rem' }}>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                          <input 
-                            type="text" 
-                            placeholder="Register User ID..." 
-                            value={newUserIdInput}
-                            onChange={e => setNewUserIdInput(e.target.value)}
-                            className="sync-input-line"
-                            style={{ flex: 2, minWidth: 0 }}
-                          />
-                          <select
-                            value={newUserRole}
-                            onChange={e => {
-                              setNewUserRole(e.target.value as 'reception' | 'doctor');
-                              if (e.target.value === 'doctor' && doctors.length > 0) {
-                                setSelectedDoctorIdForUser(doctors[0].id);
-                              }
-                            }}
-                            className="select-profile-dropdown"
-                            style={{ flex: 1.2, padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
-                          >
-                            <option value="reception">Reception</option>
-                            <option value="doctor">Doctor</option>
-                          </select>
-                        </div>
-
-                        {newUserRole === 'doctor' && (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Link Doctor Profile:</label>
-                            <select
-                              value={selectedDoctorIdForUser}
-                              onChange={e => setSelectedDoctorIdForUser(e.target.value)}
-                              className="select-profile-dropdown"
-                              style={{ flex: 1, padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
-                            >
-                              <option value="">-- Choose Doctor Registry --</option>
-                              {doctors.map(d => (
-                                <option key={d.id} value={d.id}>{d.name} ({d.specialization})</option>
-                              ))}
-                            </select>
-                          </div>
-                        )}
-
-                        <button 
-                          className="btn-primary" 
-                          onClick={handleAddUser}
-                          disabled={!newUserIdInput.trim() || (newUserRole === 'doctor' && !selectedDoctorIdForUser)}
-                          style={{ padding: '0.6rem 1.25rem', width: '100%' }}
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      {botStatus?.status !== 'CONNECTED' ? (
+                        <button
+                          className="btn-primary-sm"
+                          style={{ flex: 1, background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', padding: '0.65rem 0.75rem', borderRadius: '8px', fontWeight: 700 }}
+                          onClick={async () => {
+                            if ((window as any).whatsappBot) {
+                              const res = await (window as any).whatsappBot.start();
+                              setBotStatus(res);
+                            }
+                          }}
                         >
-                          Add Clinic User ID
+                          <Bot size={16} /> Connect WhatsApp
                         </button>
-                      </div>
-
-                      <div className="users-list-container">
-                        <span className="label-caps" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>REGISTERED PROFILES</span>
-                        <div className="users-list" style={{ maxHeight: '140px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '8px' }}>
-                          {knownUsers.map(user => (
-                            <div key={user.id} className="user-list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0.75rem', borderBottom: '1px solid var(--border)' }}>
-                              <span className="user-list-name" style={{ fontSize: '0.9rem', color: 'var(--text-main)' }}>
-                                <strong>{user.id}</strong> <span style={{ opacity: 0.65, fontSize: '0.75rem', marginLeft: '4px' }}>({user.role})</span> {user.id === currentUser && <span style={{ color: '#0ea5e9', fontSize: '0.75rem', marginLeft: '6px', fontWeight: 600 }}>(active)</span>}
-                              </span>
-                              {user.id !== 'default' && (
-                                <button 
-                                  className="btn-delete-user"
-                                  onClick={() => handleDeleteUser(user.id)}
-                                  title="Remove User ID"
-                                  style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}
-                                >
-                                  <Trash2 size={13} />
-                                </button>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
+                      ) : (
+                        <button
+                          className="btn-secondary-sm"
+                          style={{ flex: 1, color: '#ef4444', borderColor: '#fee2e2', background: '#fef2f2', padding: '0.65rem 0.75rem', fontWeight: 700 }}
+                          onClick={async () => {
+                            if ((window as any).whatsappBot) {
+                              const res = await (window as any).whatsappBot.stop();
+                              setBotStatus(res);
+                            }
+                          }}
+                        >
+                          Disconnect
+                        </button>
+                      )}
                     </div>
-                  ) : (
-                    <div style={{ padding: '0.75rem 1rem', background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: '8px', color: '#b45309', fontSize: '0.825rem', display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
-                      <AlertCircle size={16} />
-                      <span>Only the administrator (<strong>admin</strong> profile) is authorized to manage clinic user accounts.</span>
-                    </div>
-                  )}
+                  </div>
                 </div>
 
                 {/* Workstation Connection Settings */}
-                <div className="card control-card">
+                <div className="card control-card" style={{ padding: '1.5rem', gap: '0.85rem' }}>
                   <div className="card-icon-header inline">
-                    <div className="header-icon green"><Server size={18} /></div>
-                    <h3>Workstation Connection</h3>
+                    <div className="header-icon cyan" style={{ background: 'linear-gradient(135deg, #06b6d4, #0d9488)', color: 'white', boxShadow: '0 4px 10px rgba(6,182,212,0.3)' }}><Server size={18} /></div>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Workstation Connection</h3>
                   </div>
-                  <p className="card-description">Configure whether this machine runs independently, acts as the central server (Host), or connects to a central server (Client) in the clinic.</p>
+                  <p className="card-description">Configure network connection mode (Standalone, Central Host Server, or Client workstation).</p>
                   
-                  <div className="connection-settings-section" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: 'auto', paddingTop: '1rem' }}>
+                  <div className="connection-settings-section" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: 'auto', paddingTop: '0.5rem' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                       <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>CONNECTION MODE</label>
                       <select 
@@ -1103,14 +1074,13 @@ const App: React.FC = () => {
                         </div>
 
                         {localIp && (
-                          <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '0.75rem', fontSize: '0.8rem', color: '#166534', lineHeight: '1.4' }}>
+                          <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '0.65rem', fontSize: '0.8rem', color: '#166534', lineHeight: '1.4' }}>
                             <div style={{ fontWeight: 600, marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                               <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e', display: 'inline-block' }}></span>
                               Server Active
                             </div>
                             <div>Workstation IP: <strong style={{ fontFamily: 'monospace' }}>{localIp}</strong></div>
                             <div>Port: <strong style={{ fontFamily: 'monospace' }}>{hostPort}</strong></div>
-                            <div style={{ marginTop: '4px', fontSize: '0.72rem', opacity: 0.85 }}>Other computers can connect using this IP and Port.</div>
                           </div>
                         )}
 
@@ -1132,13 +1102,151 @@ const App: React.FC = () => {
                         style={{ width: '100%', padding: '0.6rem', fontSize: '0.8rem', marginTop: '4px' }} 
                         onClick={handleSaveConnectionSettings}
                       >
-                        Save & Relaunch
+                        Save Network Settings
                       </button>
                     )}
                   </div>
                 </div>
 
+                {/* Clinic Profiles & Users */}
+                <div className="card control-card" style={{ padding: '1.5rem', gap: '0.85rem' }}>
+                  <div className="card-icon-header inline">
+                    <div className="header-icon red" style={{ background: 'linear-gradient(135deg, #f43f5e, #e11d48)', color: 'white', boxShadow: '0 4px 10px rgba(244,63,94,0.3)' }}><KeyRound size={18} /></div>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Clinic Profiles & Users</h3>
+                  </div>
+                  <p className="card-description">Manage User IDs authorized to access workspace profiles on this workstation.</p>
+                  
+                  {currentUser === 'admin' ? (
+                    <div className="user-management-section">
+                      <div className="add-user-row" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '1rem' }}>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <input 
+                            type="text" 
+                            placeholder="Register User ID..." 
+                            value={newUserIdInput}
+                            onChange={e => setNewUserIdInput(e.target.value)}
+                            className="sync-input-line"
+                            style={{ flex: 2, minWidth: 0, margin: 0, padding: '0.55rem 0.75rem', fontSize: '0.85rem' }}
+                          />
+                          <select
+                            value={newUserRole}
+                            onChange={e => {
+                              setNewUserRole(e.target.value as 'reception' | 'doctor');
+                              if (e.target.value === 'doctor' && doctors.length > 0) {
+                                setSelectedDoctorIdForUser(doctors[0].id);
+                              }
+                            }}
+                            className="select-profile-dropdown"
+                            style={{ flex: 1.2, padding: '0.55rem 0.75rem', fontSize: '0.85rem' }}
+                          >
+                            <option value="reception">Reception</option>
+                            <option value="doctor">Doctor</option>
+                          </select>
+                        </div>
 
+                        {newUserRole === 'doctor' && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Link Doctor Profile:</label>
+                            <select
+                              value={selectedDoctorIdForUser}
+                              onChange={e => setSelectedDoctorIdForUser(e.target.value)}
+                              className="select-profile-dropdown"
+                              style={{ flex: 1, padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
+                            >
+                              <option value="">-- Choose Doctor Registry --</option>
+                              {doctors.map(d => (
+                                <option key={d.id} value={d.id}>{d.name} ({d.specialization})</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
+                        <button 
+                          className="btn-primary" 
+                          onClick={handleAddUser}
+                          disabled={!newUserIdInput.trim() || (newUserRole === 'doctor' && !selectedDoctorIdForUser)}
+                          style={{ padding: '0.55rem 1rem', width: '100%', fontSize: '0.85rem', fontWeight: 700 }}
+                        >
+                          Add Clinic User ID
+                        </button>
+                      </div>
+
+                      <div className="users-list-container">
+                        <span className="label-caps" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>REGISTERED PROFILES</span>
+                        <div className="users-list" style={{ maxHeight: '120px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '8px' }}>
+                          {knownUsers.map(user => (
+                            <div key={user.id} className="user-list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.45rem 0.75rem', borderBottom: '1px solid var(--border)' }}>
+                              <span className="user-list-name" style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>
+                                <strong>{user.id}</strong> <span style={{ opacity: 0.65, fontSize: '0.75rem', marginLeft: '4px' }}>({user.role})</span> {user.id === currentUser && <span style={{ color: '#0ea5e9', fontSize: '0.75rem', marginLeft: '6px', fontWeight: 600 }}>(active)</span>}
+                              </span>
+                              {user.id !== 'default' && (
+                                <button 
+                                  className="btn-delete-user"
+                                  onClick={() => handleDeleteUser(user.id)}
+                                  title="Remove User ID"
+                                  style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ padding: '0.75rem 1rem', background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: '8px', color: '#b45309', fontSize: '0.825rem', display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
+                      <AlertCircle size={16} />
+                      <span>Only administrator (<strong>admin</strong>) can manage clinic accounts.</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* System License */}
+                <div className="card control-card" style={{ gridColumn: 'span 2', justifySelf: 'center', width: '100%', maxWidth: '480px', padding: '1.5rem', gap: '0.85rem' }}>
+                  <div className="card-icon-header inline">
+                    <div className="header-icon gray" style={{ background: 'linear-gradient(135deg, #475569, #1e293b)', color: 'white', boxShadow: '0 4px 10px rgba(71,85,105,0.3)' }}><ShieldCheck size={18} /></div>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>System License</h3>
+                  </div>
+                  <p className="card-description">View active license duration, device machine ID, or renew your system registration.</p>
+                  
+                  <div className="license-status-section" style={{ paddingTop: '0.25rem', gap: '0.75rem' }}>
+                    <div className="license-row">
+                      <span className="label-caps">STATUS</span>
+                      <div className={`license-badge-modern ${activationStatus?.status === 'ACTIVATED' ? 'active' : ''}`} style={{ padding: '0.35rem 0.85rem', borderRadius: '10px' }}>
+                        <div className="dot"></div>
+                        <span>{activationStatus?.status === 'ACTIVATED' ? 'ACTIVATED' : activationStatus?.status}</span>
+                        {activationStatus?.expiryDate && <span className="expiry-date">({activationStatus.expiryDate})</span>}
+                      </div>
+                    </div>
+
+                    <div className="license-row">
+                      <span className="label-caps">MACHINE ID</span>
+                      <div className="machine-id-display" style={{ padding: '0.4rem 0.65rem', borderRadius: '8px', maxWidth: '170px', background: '#f8fafc' }}>
+                        <code style={{ fontSize: '0.75rem', color: '#334155', fontWeight: 600 }}>{machineId}</code>
+                        <button className="copy-btn" onClick={() => {
+                          navigator.clipboard.writeText(machineId);
+                          alert('Machine ID copied!');
+                        }}><Copy size={13} /></button>
+                      </div>
+                    </div>
+
+                    <div className="center-link-container" style={{ paddingTop: '0.25rem' }}>
+                      <button 
+                        className="btn-link" 
+                        onClick={() => {
+                          if (confirm('Are you sure you want to remove the current license?')) {
+                            // @ts-ignore
+                            window.licensing.deactivate();
+                            window.location.reload();
+                          }
+                        }}
+                      >
+                        Change / Renew License
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}

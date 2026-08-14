@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { LayoutDashboard, Users, Receipt, PlusCircle, Settings, ShieldCheck, Copy, Calendar, DownloadCloud, UploadCloud, FileText, Filter, Briefcase, Printer, Trash2, Edit2, FolderOpen, Search, LogOut, KeyRound, Server, AlertCircle, MessageSquare, Bot } from 'lucide-react';
 
-import { storage, type Doctor, type Receipt as ReceiptType, type Service } from './lib/storage';
+import { storage, formatAgeGender, type Doctor, type Receipt as ReceiptType, type Service } from './lib/storage';
 import './index.css';
 
 // Components
@@ -499,7 +499,7 @@ const App: React.FC = () => {
           )}
           <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255, 255, 255, 0.08)', textAlign: 'center', width: '100%' }}>
             <div style={{ fontSize: '0.7rem', color: '#64748b' }}>Software Developed by</div>
-            <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#94a3b8' }}>Burhanuddin</div>
+            <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#94a3b8' }}>Badshah Computer's</div>
             <div style={{ fontSize: '0.7rem', color: '#64748b' }}>Email:- burhansaifee2003@gmail.com</div>
           </div>
         </div>
@@ -811,7 +811,7 @@ const App: React.FC = () => {
                                 <strong style={{ color: 'var(--text-main)' }}>{p.patientName}</strong><br/>
                                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{p.patientPhone || 'No Phone'}</span>
                               </td>
-                              <td style={{ padding: '1rem', fontSize: '0.875rem' }}>{p.patientAge.includes('Y') ? p.patientAge : `${p.patientAge}Y`} / {p.patientGender}</td>
+                              <td style={{ padding: '1rem', fontSize: '0.875rem' }}>{formatAgeGender(p.patientAge, p.patientGender)}</td>
                               <td style={{ padding: '1rem', fontSize: '0.875rem', whiteSpace: 'nowrap' }}>Dr. {p.doctorName}</td>
                               <td style={{ padding: '1rem', fontSize: '0.875rem' }}>{p.diagnosis || 'N/A'}</td>
                               <td style={{ padding: '1rem', fontSize: '0.875rem' }}>
@@ -850,7 +850,7 @@ const App: React.FC = () => {
                 setEditingReceipt({
                   id: '',
                   receiptNumber: '',
-                  date: format(new Date(), 'yyyy-MM-dd HH:mm'),
+                  date: apt.appointmentDate || (apt as any).date || format(new Date(), 'yyyy-MM-dd'),
                   patientName: apt.patientName,
                   patientAge: apt.patientAge || '30',
                   patientGender: apt.patientGender || 'Male',
@@ -1256,117 +1256,142 @@ const App: React.FC = () => {
       {/* Hidden Print Template for History (Supports Multi-Receipts) */}
       {receiptsToPrint.length > 0 && (
         <div id="receipt-print-template" className="print-only">
-          {receiptsToPrint.map((r, idx) => (
-            <div key={r.id} className="print-container page-break">
-              <div className="print-header">
-                <div className="print-clinic-branding">
-                  <h2>{doctors.find(d => d.id === r.doctorId)?.name || r.doctorName}</h2>
-                  <p className="clinic-tagline" style={{ marginTop: '5px', whiteSpace: 'pre-wrap' }}>
-                    {doctors.find(d => d.id === r.doctorId)?.address || ''}
-                  </p>
-                </div>
-                <div className="print-clinic-address">
-                  <p style={{ fontWeight: 700 }}>{doctors.find(d => d.id === r.doctorId)?.qualifications || ''}</p>
-                  <p>{doctors.find(d => d.id === r.doctorId)?.specialization || ''}</p>
-                  <p>Ph: {doctors.find(d => d.id === r.doctorId)?.phone || ''}</p>
-                </div>
-              </div>
+          {receiptsToPrint.map((r, idx) => {
+            const doctorObj = doctors.find(d => d.id === r.doctorId);
+            const printHeader = doctorObj ? (doctorObj.printHeader !== false) : true;
+            const customTopMargin = doctorObj ? (doctorObj.customTopMargin || 0) : 0;
 
-              <div className="print-title-bar">
-                <h1>PAYMENT RECEIPT (DUPLICATE)</h1>
-              </div>
+            return (
+              <div 
+                key={r.id} 
+                className="print-container page-break"
+                style={{
+                  paddingTop: !printHeader && customTopMargin ? `${customTopMargin}mm` : undefined,
+                  borderTop: !printHeader ? 'none' : undefined
+                }}
+              >
+                {printHeader && (
+                  <div className="print-header">
+                    <div className="print-clinic-branding">
+                      <h2>{doctorObj?.name || r.doctorName}</h2>
+                      <p className="clinic-tagline" style={{ marginTop: '5px', whiteSpace: 'pre-wrap' }}>
+                        {doctorObj?.address || ''}
+                      </p>
+                    </div>
+                    <div className="print-clinic-address">
+                      <p style={{ fontWeight: 700 }}>{doctorObj?.qualifications || ''}</p>
+                      <p>{doctorObj?.specialization || ''}</p>
+                      <p>Ph: {doctorObj?.phone || ''}</p>
+                    </div>
+                  </div>
+                )}
 
-              <div className="print-info-grid">
-                <div className="info-section">
-                  <h3>PATIENT DETAILS</h3>
-                  <p><strong>Name:</strong> {r.patientName}</p>
-                  <p><strong>Age/Gender:</strong> {r.patientAge.includes('Y') || r.patientAge.includes('M') ? r.patientAge : `${r.patientAge}Y`} / {r.patientGender}</p>
-                  <p><strong>Phone No.:</strong> {r.patientPhone || 'N/A'}</p>
+                <div className="print-title-bar">
+                  <h1>PAYMENT RECEIPT (DUPLICATE)</h1>
                 </div>
-                <div className="info-section">
-                  <h3>BILL DETAILS</h3>
-                  <p><strong>Receipt #:</strong> {r.receiptNumber}</p>
-                  <p><strong>Original Date:</strong> {(() => {
-                    try {
-                      return format(new Date(r.date), 'dd MMM yyyy');
-                    } catch (e) {
-                      return r.date || 'N/A';
-                    }
-                  })()}</p>
-                  <p><strong>Payment Mode:</strong> {r.paymentMethod || 'CASH'}</p>
-                </div>
-              </div>
 
-              <table className="print-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: '40px' }}>Sr.</th>
-                    <th>Description of Services</th>
-                    <th className="text-right">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {r.items.map((item, index) => (
-                    <tr key={item.id}>
-                      <td>{index + 1}</td>
-                      <td>{item.description}</td>
-                      <td className="text-right">₹{(r.paymentMethod === 'FREE' ? 0 : (Number(item.amount) || 0)).toFixed(2)}</td>
+                <div className="print-info-grid">
+                  <div className="info-section">
+                    <h3>PATIENT DETAILS</h3>
+                    <p><strong>Name:</strong> {r.patientName}</p>
+                    <p><strong>Age/Gender:</strong> {formatAgeGender(r.patientAge, r.patientGender)}</p>
+                    <p><strong>Phone No.:</strong> {r.patientPhone || 'N/A'}</p>
+                  </div>
+                  <div className="info-section">
+                    <h3>BILL DETAILS</h3>
+                    <p><strong>Receipt #:</strong> {r.receiptNumber}</p>
+                    <p><strong>Original Date:</strong> {(() => {
+                      try {
+                        return format(new Date(r.date), 'dd MMM yyyy');
+                      } catch (e) {
+                        return r.date || 'N/A';
+                      }
+                    })()}</p>
+                    <p><strong>Payment Mode:</strong> {r.paymentMethod || 'CASH'}</p>
+                  </div>
+                </div>
+
+                <table className="print-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: '40px' }}>Sr.</th>
+                      <th>Description of Services</th>
+                      <th className="text-right">Amount</th>
                     </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <th colSpan={2} className="text-right">Total Payable Amount:</th>
-                    <th className="text-right">₹{(Number(r.total) || 0).toFixed(2)}</th>
-                  </tr>
-                </tfoot>
-              </table>
+                  </thead>
+                  <tbody>
+                    {r.items.map((item, index) => (
+                      <tr key={item.id}>
+                        <td>{index + 1}</td>
+                        <td>{item.description}</td>
+                        <td className="text-right">₹{(r.paymentMethod === 'FREE' ? 0 : (Number(item.amount) || 0)).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <th colSpan={2} className="text-right">Total Payable Amount:</th>
+                      <th className="text-right">₹{(Number(r.total) || 0).toFixed(2)}</th>
+                    </tr>
+                  </tfoot>
+                </table>
 
-              <div className="print-amount-words">
-                <p><strong>Total in words:</strong> Rupee {(Number(r.total) || 0).toLocaleString()} Only</p>
-              </div>
+                <div className="print-amount-words">
+                  <p><strong>Total in words:</strong> Rupee {(Number(r.total) || 0).toLocaleString()} Only</p>
+                </div>
 
-              <div className="print-footer">
-                <div className="terms">
-                  <p>• This is a computer-generated duplicate receipt.</p>
-                  <p>• Original date of service: {(() => {
-                    try {
-                      return format(new Date(r.date), 'dd MMM yyyy');
-                    } catch (e) {
-                      return r.date || 'N/A';
-                    }
-                  })()}</p>
-                  {receiptsToPrint.length > 1 && (
-                    <p className="print-page-info">Receipt {idx + 1} of {receiptsToPrint.length}</p>
-                  )}
-                </div>
-                <div className="signature-box">
-                  <div className="signature-line"></div>
-                  <p>Authorized Signatory</p>
+                <div className="print-footer">
+                  <div className="terms">
+                    <p>• This is a computer-generated duplicate receipt.</p>
+                    <p>• Original date of service: {(() => {
+                      try {
+                        return format(new Date(r.date), 'dd MMM yyyy');
+                      } catch (e) {
+                        return r.date || 'N/A';
+                      }
+                    })()}</p>
+                    {receiptsToPrint.length > 1 && (
+                      <p className="print-page-info">Receipt {idx + 1} of {receiptsToPrint.length}</p>
+                    )}
+                  </div>
+                  <div className="signature-box">
+                    <div className="signature-line"></div>
+                    <p>Authorized Signatory</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
       {activePrintPrescription && (
         <div id="prescription-print-template" className="print-only">
-          <div className="print-container">
+          <div 
+            className="print-container"
+            style={{
+              paddingTop: (doctors.find(d => d.id === activePrintPrescription.doctorId)?.printHeader === false) && doctors.find(d => d.id === activePrintPrescription.doctorId)?.customTopMargin
+                ? `${doctors.find(d => d.id === activePrintPrescription.doctorId)?.customTopMargin}mm`
+                : undefined,
+              borderTop: (doctors.find(d => d.id === activePrintPrescription.doctorId)?.printHeader === false) ? 'none' : undefined
+            }}
+          >
             {/* Header / Clinic Doctor Info */}
-            <div className="print-header">
-              <div className="print-clinic-branding">
-                <h2>Dr. {activePrintPrescription.doctorName.replace(/^Dr\.?\s+/i, '')}</h2>
-                <p className="qualifications">{doctors.find(d => d.id === activePrintPrescription.doctorId)?.qualifications || ''}</p>
-                <p className="specialization">{doctors.find(d => d.id === activePrintPrescription.doctorId)?.specialization || 'Consulting Physician'}</p>
+            {(doctors.find(d => d.id === activePrintPrescription.doctorId)?.printHeader !== false) && (
+              <div className="print-header">
+                <div className="print-clinic-branding">
+                  <h2>Dr. {activePrintPrescription.doctorName.replace(/^Dr\.?\s+/i, '')}</h2>
+                  <p className="qualifications">{doctors.find(d => d.id === activePrintPrescription.doctorId)?.qualifications || ''}</p>
+                  <p className="specialization">{doctors.find(d => d.id === activePrintPrescription.doctorId)?.specialization || 'Consulting Physician'}</p>
+                </div>
+                <div className="print-clinic-address">
+                  <p className="address-text">{doctors.find(d => d.id === activePrintPrescription.doctorId)?.address || ''}</p>
+                  {doctors.find(d => d.id === activePrintPrescription.doctorId)?.phone && (
+                    <p className="phone-text"><strong>Ph:</strong> {doctors.find(d => d.id === activePrintPrescription.doctorId)?.phone}</p>
+                  )}
+                </div>
               </div>
-              <div className="print-clinic-address">
-                <p className="address-text">{doctors.find(d => d.id === activePrintPrescription.doctorId)?.address || ''}</p>
-                {doctors.find(d => d.id === activePrintPrescription.doctorId)?.phone && (
-                  <p className="phone-text"><strong>Ph:</strong> {doctors.find(d => d.id === activePrintPrescription.doctorId)?.phone}</p>
-                )}
-              </div>
-            </div>
+            )}
 
             {/* Patient Info */}
             <div className="print-patient-meta-grid">
@@ -1376,7 +1401,7 @@ const App: React.FC = () => {
               </div>
               <div>
                 <span className="meta-label">Age / Gender</span>
-                <strong className="meta-value">{activePrintPrescription.patientAge.includes('Y') ? activePrintPrescription.patientAge : `${activePrintPrescription.patientAge}Y`} / {activePrintPrescription.patientGender}</strong>
+                <strong className="meta-value">{formatAgeGender(activePrintPrescription.patientAge, activePrintPrescription.patientGender)}</strong>
               </div>
               <div>
                 <span className="meta-label">Date</span>
@@ -1456,6 +1481,7 @@ const App: React.FC = () => {
               </div>
             </div>
           </div>
+
           <style>{`
             #prescription-print-template {
               font-family: 'Outfit', 'Inter', sans-serif;

@@ -404,3 +404,26 @@ export const storage = {
     }
   }
 };
+
+export const cleanAgeString = (ageStr?: string): string => {
+  if (!ageStr) return '';
+  return ageStr
+    .replace(/\b(male|female|other)\b/gi, '')
+    .replace(/\//g, '')
+    .trim();
+};
+
+export const formatAgeGender = (patientAge?: string, patientGender?: string): string => {
+  const gender = patientGender?.trim() || 'Male';
+  const cleanedAge = cleanAgeString(patientAge);
+
+  if (!cleanedAge) {
+    return `N/A / ${gender}`;
+  }
+
+  const hasUnit = /[0-9]+\s*[ymYM]\b/.test(cleanedAge) || /\b(years?|months?|yrs?|mths?)\b/i.test(cleanedAge);
+  const formattedAge = (!hasUnit && /^\d+$/.test(cleanedAge)) ? `${cleanedAge}Y` : cleanedAge;
+
+  return `${formattedAge} / ${gender}`;
+};
+

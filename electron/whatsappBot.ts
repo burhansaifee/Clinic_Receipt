@@ -488,9 +488,17 @@ async function handleIncomingBookingFlow(socket: any, jid: string, phone: string
     case 5: {
       // Step 5: Patient Details Received -> Finalize Booking Request
       const parts = text.split(',').map((p) => p.trim());
-      const patientName = parts[0] || text;
-      const patientAge = parts[1] || '30';
-      const patientGender = parts[2] || 'Male';
+      let patientName = parts[0] || text;
+      let patientAge = parts[1] || '30';
+      let patientGender = parts[2] || 'Male';
+
+      if (/\b(male|female|other)\b/i.test(patientAge)) {
+        const genderMatch = patientAge.match(/\b(male|female|other)\b/i);
+        if (genderMatch && (!parts[2] || !parts[2].trim())) {
+          patientGender = genderMatch[0].charAt(0).toUpperCase() + genderMatch[0].slice(1).toLowerCase();
+        }
+        patientAge = patientAge.replace(/\b(male|female|other)\b/gi, '').replace(/\//g, '').trim();
+      }
 
       const appointmentId = 'APT-' + Math.floor(100000 + Math.random() * 900000);
 

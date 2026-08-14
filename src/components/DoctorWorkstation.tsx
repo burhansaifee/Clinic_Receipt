@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ClipboardList, FileText, Search, Plus, Trash2, Printer, PlusCircle, AlertCircle, LogOut, CheckCircle, Save, History, KeyRound } from 'lucide-react';
-import { storage, type Doctor, type Receipt, type Prescription, type PrescribedMedicine } from '../lib/storage';
+import { storage, formatAgeGender, type Doctor, type Receipt, type Prescription, type PrescribedMedicine } from '../lib/storage';
 
 interface DoctorWorkstationProps {
   currentUser: string;
@@ -261,7 +261,7 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
             </button>
             <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #e2e8f0', textAlign: 'center', width: '100%' }}>
               <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Software Developed by</div>
-              <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Burhanuddin</div>
+              <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Badshah Computer's</div>
               <div style={{ fontSize: '0.7rem', color: '#64748b' }}>Email:- burhansaifee2003@gmail.com</div>
             </div>
           </div>
@@ -300,7 +300,7 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
                           <div className="patient-meta">
                             <h4>{r.patientName}</h4>
                             <span className="patient-specs">
-                              {r.patientAge}Y / {r.patientGender}
+                              {formatAgeGender(r.patientAge, r.patientGender)}
                             </span>
                           </div>
                           <span className={`status-tag ${isPrescribed ? 'success' : 'pending'}`}>
@@ -392,7 +392,7 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
                         <tr key={p.id}>
                           <td>{p.date}</td>
                           <td><strong>{p.patientName}</strong><br/><span className="sub-text">{p.patientPhone}</span></td>
-                          <td>{p.patientAge}Y / {p.patientGender}</td>
+                          <td>{formatAgeGender(p.patientAge, p.patientGender)}</td>
                           <td>{p.doctorName}</td>
                           <td>{p.diagnosis || 'N/A'}</td>
                           <td>
@@ -438,7 +438,7 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
             <div className="writer-header">
               <div>
                 <h3>Write Medical Prescription (Rx)</h3>
-                <p>Patient: <strong>{selectedReceipt.patientName}</strong> ({selectedReceipt.patientAge}Y / {selectedReceipt.patientGender})</p>
+                <p>Patient: <strong>{selectedReceipt.patientName}</strong> ({formatAgeGender(selectedReceipt.patientAge, selectedReceipt.patientGender)})</p>
               </div>
               <button className="btn-close" onClick={() => setSelectedReceipt(null)}>×</button>
             </div>
@@ -742,7 +742,7 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
                 </div>
                 <div>
                   <span className="meta-label">Age / Gender</span>
-                  <strong className="meta-value">{activePrintPrescription.patientAge.includes('Y') ? activePrintPrescription.patientAge : `${activePrintPrescription.patientAge}Y`} / {activePrintPrescription.patientGender}</strong>
+                  <strong className="meta-value">{formatAgeGender(activePrintPrescription.patientAge, activePrintPrescription.patientGender)}</strong>
                 </div>
                 <div>
                   <span className="meta-label">Date</span>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { storage, type Doctor, type Receipt, type ReceiptItem, type Service } from '../lib/storage';
+import { storage, formatAgeGender, cleanAgeString, type Doctor, type Receipt, type ReceiptItem, type Service } from '../lib/storage';
 import { Plus, Trash2, Save, User, CreditCard } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -10,14 +10,16 @@ interface ReceiptFormProps {
 }
 
 const parseAge = (ageStr: string) => {
-  const yearsMatch = ageStr.match(/(\d+)\s*y/i);
-  const monthsMatch = ageStr.match(/(\d+)\s*m/i);
+  if (!ageStr) return { years: '', months: '' };
+  const cleaned = cleanAgeString(ageStr);
+  const yearsMatch = cleaned.match(/(\d+)\s*(?:y|years|yr|yrs)\b/i);
+  const monthsMatch = cleaned.match(/(\d+)\s*(?:m|months|mth|mths)\b/i);
   
   const years = yearsMatch ? yearsMatch[1] : '';
   const months = monthsMatch ? monthsMatch[1] : '';
   
-  if (!years && !months && /^\d+$/.test(ageStr.trim())) {
-    return { years: ageStr.trim(), months: '' };
+  if (!years && !months && /^\d+$/.test(cleaned)) {
+    return { years: cleaned, months: '' };
   }
   
   return { years, months };
@@ -46,6 +48,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, initialData 
   );
   const [receiptNumber, setReceiptNumber] = useState(initialData?.receiptNumber || '');
   const [availableServices, setAvailableServices] = useState<Service[]>([]);
+  const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
   const [isReturningPatient, setIsReturningPatient] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'ONLINE' | 'FREE'>(initialData?.paymentMethod || 'CASH');
   const [appointmentDate, setAppointmentDate] = useState(initialData?.date || format(new Date(), 'yyyy-MM-dd'));
@@ -68,6 +71,9 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, initialData 
 
   useEffect(() => {
     const init = async () => {
+      if (initialData?.date) {
+        setAppointmentDate(initialData.date.split(' ')[0]);
+      }
       if (!initialData || !initialData.id || !initialData.receiptNumber) {
         setReceiptNumber(await storage.getNextReceiptNumber(paymentMethod === 'FREE'));
         if (doctors.length > 0 && !selectedDoctorId) {
@@ -315,34 +321,58 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, initialData 
               <span>Amount</span>
               <span>Action</span>
             </div>
-            {items.map(item => (
-              <div key={item.id} className="items-row">
-                <div className="description-selector">
+            {items.map(item => {
+              const filteredServices = availableServices.filter(s =>
+                s.name.toLowerCase().includes((item.description || '').toLowerCase())
+              );
+
+              return (
+                <div key={item.id} className="items-row">
+                  <div className="description-selector">
+                    <input 
+                      value={item.description} 
+                      onChange={e => {
+                        updateItem(item.id, 'description', e.target.value);
+                        setActiveDropdownId(item.id);
+                      }} 
+                      onFocus={() => setActiveDropdownId(item.id)}
+                      onBlur={() => setTimeout(() => setActiveDropdownId(null), 200)}
+                      placeholder="e.g. Blood Test"
+                      required
+                      autoComplete="off"
+                    />
+                    {activeDropdownId === item.id && filteredServices.length > 0 && (
+                      <div className="custom-services-dropdown">
+                        {filteredServices.map(s => (
+                          <div 
+                            key={s.id} 
+                            className="dropdown-service-item"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              updateItem(item.id, 'description', s.name);
+                              setActiveDropdownId(null);
+                            }}
+                          >
+                            <span className="service-name">{s.name}</span>
+                            <span className="service-amount">₹{s.amount}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <input 
-                    value={item.description} 
-                    onChange={e => updateItem(item.id, 'description', e.target.value)} 
-                    placeholder="e.g. Blood Test"
+                    type="number" 
+                    value={item.amount} 
+                    onChange={e => updateItem(item.id, 'amount', Number(e.target.value))} 
+                    placeholder="0.00"
                     required
-                    list={`services-list-${item.id}`}
                   />
-                  <datalist id={`services-list-${item.id}`}>
-                    {availableServices.map(s => (
-                      <option key={s.id} value={s.name}>{s.amount}</option>
-                    ))}
-                  </datalist>
+                  <button type="button" onClick={() => removeItem(item.id)} className="btn-icon text-danger">
+                    <Trash2 size={16} />
+                  </button>
                 </div>
-                <input 
-                  type="number" 
-                  value={item.amount} 
-                  onChange={e => updateItem(item.id, 'amount', Number(e.target.value))} 
-                  placeholder="0.00"
-                  required
-                />
-                <button type="button" onClick={() => removeItem(item.id)} className="btn-icon text-danger">
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            ))}
+              );
+            })}
             <div className="items-footer no-print">
               <button type="button" className="btn-secondary add-item-btn" onClick={addItem}>
                 <Plus size={16} /> Add Another Service
@@ -376,86 +406,102 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, initialData 
 
       {/* Hidden Print Template */}
       <div id="receipt-print-template" className="print-only">
-        <div className="print-container">
-          <div className="print-header">
-            <div className="print-clinic-branding">
-              <h2>{doctors.find(d => d.id === selectedDoctorId)?.name || 'DOCTOR NAME'}</h2>
-              <p className="clinic-tagline" style={{ marginTop: '5px', whiteSpace: 'pre-wrap' }}>
-                {doctors.find(d => d.id === selectedDoctorId)?.address || 'Doctor Address goes here'}
-              </p>
-            </div>
-            <div className="print-clinic-address">
-              <p style={{ fontWeight: 700 }}>{doctors.find(d => d.id === selectedDoctorId)?.qualifications || 'Qualifications'}</p>
-              <p>{doctors.find(d => d.id === selectedDoctorId)?.specialization}</p>
-              <p>Ph: {doctors.find(d => d.id === selectedDoctorId)?.phone}</p>
-            </div>
-          </div>
+        {(() => {
+          const doctorObj = doctors.find(d => d.id === selectedDoctorId);
+          const printHeader = doctorObj ? (doctorObj.printHeader !== false) : true;
+          const customTopMargin = doctorObj ? (doctorObj.customTopMargin || 0) : 0;
 
-          <div className="print-title-bar">
-            <h1>PAYMENT RECEIPT</h1>
-          </div>
+          return (
+            <div 
+              className="print-container"
+              style={{
+                paddingTop: !printHeader && customTopMargin ? `${customTopMargin}mm` : undefined,
+                borderTop: !printHeader ? 'none' : undefined
+              }}
+            >
+              {printHeader && (
+                <div className="print-header">
+                  <div className="print-clinic-branding">
+                    <h2>{doctorObj?.name || 'DOCTOR NAME'}</h2>
+                    <p className="clinic-tagline" style={{ marginTop: '5px', whiteSpace: 'pre-wrap' }}>
+                      {doctorObj?.address || 'Doctor Address goes here'}
+                    </p>
+                  </div>
+                  <div className="print-clinic-address">
+                    <p style={{ fontWeight: 700 }}>{doctorObj?.qualifications || 'Qualifications'}</p>
+                    <p>{doctorObj?.specialization}</p>
+                    <p>Ph: {doctorObj?.phone}</p>
+                  </div>
+                </div>
+              )}
 
-          <div className="print-info-grid">
-            <div className="info-section">
-              <h3>PATIENT DETAILS</h3>
-              <p><strong>Name:</strong> {patientName}</p>
-              <p><strong>Age/Gender:</strong> {patientAge.includes('Y') || patientAge.includes('M') ? patientAge : `${patientAge}Y`} / {patientGender}</p>
-              <p><strong>Phone No.:</strong> {patientPhone || 'N/A'}</p>
-            </div>
-            <div className="info-section">
-              <h3>BILL DETAILS</h3>
-              <p><strong>Receipt #:</strong> {receiptNumber}</p>
-              <p><strong>Date:</strong> {(() => {
-                try {
-                  return format(new Date(appointmentDate), 'dd MMM yyyy');
-                } catch (e) {
-                  return appointmentDate || 'N/A';
-                }
-              })()}</p>
-              <p><strong>Payment Mode:</strong> {paymentMethod}</p>
-            </div>
-          </div>
+              <div className="print-title-bar">
+                <h1>PAYMENT RECEIPT</h1>
+              </div>
 
-          <table className="print-table">
-            <thead>
-              <tr>
-                <th style={{ width: '40px' }}>Sr.</th>
-                <th>Description of Services</th>
-                <th className="text-right">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item, index) => (
-                <tr key={item.id}>
-                  <td>{index + 1}</td>
-                  <td>{item.description}</td>
-                  <td className="text-right">₹{(paymentMethod === 'FREE' ? 0 : item.amount).toFixed(2)}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr>
-                <th colSpan={2} className="text-right">Total Payable Amount:</th>
-                <th className="text-right">₹{total.toFixed(2)}</th>
-              </tr>
-            </tfoot>
-          </table>
+              <div className="print-info-grid">
+                <div className="info-section">
+                  <h3>PATIENT DETAILS</h3>
+                  <p><strong>Name:</strong> {patientName}</p>
+                  <p><strong>Age/Gender:</strong> {formatAgeGender(patientAge, patientGender)}</p>
+                  <p><strong>Phone No.:</strong> {patientPhone || 'N/A'}</p>
+                </div>
+                <div className="info-section">
+                  <h3>BILL DETAILS</h3>
+                  <p><strong>Receipt #:</strong> {receiptNumber}</p>
+                  <p><strong>Date:</strong> {(() => {
+                    try {
+                      return format(new Date(appointmentDate), 'dd MMM yyyy');
+                    } catch (e) {
+                      return appointmentDate || 'N/A';
+                    }
+                  })()}</p>
+                  <p><strong>Payment Mode:</strong> {paymentMethod}</p>
+                </div>
+              </div>
 
-          <div className="print-amount-words">
-            <p><strong>Total in words:</strong> Rupee {total.toLocaleString()} Only</p>
-          </div>
+              <table className="print-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '40px' }}>Sr.</th>
+                    <th>Description of Services</th>
+                    <th className="text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item, index) => (
+                    <tr key={item.id}>
+                      <td>{index + 1}</td>
+                      <td>{item.description}</td>
+                      <td className="text-right">₹{(paymentMethod === 'FREE' ? 0 : item.amount).toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <th colSpan={2} className="text-right">Total Payable Amount:</th>
+                    <th className="text-right">₹{total.toFixed(2)}</th>
+                  </tr>
+                </tfoot>
+              </table>
 
-          <div className="print-footer">
-            <div className="terms">
-              <p>• This is a computer-generated receipt.</p>
-              <p>• Fees once paid are non-refundable.</p>
+              <div className="print-amount-words">
+                <p><strong>Total in words:</strong> Rupee {total.toLocaleString()} Only</p>
+              </div>
+
+              <div className="print-footer">
+                <div className="terms">
+                  <p>• This is a computer-generated receipt.</p>
+                  <p>• Fees once paid are non-refundable.</p>
+                </div>
+                <div className="signature-box">
+                  <div className="signature-line"></div>
+                  <p>Authorized Signatory</p>
+                </div>
+              </div>
             </div>
-            <div className="signature-box">
-              <div className="signature-line"></div>
-              <p>Authorized Signatory</p>
-            </div>
-          </div>
-        </div>
+          );
+        })()}
       </div>
 
       <style>{`
@@ -568,6 +614,73 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, initialData 
         .add-item-btn:hover {
           background: #e0f2fe;
           border-style: solid;
+        }
+
+        .description-selector {
+          position: relative;
+        }
+
+        .custom-services-dropdown {
+          position: absolute;
+          top: calc(100% + 4px);
+          left: 0;
+          right: 0;
+          max-height: 220px;
+          overflow-y: auto;
+          background: #ffffff;
+          border: 1px solid var(--border);
+          border-radius: 8px;
+          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+          z-index: 1000;
+          padding: 4px 0;
+        }
+
+        .custom-services-dropdown::-webkit-scrollbar {
+          width: 6px;
+        }
+        .custom-services-dropdown::-webkit-scrollbar-track {
+          background: #f1f5f9;
+          border-radius: 4px;
+        }
+        .custom-services-dropdown::-webkit-scrollbar-thumb {
+          background: #cbd5e1;
+          border-radius: 4px;
+        }
+        .custom-services-dropdown::-webkit-scrollbar-thumb:hover {
+          background: #94a3b8;
+        }
+
+        .dropdown-service-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 0.6rem 0.85rem;
+          cursor: pointer;
+          font-size: 0.875rem;
+          transition: background 0.15s ease;
+        }
+
+        .dropdown-service-item:hover {
+          background: #f0f9ff;
+          color: var(--primary);
+        }
+
+        .dropdown-service-item .service-name {
+          font-weight: 500;
+          color: var(--text-main);
+        }
+
+        .dropdown-service-item:hover .service-name {
+          color: var(--primary);
+        }
+
+        .dropdown-service-item .service-amount {
+          font-weight: 600;
+          color: var(--text-muted);
+          font-size: 0.8rem;
+          background: #f1f5f9;
+          padding: 2px 8px;
+          border-radius: 4px;
         }
 
         .items-footer {

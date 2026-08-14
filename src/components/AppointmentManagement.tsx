@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { storage, type Doctor, type Appointment, type AppointmentStatus } from '../lib/storage';
+import { storage, formatAgeGender, type Doctor, type Appointment, type AppointmentStatus } from '../lib/storage';
 import { Calendar, Search, CheckCircle, XCircle, Clock, Plus, Trash2, MessageSquare, Phone, Tag, Save, Check, CalendarDays, RefreshCw } from 'lucide-react';
 
 interface AppointmentManagementProps {
@@ -376,7 +376,7 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
                       <span style={{ fontSize: '0.75rem', color: '#0ea5e9', marginLeft: '6px', fontWeight: 600 }}>({apt.id})</span>
                       <br />
                       <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
-                        <Phone size={12} /> {apt.patientPhone?.split('@')[0] || 'No Phone'} • {apt.patientAge}Y / {apt.patientGender}
+                        <Phone size={12} /> {apt.patientPhone?.split('@')[0] || 'No Phone'} • {formatAgeGender(apt.patientAge, apt.patientGender)}
                       </span>
                     </td>
 

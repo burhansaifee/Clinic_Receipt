@@ -81,8 +81,6 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
   useEffect(() => {
     loadAppointments();
     loadSchedule();
-    const interval = setInterval(loadAppointments, 5000);
-    return () => clearInterval(interval);
   }, []);
 
   const handleToggleDay = (dayKey: string) => {

@@ -108,6 +108,8 @@ function generateAvailableBookingDates(allowedDays: string[]) {
   return availableDates;
 }
 
+let wasConnected = false;
+
 export const whatsappBot = {
   getStatus: () => state,
 
@@ -124,7 +126,7 @@ export const whatsappBot = {
     state.status = 'CONNECTING';
     state.qrCodeDataUrl = null;
     state.errorMessage = null;
-    if (onStateChange) onStateChange(state);
+    if (onStateChange) onStateChange({ ...state });
 
     try {
       const baileys = require('@whiskeysockets/baileys');
@@ -153,7 +155,7 @@ export const whatsappBot = {
           try {
             state.qrCodeDataUrl = await QRCode.toDataURL(qr);
             state.status = 'QR_READY';
-            console.log('[WhatsApp Bot] New QR Code generated');
+            console.log('[WhatsApp Bot] New QR Code generated on user request');
             if (onStateChange) onStateChange({ ...state });
           } catch (err) {
             console.error('[WhatsApp Bot] Failed to render QR code:', err);
@@ -163,12 +165,15 @@ export const whatsappBot = {
         if (connection === 'close') {
           const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
           const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-          console.log('[WhatsApp Bot] Connection closed. Reconnecting:', shouldReconnect);
+          const previouslyConnected = wasConnected;
+          
+          console.log('[WhatsApp Bot] Connection closed. Status code:', statusCode, 'Previously connected:', previouslyConnected);
+          
           state.status = 'DISCONNECTED';
           state.qrCodeDataUrl = null;
-          if (onStateChange) onStateChange({ ...state });
 
           if (!shouldReconnect) {
+            wasConnected = false;
             try {
               const authDir = path.join(app.getPath('userData'), 'whatsapp_auth');
               if (fs.existsSync(authDir)) {
@@ -178,13 +183,24 @@ export const whatsappBot = {
             } catch (err) {
               console.error('[WhatsApp Bot] Failed to clear auth directory on logout:', err);
             }
-          } else {
+            if (onStateChange) onStateChange({ ...state });
+          } else if (previouslyConnected) {
+            // Only auto-reconnect if we were already authenticated & connected
+            console.log('[WhatsApp Bot] Session lost while connected. Reconnecting existing session...');
+            state.status = 'CONNECTING';
+            if (onStateChange) onStateChange({ ...state });
             setTimeout(() => whatsappBot.start(onStateChange), 5000);
+          } else {
+            // Unauthenticated QR pairing phase ended/expired - stop and wait for user to click "Connect WhatsApp" again
+            console.log('[WhatsApp Bot] QR pairing stopped/expired. Waiting for user to click Connect WhatsApp.');
+            wasConnected = false;
+            if (onStateChange) onStateChange({ ...state });
           }
         } else if (connection === 'open') {
           state.status = 'CONNECTED';
           state.qrCodeDataUrl = null;
           state.phoneNumber = socket.user?.id ? socket.user.id.split(':')[0] : 'Active';
+          wasConnected = true;
           console.log('[WhatsApp Bot] Successfully connected to WhatsApp!');
           if (onStateChange) onStateChange({ ...state });
         }
@@ -231,6 +247,7 @@ export const whatsappBot = {
   },
 
   stop: async () => {
+    wasConnected = false;
     if (socket) {
       try {
         await socket.logout();

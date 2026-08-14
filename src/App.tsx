@@ -79,12 +79,6 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!currentUser || currentUserRole === 'doctor') return;
-    const interval = setInterval(refreshData, 3000);
-    return () => clearInterval(interval);
-  }, [currentUser, currentUserRole, refreshData]);
-
-  useEffect(() => {
     const checkLicense = async () => {
       // @ts-ignore
       const result = await window.licensing.checkActivation();
@@ -812,7 +806,7 @@ const App: React.FC = () => {
                                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{p.patientPhone || 'No Phone'}</span>
                               </td>
                               <td style={{ padding: '1rem', fontSize: '0.875rem' }}>{formatAgeGender(p.patientAge, p.patientGender)}</td>
-                              <td style={{ padding: '1rem', fontSize: '0.875rem', whiteSpace: 'nowrap' }}>Dr. {p.doctorName}</td>
+                              <td style={{ padding: '1rem', fontSize: '0.875rem', whiteSpace: 'nowrap' }}>{p.doctorName}</td>
                               <td style={{ padding: '1rem', fontSize: '0.875rem' }}>{p.diagnosis || 'N/A'}</td>
                               <td style={{ padding: '1rem', fontSize: '0.875rem' }}>
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>

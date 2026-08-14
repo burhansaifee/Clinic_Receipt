@@ -49,8 +49,6 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
 
   useEffect(() => {
     refreshData();
-    const interval = setInterval(refreshData, 3000);
-    return () => clearInterval(interval);
   }, [refreshData]);
 
   useEffect(() => {

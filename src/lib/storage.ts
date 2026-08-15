@@ -36,6 +36,7 @@ export interface Receipt {
   items: ReceiptItem[];
   total: number;
   paymentMethod: 'CASH' | 'ONLINE' | 'FREE';
+  appointmentId?: string;
 }
 
 export interface PrescribedMedicine {
@@ -74,6 +75,7 @@ export interface Appointment {
   appointmentDate: string; // YYYY-MM-DD
   appointmentTime: string; // e.g. 10:30 AM
   notes?: string;
+  rejectionReason?: string;
   source?: 'WHATSAPP' | 'MANUAL';
   status: AppointmentStatus;
   createdAt: string;
@@ -161,13 +163,11 @@ export const storage = {
   saveDoctor: async (doctor: Doctor) => {
     // @ts-ignore
     await window.database.saveDoctor(doctor);
-    await storage.syncToExcel();
   },
 
   deleteDoctor: async (id: string) => {
     // @ts-ignore
     await window.database.deleteDoctor(id);
-    await storage.syncToExcel();
   },
 
   getServices: async (): Promise<Service[]> => {
@@ -178,13 +178,11 @@ export const storage = {
   saveService: async (service: Service) => {
     // @ts-ignore
     await window.database.saveService(service);
-    await storage.syncToExcel();
   },
 
   deleteService: async (id: string) => {
     // @ts-ignore
     await window.database.deleteService(id);
-    await storage.syncToExcel();
   },
 
   getReceipts: async (): Promise<Receipt[]> => {
@@ -203,20 +201,16 @@ export const storage = {
     const prefix = isFree ? 'F' : '';
     // @ts-ignore
     await window.database.setMetadata(key, prefix + nextNum.toString());
-    
-    await storage.syncToExcel();
   },
 
   deleteReceipt: async (id: string) => {
     // @ts-ignore
     await window.database.deleteReceipt(id);
-    await storage.syncToExcel();
   },
 
   updateReceipt: async (receipt: Receipt) => {
     // @ts-ignore
     await window.database.updateReceipt(receipt);
-    await storage.syncToExcel();
     return true;
   },
 
@@ -293,7 +287,6 @@ export const storage = {
         // @ts-ignore
         await window.database.setMetadata('last_receipt_num', data.lastReceiptNum);
       }
-      await storage.syncToExcel();
       return true;
     } catch (e) {
       console.error('Failed to import data:', e);
@@ -346,7 +339,6 @@ export const storage = {
       if (Array.isArray(newDoctors)) {
         // @ts-ignore
         await window.database.batchImportDoctors(newDoctors);
-        await storage.syncToExcel();
         return true;
       }
       return false;
@@ -388,11 +380,11 @@ export const storage = {
     }
   },
 
-  updateAppointmentStatus: async (id: string, status: AppointmentStatus) => {
+  updateAppointmentStatus: async (id: string, status: AppointmentStatus, rejectionReason?: string) => {
     // @ts-ignore
     if (window.database?.updateAppointmentStatus) {
       // @ts-ignore
-      await window.database.updateAppointmentStatus(id, status);
+      await window.database.updateAppointmentStatus(id, status, rejectionReason);
     }
   },
 

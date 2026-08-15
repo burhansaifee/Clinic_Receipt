@@ -24,7 +24,7 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
   const [diagnosis, setDiagnosis] = useState('');
   const [notes, setNotes] = useState('');
   const [medicines, setMedicines] = useState<PrescribedMedicine[]>([
-    { name: '', dosage: '1-0-1', duration: '5 days', instructions: 'After food' }
+    { name: '', dosage: '', duration: '', instructions: '' }
   ]);
   
   // Printing State
@@ -121,18 +121,18 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
       setDiagnosis(existing.diagnosis);
       setNotes(existing.notes);
       setMedicines(existing.medicines.length > 0 ? existing.medicines : [
-        { name: '', dosage: '1-0-1', duration: '5 days', instructions: 'After food' }
+        { name: '', dosage: '', duration: '', instructions: '' }
       ]);
     } else {
       setSymptoms('');
       setDiagnosis('');
       setNotes('');
-      setMedicines([{ name: '', dosage: '1-0-1', duration: '5 days', instructions: 'After food' }]);
+      setMedicines([{ name: '', dosage: '', duration: '', instructions: '' }]);
     }
   };
 
   const handleAddMedicineRow = () => {
-    setMedicines(prev => [...prev, { name: '', dosage: '1-0-1', duration: '5 days', instructions: 'After food' }]);
+    setMedicines(prev => [...prev, { name: '', dosage: '', duration: '', instructions: '' }]);
   };
 
   const handleRemoveMedicineRow = (index: number) => {
@@ -155,7 +155,7 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
     if (pastRx.medicines && pastRx.medicines.length > 0) {
       setMedicines(pastRx.medicines.map(m => ({ ...m })));
     } else {
-      setMedicines([{ name: '', dosage: '1-0-1', duration: '5 days', instructions: 'After food' }]);
+      setMedicines([{ name: '', dosage: '', duration: '', instructions: '' }]);
     }
   };
 
@@ -469,13 +469,6 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
                   <div className="medicines-section">
                     <div className="section-title-row">
                       <h4>Medicines & Rx Dosage</h4>
-                      <button 
-                        type="button" 
-                        className="btn-secondary-sm"
-                        onClick={handleAddMedicineRow}
-                      >
-                        <Plus size={14} /> Add Medicine
-                      </button>
                     </div>
 
                     <div className="medicines-table-wrapper">
@@ -543,6 +536,16 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
                           ))}
                         </tbody>
                       </table>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
+                      <button 
+                        type="button" 
+                        className="btn-secondary-sm"
+                        onClick={handleAddMedicineRow}
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                      >
+                        <Plus size={14} /> Add Medicine
+                      </button>
                     </div>
                   </div>
 

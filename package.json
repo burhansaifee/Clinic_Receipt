@@ -1,7 +1,7 @@
 {
   "name": "clinic",
   "private": true,
-  "version": "1.0.2",
+  "version": "1.0.3",
   "main": "dist-electron/main.js",
   "type": "module",
   "scripts": {
@@ -13,7 +13,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@types/qrcode": "^1.5.6",
     "@whiskeysockets/baileys": "^7.0.0-rc14",
     "better-sqlite3": "^12.10.0",
     "date-fns": "^4.1.0",
@@ -23,14 +22,14 @@
     "node-machine-id": "^1.1.12",
     "qrcode": "^1.5.4",
     "react": "^19.2.4",
-    "react-dom": "^19.2.4",
-    "xlsx": "^0.18.5"
+    "react-dom": "^19.2.4"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.4",
     "@eslint/js": "^9.39.4",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.12.2",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",

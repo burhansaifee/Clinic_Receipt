@@ -56,7 +56,7 @@ contextBridge.exposeInMainWorld('database', {
   deletePrescription: (id: string) => ipcRenderer.invoke('db-delete-prescription', id),
   getAppointments: () => ipcRenderer.invoke('db-get-appointments'),
   saveAppointment: (appointment: any) => ipcRenderer.invoke('db-save-appointment', appointment),
-  updateAppointmentStatus: (id: string, status: string) => ipcRenderer.invoke('db-update-appointment-status', id, status),
+  updateAppointmentStatus: (id: string, status: string, rejectionReason?: string) => ipcRenderer.invoke('db-update-appointment-status', id, status, rejectionReason),
   deleteAppointment: (id: string) => ipcRenderer.invoke('db-delete-appointment', id),
 })
 
@@ -94,5 +94,6 @@ contextBridge.exposeInMainWorld('connection', {
   saveSettings: (settings: any) => ipcRenderer.invoke('save-connection-settings', settings),
   getServerStatus: () => ipcRenderer.invoke('get-server-status'),
   testConnection: (hostIp: string, hostPort: number) => ipcRenderer.invoke('test-connection', hostIp, hostPort),
+  saveClientSecret: (secret: string) => ipcRenderer.invoke('save-client-secret', secret),
 })
 

@@ -1,0 +1,162 @@
+import React, { useState } from 'react';
+import { FileText, Search, Printer } from 'lucide-react';
+import { formatAgeGender, type Prescription } from '../../lib/storage';
+
+interface PrescriptionsTabProps {
+  prescriptions: Prescription[];
+  onPrintRx: (rx: Prescription) => void;
+}
+
+const PrescriptionsTab: React.FC<PrescriptionsTabProps> = ({ prescriptions, onPrintRx }) => {
+  const [rxSearchQuery, setRxSearchQuery] = useState('');
+
+  const filtered = prescriptions.filter(p => {
+    const query = rxSearchQuery.toLowerCase();
+    return (
+      !query ||
+      p.patientName.toLowerCase().includes(query) ||
+      p.patientPhone.includes(query) ||
+      p.doctorName.toLowerCase().includes(query) ||
+      (p.diagnosis && p.diagnosis.toLowerCase().includes(query))
+    );
+  });
+
+  return (
+    <div className="prescriptions-page tab-pane">
+      {/* Header / Search */}
+      <div className="card filter-card no-print">
+        <div
+          className="filter-header"
+          style={{ marginBottom: '0px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+        >
+          <div className="filter-title" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div
+              className="filter-icon-bg"
+              style={{ background: '#e0f2fe', color: '#0369a1', padding: '0.5rem', borderRadius: '8px', display: 'flex', alignItems: 'center' }}
+            >
+              <FileText size={18} />
+            </div>
+            <div>
+              <h3 style={{ margin: '0', fontSize: '1.25rem', fontFamily: 'Outfit, sans-serif' }}>Prescription Explorer</h3>
+              <p style={{ margin: '0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                Quick access to print prescriptions created by doctors
+              </p>
+            </div>
+          </div>
+          <div className="search-bar" style={{ position: 'relative', width: '320px' }}>
+            <Search
+              size={18}
+              className="search-icon"
+              style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}
+            />
+            <input
+              type="text"
+              placeholder="Search patient name, phone, doctor..."
+              value={rxSearchQuery}
+              onChange={e => setRxSearchQuery(e.target.value)}
+              className="sync-input-line"
+              style={{ paddingLeft: '2.5rem', width: '100%' }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="history-list no-print" style={{ marginTop: '1.5rem' }}>
+        {filtered.length === 0 ? (
+          <div className="card empty-state" style={{ textAlign: 'center', padding: '3rem' }}>
+            <FileText size={48} style={{ color: 'var(--text-muted)', marginBottom: '1rem', opacity: 0.5 }} />
+            <p className="text-muted">No prescriptions written yet or matches found.</p>
+          </div>
+        ) : (
+          <div
+            className="history-table-wrapper"
+            style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden' }}
+          >
+            <table className="history-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  {['Date', 'Patient Details', 'Age / Gender', 'Prescribed By', 'Diagnosis', 'Medicines', 'Action'].map(col => (
+                    <th
+                      key={col}
+                      style={{
+                        padding: '1rem',
+                        background: '#f8fafc',
+                        fontWeight: 600,
+                        color: '#475569',
+                        fontSize: '0.875rem',
+                        borderBottom: '1px solid var(--border)',
+                        ...(col === 'Action' ? { width: '100px', textAlign: 'center' } : {}),
+                      }}
+                    >
+                      {col}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(p => (
+                  <tr key={p.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <td style={{ padding: '1rem', fontSize: '0.875rem', whiteSpace: 'nowrap' }}>{p.date}</td>
+                    <td style={{ padding: '1rem', fontSize: '0.875rem' }}>
+                      <strong style={{ color: 'var(--text-main)' }}>{p.patientName}</strong>
+                      <br />
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{p.patientPhone || 'No Phone'}</span>
+                    </td>
+                    <td style={{ padding: '1rem', fontSize: '0.875rem' }}>
+                      {formatAgeGender(p.patientAge, p.patientGender)}
+                    </td>
+                    <td style={{ padding: '1rem', fontSize: '0.875rem', whiteSpace: 'nowrap' }}>{p.doctorName}</td>
+                    <td style={{ padding: '1rem', fontSize: '0.875rem' }}>{p.diagnosis || 'N/A'}</td>
+                    <td style={{ padding: '1rem', fontSize: '0.875rem' }}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                        {(p.medicines || []).map((m, idx) => (
+                          <span
+                            key={idx}
+                            style={{
+                              background: '#f1f5f9',
+                              color: '#475569',
+                              padding: '0.15rem 0.5rem',
+                              borderRadius: '4px',
+                              fontSize: '0.75rem',
+                              fontWeight: 500,
+                            }}
+                          >
+                            {m.name}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="text-center" style={{ padding: '1rem' }}>
+                      <button
+                        className="btn-icon-xs print-rx-btn"
+                        onClick={() => onPrintRx(p)}
+                        title="Print Prescription (Rx)"
+                        style={{
+                          color: '#0ea5e9',
+                          background: '#f0f9ff',
+                          borderColor: '#e0f2fe',
+                          padding: '0.4rem',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          border: '1px solid #cbd5e1',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <Printer size={15} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default PrescriptionsTab;

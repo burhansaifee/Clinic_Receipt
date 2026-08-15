@@ -44,7 +44,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, initialData 
   const [patientPhone, setPatientPhone] = useState(initialData?.patientPhone || '');
   const [selectedDoctorId, setSelectedDoctorId] = useState(initialData?.doctorId || '');
   const [items, setItems] = useState<ReceiptItem[]>(
-    initialData?.items || [{ id: '1', description: 'Consultation Fee', amount: 500 }]
+    initialData?.items || []
   );
   const [receiptNumber, setReceiptNumber] = useState(initialData?.receiptNumber || '');
   const [availableServices, setAvailableServices] = useState<Service[]>([]);
@@ -181,11 +181,15 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, initialData 
       doctorName: doctor?.name || 'Unknown',
       items,
       total,
-      paymentMethod
+      paymentMethod,
+      appointmentId: initialData?.appointmentId
     };
 
     if (isNew) {
       await storage.saveReceipt(receipt);
+      if (initialData?.appointmentId) {
+        await storage.updateAppointmentStatus(initialData.appointmentId, 'COMPLETED');
+      }
     } else {
       await storage.updateReceipt(receipt);
     }

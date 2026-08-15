@@ -20,6 +20,11 @@ const Database = require('better-sqlite3')
 const store = new Store()
 const SECRET_SALT = 'MEDFLOW-OFFLINE-LICENSE-2024-X99'
 
+// Ensure a network secret exists for RPC authentication
+if (!store.get('network_secret')) {
+  store.set('network_secret', crypto.randomBytes(32).toString('hex'));
+}
+
 // Seed or migrate default known users
 const rawUsers = store.get('known_users');
 let knownUsersList: any[] = [];
@@ -110,7 +115,7 @@ function startHostServer() {
   hostServer = http.createServer((req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-MedFlow-Auth');
 
     if (req.method === 'OPTIONS') {
       res.writeHead(204);
@@ -119,6 +124,14 @@ function startHostServer() {
     }
 
     if (req.url === '/api/rpc' && req.method === 'POST') {
+      const authHeader = req.headers['x-medflow-auth'];
+      const expectedSecret = store.get('network_secret') as string;
+      if (authHeader !== expectedSecret) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Unauthorized: Invalid network secret' }));
+        return;
+      }
+
       let body = '';
       req.on('data', chunk => body += chunk);
       req.on('end', async () => {
@@ -226,18 +239,21 @@ async function clientRequest(method: string, ...args: any[]) {
   const cHostIp = store.get('host_ip') as string || '127.0.0.1';
   const cHostPort = store.get('host_port') as number || 49152;
   const url = `http://${cHostIp}:${cHostPort}/api/rpc`;
+  // Use the secret that was copied from the Host machine, not this machine's own secret.
+  const secret = (store.get('client_network_secret') as string) || '';
   try {
     const res = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'X-MedFlow-Auth': secret
       },
       body: JSON.stringify({ method, args }),
       signal: AbortSignal.timeout(5000)
     });
     if (!res.ok) {
       const errText = await res.text();
-      throw new Error(errText || `Server returned status ${res.status}`);
+      throw new Error(errText || `Server returned ${res.status} — check network token in Settings`);
     }
     const data = (await res.json()) as any;
     if (data.error) {
@@ -374,6 +390,12 @@ ipcMain.handle('open-excel-file', () => {
   shell.openPath(excelStorage.getExcelPath())
 })
 
+ipcMain.handle('open-db-folder', () => {
+  if (workstationMode === 'client') return;
+  const dbDir = path.join(app.getPath('userData'), 'ClinicData');
+  shell.openPath(dbDir);
+})
+
 // SQLite Database IPCs
 ipcMain.handle('db-get-doctors', () => {
   if (workstationMode === 'client') return clientRequest('db-get-doctors');
@@ -440,9 +462,9 @@ ipcMain.handle('db-save-appointment', (_, appointment) => {
   if (workstationMode === 'client') return clientRequest('db-save-appointment', appointment);
   return database.saveAppointment(appointment);
 })
-ipcMain.handle('db-update-appointment-status', (_, id, status) => {
-  if (workstationMode === 'client') return clientRequest('db-update-appointment-status', id, status);
-  return database.updateAppointmentStatus(id, status);
+ipcMain.handle('db-update-appointment-status', (_, id, status, rejectionReason) => {
+  if (workstationMode === 'client') return clientRequest('db-update-appointment-status', id, status, rejectionReason);
+  return database.updateAppointmentStatus(id, status, rejectionReason);
 })
 ipcMain.handle('db-delete-appointment', (_, id) => {
   if (workstationMode === 'client') return clientRequest('db-delete-appointment', id);
@@ -571,6 +593,10 @@ ipcMain.handle('connect-user', async (_, userId: string, password?: string) => {
     knownUsers = store.get('known_users') as any[] || [];
   }
   
+  const hashPassword = (pwd: string) => {
+    return crypto.createHash('sha256').update(pwd + SECRET_SALT).digest('hex');
+  };
+
   const user = knownUsers.find(u => u.id === cleanId);
   if (!user) {
     return { success: false, error: 'Access Denied: User ID is not recognized.' };
@@ -583,8 +609,18 @@ ipcMain.handle('connect-user', async (_, userId: string, password?: string) => {
   if (password === undefined) {
     return { success: false, requirePasswordInput: true };
   }
-  if (user.password !== password) {
+  
+  const isPlaintextMatch = user.password === password;
+  const isHashedMatch = user.password === hashPassword(password);
+  
+  if (!isPlaintextMatch && !isHashedMatch) {
     return { success: false, error: 'Incorrect password' };
+  }
+  
+  // Auto-migrate plaintext password to hash
+  if (isPlaintextMatch && password !== '') {
+    user.password = hashPassword(password);
+    store.set('known_users', knownUsers);
   }
   
   if (workstationMode !== 'client') {
@@ -602,7 +638,8 @@ ipcMain.handle('set-user-password', (_, userId: string, password?: string) => {
   const knownUsers = store.get('known_users') as { id: string, role: string, doctorId?: string, password?: string }[] || [];
   const idx = knownUsers.findIndex(u => u.id === cleanId);
   if (idx !== -1) {
-    knownUsers[idx].password = password || '';
+    const hashPassword = (pwd: string) => crypto.createHash('sha256').update(pwd + SECRET_SALT).digest('hex');
+    knownUsers[idx].password = password ? hashPassword(password) : '';
     store.set('known_users', knownUsers);
     return { success: true };
   }
@@ -679,6 +716,10 @@ ipcMain.handle('get-connection-settings', () => {
     hostIp: store.get('host_ip') || '127.0.0.1',
     hostPort: store.get('host_port') || 49152,
     localIp: getLocalIpAddress(),
+    // Host exposes its own secret; client exposes whatever token it has saved
+    networkSecret: workstationMode === 'host'
+      ? (store.get('network_secret') as string)
+      : (store.get('client_network_secret') as string) || '',
   };
 });
 
@@ -694,6 +735,17 @@ ipcMain.handle('save-connection-settings', (_, settings) => {
   return { success: true };
 });
 
+// Save the host's network token on the client — no relaunch needed, takes effect immediately.
+ipcMain.handle('save-client-secret', (_, secret: string) => {
+  if (workstationMode !== 'client') {
+    return { success: false, error: 'Only client workstations need to save a network token.' };
+  }
+  const trimmed = (secret || '').trim();
+  if (!trimmed) return { success: false, error: 'Token cannot be empty.' };
+  store.set('client_network_secret', trimmed);
+  return { success: true };
+});
+
 ipcMain.handle('get-server-status', () => {
   if (workstationMode === 'host') {
     return { status: 'RUNNING', localIp: getLocalIpAddress(), port: hostPort };
@@ -703,13 +755,18 @@ ipcMain.handle('get-server-status', () => {
   return { status: 'STANDALONE' };
 });
 
+// test-connection: send the stored client secret (or nothing for a quick ping test)
 ipcMain.handle('test-connection', async (_, ip: string, port: number) => {
   const cleanIp = (ip || '').trim().replace(/^https?:\/\//i, '').replace(/\/$/, '');
   const url = `http://${cleanIp}:${port}/api/rpc`;
+  const secret = (store.get('client_network_secret') as string) || '';
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-MedFlow-Auth': secret,
+      },
       body: JSON.stringify({ method: 'ping', args: [] }),
       signal: AbortSignal.timeout(3000)
     });
@@ -719,7 +776,7 @@ ipcMain.handle('test-connection', async (_, ip: string, port: number) => {
         return { success: true };
       }
     }
-    return { success: false, error: `Invalid response from server at ${url}` };
+    return { success: false, error: `Server responded but ping failed — check the network token.` };
   } catch (err: any) {
     return { success: false, error: err.message };
   }

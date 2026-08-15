@@ -3,11 +3,9 @@ import fs from 'node:fs';
 import { app } from 'electron';
 
 let db: any;
-let currentUserId: string | null = null;
 
 export const database = {
   init: (Database: any, userId?: string) => {
-    currentUserId = userId || null;
     const DATA_DIR = path.join(app.getPath('userData'), 'ClinicData');
     const DB_PATH = path.join(DATA_DIR, 'medflow.db');
 
@@ -118,6 +116,7 @@ export const database = {
       'appointmentDate TEXT NOT NULL DEFAULT ""',
       'appointmentTime TEXT NOT NULL DEFAULT ""',
       'notes TEXT',
+      'rejectionReason TEXT',
       'source TEXT DEFAULT "WHATSAPP"',
       'status TEXT DEFAULT "PENDING"',
       'createdAt TEXT'
@@ -128,14 +127,18 @@ export const database = {
       } catch (e) {}
     }
 
+    // Performance indexes (CREATE IF NOT EXISTS is idempotent)
     try {
-      const columnsInfo = db.prepare("PRAGMA table_info(appointments)").all();
-      console.log("[DB] Appointments Table Columns:", columnsInfo.map((c: any) => c.name));
-      const rows = db.prepare("SELECT * FROM appointments").all();
-      console.log(`[DB] Appointments Row Count: ${rows.length}`);
-      console.log("[DB] Appointments Rows:", JSON.stringify(rows));
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_receipts_date ON receipts(date);
+        CREATE INDEX IF NOT EXISTS idx_receipts_doctorId ON receipts(doctorId);
+        CREATE INDEX IF NOT EXISTS idx_appointments_date ON appointments(appointmentDate);
+        CREATE INDEX IF NOT EXISTS idx_appointments_status ON appointments(status);
+        CREATE INDEX IF NOT EXISTS idx_prescriptions_doctorId ON prescriptions(doctorId);
+        CREATE INDEX IF NOT EXISTS idx_prescriptions_date ON prescriptions(date);
+      `);
     } catch (e) {
-      console.error("[DB] Failed to query table_info/rows for appointments:", e);
+      console.error('[DB] Failed to create indexes:', e);
     }
   },
 
@@ -315,15 +318,15 @@ export const database = {
     }
   },
   saveAppointment: (appointment: any) => {
-    console.log(`[DB] saveAppointment called for ID: ${appointment.id}`);
     const stmt = db.prepare(`
-      INSERT OR REPLACE INTO appointments (id, patientName, patientPhone, patientAge, patientGender, doctorId, doctorName, appointmentDate, appointmentTime, date, timeSlot, notes, source, status, createdAt)
-      VALUES (@id, @patientName, @patientPhone, @patientAge, @patientGender, @doctorId, @doctorName, @appointmentDate, @appointmentTime, @date, @timeSlot, @notes, @source, @status, @createdAt)
+      INSERT OR REPLACE INTO appointments (id, patientName, patientPhone, patientAge, patientGender, doctorId, doctorName, appointmentDate, appointmentTime, date, timeSlot, notes, rejectionReason, source, status, createdAt)
+      VALUES (@id, @patientName, @patientPhone, @patientAge, @patientGender, @doctorId, @doctorName, @appointmentDate, @appointmentTime, @date, @timeSlot, @notes, @rejectionReason, @source, @status, @createdAt)
     `);
-    const res = stmt.run({
+    return stmt.run({
       patientAge: '30',
       patientGender: 'Male',
       notes: '',
+      rejectionReason: '',
       source: 'WHATSAPP',
       status: 'PENDING',
       createdAt: new Date().toISOString(),
@@ -331,10 +334,11 @@ export const database = {
       timeSlot: appointment.appointmentTime || 'Anytime',
       ...appointment
     });
-    console.log(`[DB] saveAppointment completed successfully. Changes: ${res.changes}`);
-    return res;
   },
-  updateAppointmentStatus: (id: string, status: string) => {
+  updateAppointmentStatus: (id: string, status: string, rejectionReason?: string) => {
+    if (rejectionReason !== undefined) {
+      return db.prepare('UPDATE appointments SET status = ?, rejectionReason = ? WHERE id = ?').run(status, rejectionReason, id);
+    }
     return db.prepare('UPDATE appointments SET status = ? WHERE id = ?').run(status, id);
   },
   deleteAppointment: (id: string) => db.prepare('DELETE FROM appointments WHERE id = ?').run(id)

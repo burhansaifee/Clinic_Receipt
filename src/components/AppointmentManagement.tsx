@@ -52,6 +52,12 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
   const [newSlotInput, setNewSlotInput] = useState('');
   const [isSavingSchedule, setIsSavingSchedule] = useState(false);
 
+  // Modal State - Rejection Reason
+  const [rejectingApt, setRejectingApt] = useState<Appointment | null>(null);
+  const [selectedReasonOption, setSelectedReasonOption] = useState<string>('Doctor is unavailable at this date/time');
+  const [customReasonText, setCustomReasonText] = useState<string>('');
+  const [isSubmittingReject, setIsSubmittingReject] = useState<boolean>(false);
+
   const loadAppointments = async () => {
     try {
       const data = await storage.getAppointments();
@@ -152,10 +158,6 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
           const msg = `✅ *Appointment Confirmed!*\n\nYour appointment with ${doctorName || 'your doctor'} on *${date || 'your requested slot'}* has been confirmed by MedFlow Clinic. We look forward to seeing you!`;
           await (window as any).whatsappBot.sendMessage(phone, msg);
           console.log('Confirmation message sent successfully via UI.');
-        } else if (status === 'CANCELLED') {
-          const msg = `❌ *Appointment Update*\n\nUnfortunately, your appointment request with ${doctorName || 'your doctor'} on *${date || 'your requested slot'}* could not be confirmed at this time. Please contact MedFlow Clinic reception to reschedule.`;
-          await (window as any).whatsappBot.sendMessage(phone, msg);
-          console.log('Cancellation message sent successfully via UI.');
         }
       } catch (err) {
         console.error('WhatsApp notification error:', err);
@@ -164,6 +166,51 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
       console.log('Skipping WhatsApp message: phone missing or bot not available.');
     }
     loadAppointments();
+  };
+
+  const handleOpenRejectModal = (apt: Appointment) => {
+    setRejectingApt(apt);
+    setSelectedReasonOption('Doctor is unavailable at this date/time');
+    setCustomReasonText('');
+  };
+
+  const handleConfirmRejection = async () => {
+    if (!rejectingApt) return;
+    const finalReason = selectedReasonOption === 'Other (Specify below)' ? customReasonText.trim() : selectedReasonOption;
+
+    if (!finalReason) {
+      alert('Please select or enter a valid rejection reason.');
+      return;
+    }
+
+    setIsSubmittingReject(true);
+    try {
+      await storage.updateAppointmentStatus(rejectingApt.id, 'CANCELLED', finalReason);
+
+      // Send WhatsApp Rejection Notice to Patient
+      if (rejectingApt.patientPhone && (window as any).whatsappBot) {
+        const msg =
+          `❌ *APPOINTMENT REQUEST UPDATE*\n\n` +
+          `Dear *${rejectingApt.patientName}*,\n\n` +
+          `Unfortunately, your appointment request with *${rejectingApt.doctorName}* on *${rejectingApt.appointmentDate} (${rejectingApt.appointmentTime})* could not be approved.\n\n` +
+          `📌 *Reason for Rejection:*\n_${finalReason}_\n\n` +
+          `Please contact MedFlow Clinic reception if you wish to reschedule or request another time slot. Thank you!`;
+
+        try {
+          await (window as any).whatsappBot.sendMessage(rejectingApt.patientPhone, msg);
+          console.log('WhatsApp rejection message sent successfully to patient.');
+        } catch (botErr) {
+          console.error('Failed to send WhatsApp rejection message:', botErr);
+        }
+      }
+
+      setRejectingApt(null);
+      loadAppointments();
+    } catch (err: any) {
+      alert(`Failed to reject appointment: ${err.message}`);
+    } finally {
+      setIsSubmittingReject(false);
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -272,6 +319,52 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
         </div>
       </div>
 
+      {/* Pending Alert Banner */}
+      {pendingCount > 0 && (
+        <div className="no-print" style={{
+          background: '#fff7ed',
+          border: '1px solid #ffedd5',
+          borderLeft: '5px solid #f97316',
+          padding: '1rem 1.25rem',
+          borderRadius: '12px',
+          marginBottom: '1.5rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: '0 2px 4px rgba(249,115,22,0.05)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{ background: '#ffedd5', color: '#ea580c', padding: '0.5rem', borderRadius: '50%', display: 'flex' }}>
+              <Clock size={20} />
+            </div>
+            <div>
+              <strong style={{ color: '#9a3412', fontSize: '0.95rem', display: 'block' }}>
+                {pendingCount} Pending Appointment Request{pendingCount > 1 ? 's' : ''} Awaiting Approval or Rejection
+              </strong>
+              <span style={{ fontSize: '0.8rem', color: '#c2410c' }}>
+                Review incoming requests below. Click <strong>Approve</strong> or <strong>Reject</strong> to automatically notify patients via WhatsApp.
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={() => { setSelectedStatus('PENDING'); }}
+            style={{
+              background: '#ea580c',
+              color: 'white',
+              padding: '0.4rem 0.9rem',
+              borderRadius: '8px',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              border: 'none',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            Filter Pending ({pendingCount})
+          </button>
+        </div>
+      )}
+
       {/* Metrics Row */}
       <div className="summary-grid no-print" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
         <div className="metric-card">
@@ -309,11 +402,10 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
               placeholder="Search patient, phone, doctor..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              style={{ paddingLeft: '2.5rem' }}
             />
           </div>
 
-          <div className="filter-input-wrapper" style={{ flex: 1, minWidth: '160px' }}>
+          <div className="filter-input-wrapper" style={{ flex: 1.2, minWidth: '180px' }}>
             <select value={selectedDoctorId} onChange={(e) => setSelectedDoctorId(e.target.value)}>
               <option value="">All Doctors</option>
               {doctors.map((d) => (
@@ -324,7 +416,7 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
             </select>
           </div>
 
-          <div className="filter-input-wrapper" style={{ flex: 1, minWidth: '150px' }}>
+          <div className="filter-input-wrapper" style={{ flex: 1.2, minWidth: '170px' }}>
             <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)}>
               <option value="ALL">All Statuses</option>
               <option value="PENDING">Pending Approval</option>
@@ -334,8 +426,9 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
             </select>
           </div>
 
-          <div className="filter-input-wrapper" style={{ flex: 1, minWidth: '150px' }}>
-            <input type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} />
+          <div className="filter-input-wrapper date-picker-group" style={{ flex: 1.1, minWidth: '165px' }}>
+            <span className="date-field-label">Date</span>
+            <input type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} className="date-input" />
           </div>
 
           {(searchQuery || selectedDoctorId || selectedStatus !== 'ALL' || filterDate) && (
@@ -412,9 +505,16 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
                         </span>
                       )}
                       {apt.status === 'CANCELLED' && (
-                        <span style={{ background: '#fef2f2', color: '#dc2626', padding: '0.25rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                          <XCircle size={12} /> Cancelled
-                        </span>
+                        <div>
+                          <span style={{ background: '#fef2f2', color: '#dc2626', padding: '0.25rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <XCircle size={12} /> Rejected / Cancelled
+                          </span>
+                          {apt.rejectionReason && (
+                            <div style={{ marginTop: '4px', fontSize: '0.75rem', color: '#991b1b', background: '#fff1f2', padding: '0.25rem 0.5rem', borderRadius: '6px', borderLeft: '3px solid #f43f5e' }}>
+                              <strong>Reason:</strong> {apt.rejectionReason}
+                            </div>
+                          )}
+                        </div>
                       )}
                       {apt.status === 'COMPLETED' && (
                         <span style={{ background: '#f0f9ff', color: '#0284c7', padding: '0.25rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
@@ -426,24 +526,40 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
                     <td className="text-right" style={{ padding: '1rem' }}>
                       <div className="action-buttons" style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
                         {apt.status === 'PENDING' && (
-                          <button
-                            className="btn-primary-sm"
-                            style={{ background: '#10b981', color: 'white', fontSize: '0.75rem', padding: '0.35rem 0.6rem' }}
-                            onClick={() => handleUpdateStatus(apt.id, 'CONFIRMED', apt.patientPhone, apt.doctorName, apt.appointmentTime)}
-                            title="Approve & Confirm"
-                          >
-                            Approve
-                          </button>
+                          <>
+                            <button
+                              className="btn-primary-sm"
+                              style={{ background: '#10b981', color: 'white', fontSize: '0.75rem', padding: '0.35rem 0.65rem', borderRadius: '6px' }}
+                              onClick={() => handleUpdateStatus(apt.id, 'CONFIRMED', apt.patientPhone, apt.doctorName, apt.appointmentTime)}
+                              title="Approve & Confirm Appointment"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              className="btn-danger-sm"
+                              style={{ background: '#ef4444', color: 'white', fontSize: '0.75rem', padding: '0.35rem 0.65rem', borderRadius: '6px', border: 'none', cursor: 'pointer' }}
+                              onClick={() => handleOpenRejectModal(apt)}
+                              title="Reject Appointment Request"
+                            >
+                              Reject
+                            </button>
+                          </>
                         )}
 
-                        <button
-                          className="btn-secondary-sm"
-                          style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem', color: '#0284c7', borderColor: '#e0f2fe', background: '#f0f9ff' }}
-                          onClick={() => onConvertToReceipt(apt)}
-                          title="Generate Receipt from Appointment"
-                        >
-                          Create Receipt
-                        </button>
+                        {apt.status === 'COMPLETED' ? (
+                          <span style={{ background: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd', padding: '0.35rem 0.65rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <CheckCircle size={13} /> Receipt Created
+                          </span>
+                        ) : apt.status !== 'CANCELLED' ? (
+                          <button
+                            className="btn-secondary-sm"
+                            style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem', color: '#0284c7', borderColor: '#e0f2fe', background: '#f0f9ff' }}
+                            onClick={() => onConvertToReceipt(apt)}
+                            title="Generate Receipt from Appointment"
+                          >
+                            Create Receipt
+                          </button>
+                        ) : null}
 
                         <button
                           className="btn-icon-xs delete-btn"
@@ -691,6 +807,90 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
                 style={{ padding: '0.6rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
               >
                 <Save size={16} /> {isSavingSchedule ? 'Saving...' : 'Save Schedule Settings'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Rejection Reason Modal */}
+      {rejectingApt && (
+        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="modal-content card" style={{ width: '480px', maxWidth: '92%', padding: '0', borderRadius: '16px', background: 'white', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.25rem 1.5rem', background: '#fef2f2', borderBottom: '1px solid #fee2e2' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <div style={{ background: '#fee2e2', color: '#dc2626', padding: '0.4rem', borderRadius: '50%', display: 'flex' }}>
+                  <XCircle size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#991b1b', fontFamily: 'Outfit, sans-serif' }}>Reject Appointment Request</h3>
+                  <span style={{ fontSize: '0.75rem', color: '#b91c1c' }}>ID: {rejectingApt.id}</span>
+                </div>
+              </div>
+              <button onClick={() => setRejectingApt(null)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#991b1b', fontSize: '1.1rem' }}>✕</button>
+            </div>
+
+            <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ background: '#f8fafc', padding: '0.85rem 1rem', borderRadius: '10px', border: '1px solid var(--border)', fontSize: '0.85rem' }}>
+                <div style={{ marginBottom: '2px' }}><strong>Patient:</strong> {rejectingApt.patientName} ({rejectingApt.patientPhone || 'No Phone'})</div>
+                <div style={{ marginBottom: '2px' }}><strong>Doctor:</strong> {rejectingApt.doctorName}</div>
+                <div><strong>Requested Slot:</strong> {rejectingApt.appointmentDate} at {rejectingApt.appointmentTime}</div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
+                  SELECT REJECTION REASON *
+                </label>
+                <select
+                  value={selectedReasonOption}
+                  onChange={(e) => setSelectedReasonOption(e.target.value)}
+                  style={{ width: '100%', padding: '0.65rem', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '0.875rem' }}
+                >
+                  <option value="Doctor is unavailable at this date/time">Doctor is unavailable at this date/time</option>
+                  <option value="Requested time slot is fully booked">Requested time slot is fully booked</option>
+                  <option value="Clinic is closed on the requested date">Clinic is closed on the requested date</option>
+                  <option value="Outside clinic operating hours">Outside clinic operating hours</option>
+                  <option value="Emergency / Special circumstances">Emergency / Special circumstances</option>
+                  <option value="Other (Specify below)">Other (Specify custom reason below)</option>
+                </select>
+              </div>
+
+              {selectedReasonOption === 'Other (Specify below)' && (
+                <div>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                    CUSTOM REJECTION REASON *
+                  </label>
+                  <textarea
+                    rows={3}
+                    placeholder="Enter specific reason to send to patient..."
+                    value={customReasonText}
+                    onChange={(e) => setCustomReasonText(e.target.value)}
+                    style={{ width: '100%', padding: '0.65rem', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '0.875rem', fontFamily: 'inherit' }}
+                  />
+                </div>
+              )}
+
+              <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b', background: '#f1f5f9', padding: '0.6rem 0.8rem', borderRadius: '8px' }}>
+                📱 <strong>WhatsApp Notice:</strong> Upon confirmation, a WhatsApp message containing this rejection reason will automatically be sent to <strong>{rejectingApt.patientPhone || 'the patient'}</strong>.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', padding: '1rem 1.5rem', borderTop: '1px solid var(--border)', background: '#f8fafc' }}>
+              <button
+                type="button"
+                className="btn-secondary-sm"
+                onClick={() => setRejectingApt(null)}
+                style={{ padding: '0.55rem 1.2rem' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-danger-sm"
+                onClick={handleConfirmRejection}
+                disabled={isSubmittingReject}
+                style={{ background: '#dc2626', color: 'white', padding: '0.55rem 1.25rem', borderRadius: '8px', border: 'none', fontWeight: 600, cursor: 'pointer' }}
+              >
+                {isSubmittingReject ? 'Rejecting & Sending...' : 'Confirm Rejection'}
               </button>
             </div>
           </div>

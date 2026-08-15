@@ -304,7 +304,10 @@ async function getDoctorsFromDb() {
       console.log(`[WhatsApp Bot] Client Mode: Fetching doctors from host server at ${url}...`);
       const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-MedFlow-Auth': store.get('network_secret') as string
+        },
         body: JSON.stringify({ method: 'db-get-doctors', args: [] }),
         signal: AbortSignal.timeout(4000)
       });
@@ -330,7 +333,10 @@ async function saveAppointmentToDb(appointment: any) {
       console.log(`[WhatsApp Bot] Client Mode: Forwarding appointment to host server at ${url}...`);
       const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-MedFlow-Auth': store.get('network_secret') as string
+        },
         body: JSON.stringify({ method: 'db-save-appointment', args: [appointment] }),
         signal: AbortSignal.timeout(4000)
       });
@@ -357,7 +363,7 @@ async function handleIncomingBookingFlow(socket: any, jid: string, phone: string
 
   if (!doctors || doctors.length === 0) {
     await socket.sendMessage(jid, {
-      text: '🏥 *MedFlow Clinic*\n\nThank you for reaching out! Our clinic directory is currently being updated. Please call our reception directly.',
+      text: ' *MedFlow Clinic*\n\nThank you for reaching out! Our clinic directory is currently being updated. Please call our reception directly.',
     });
     return;
   }
@@ -377,7 +383,7 @@ async function handleIncomingBookingFlow(socket: any, jid: string, phone: string
         .join('\n');
 
       const greetingMsg =
-        `🏥 *Welcome to MedFlow Clinic Appointment Booking!*\n\n` +
+        ` *Welcome to MedFlow Clinic Appointment Booking!*\n\n` +
         `Please select a doctor by replying with their number:\n\n` +
         `${docListStr}\n\n` +
         `_Reply with the number (e.g. 1 or 2)_`;

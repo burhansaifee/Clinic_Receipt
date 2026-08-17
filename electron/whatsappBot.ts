@@ -112,6 +112,9 @@ let wasConnected = false;
 
 export const whatsappBot = {
   getStatus: () => state,
+  setOnAppointmentSavedCallback: (cb: () => void) => {
+    appointmentSavedCallback = cb;
+  },
 
   toggleAutoReply: (enabled: boolean) => {
     state.autoReplyEnabled = enabled;
@@ -322,6 +325,12 @@ async function getDoctorsFromDb() {
   return database.getDoctors();
 }
 
+let appointmentSavedCallback: (() => void) | null = null;
+
+export function setOnAppointmentSavedCallback(cb: () => void) {
+  appointmentSavedCallback = cb;
+}
+
 async function saveAppointmentToDb(appointment: any) {
   try {
     const workstationMode = store.get('workstation_mode') as string || 'standalone';
@@ -352,6 +361,10 @@ async function saveAppointmentToDb(appointment: any) {
       database.saveAppointment(appointment);
     } catch (localErr) {
       console.error(`[WhatsApp Bot] Local SQLite fallback write failed:`, localErr);
+    }
+  } finally {
+    if (appointmentSavedCallback) {
+      try { appointmentSavedCallback(); } catch(e) {}
     }
   }
 }

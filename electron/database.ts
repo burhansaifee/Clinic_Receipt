@@ -23,7 +23,8 @@ export const database = {
     }
 
     db = new Database(DB_PATH);
-    db.exec('PRAGMA foreign_keys = OFF;');
+    db.exec('PRAGMA foreign_keys = ON;');
+    db.exec('PRAGMA journal_mode = WAL;');
 
     // Initialize Tables
     db.exec(`
@@ -85,7 +86,10 @@ export const database = {
         doctorName TEXT NOT NULL,
         appointmentDate TEXT NOT NULL,
         appointmentTime TEXT NOT NULL,
+        date TEXT,
+        timeSlot TEXT,
         notes TEXT,
+        rejectionReason TEXT,
         source TEXT DEFAULT 'WHATSAPP',
         status TEXT DEFAULT 'PENDING',
         createdAt TEXT NOT NULL
@@ -115,6 +119,8 @@ export const database = {
       'doctorName TEXT NOT NULL DEFAULT ""',
       'appointmentDate TEXT NOT NULL DEFAULT ""',
       'appointmentTime TEXT NOT NULL DEFAULT ""',
+      'date TEXT',
+      'timeSlot TEXT',
       'notes TEXT',
       'rejectionReason TEXT',
       'source TEXT DEFAULT "WHATSAPP"',
@@ -177,8 +183,37 @@ export const database = {
   deleteService: (id: string) => db.prepare('DELETE FROM services WHERE id = ?').run(id),
 
   // Receipts
-  getReceipts: () => {
-    const receipts = db.prepare('SELECT * FROM receipts ORDER BY date DESC').all() as any[];
+  getReceipts: (options?: { limit?: number; offset?: number; search?: string; startDate?: string; endDate?: string }) => {
+    let query = 'SELECT * FROM receipts';
+    const params: any = {};
+    const conditions: string[] = [];
+
+    if (options?.startDate) {
+      conditions.push("date(date) >= date(@startDate)");
+      params.startDate = options.startDate;
+    }
+    if (options?.endDate) {
+      conditions.push("date(date) <= date(@endDate)");
+      params.endDate = options.endDate;
+    }
+    if (options?.search) {
+      conditions.push("(patientName LIKE @search OR patientPhone LIKE @search OR receiptNumber LIKE @search)");
+      params.search = `%${options.search}%`;
+    }
+
+    if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ');
+    }
+
+    query += ' ORDER BY date DESC';
+
+    if (options?.limit) {
+      query += ' LIMIT @limit OFFSET @offset';
+      params.limit = options.limit;
+      params.offset = options.offset || 0;
+    }
+
+    const receipts = db.prepare(query).all(params) as any[];
     return receipts.map(r => {
       try {
         return {
@@ -194,7 +229,29 @@ export const database = {
       }
     });
   },
+  getDashboardMetrics: () => {
+    const totalReceiptsRow = db.prepare("SELECT COUNT(*) as count FROM receipts").get() as { count: number };
+    const totalRevenueRow = db.prepare("SELECT SUM(total) as sum FROM receipts WHERE paymentMethod != 'FREE'").get() as { sum: number };
+    
+    const count = totalReceiptsRow?.count || 0;
+    const revenue = totalRevenueRow?.sum || 0;
+    
+    return {
+      totalReceipts: count,
+      totalRevenue: revenue,
+      avgPerReceipt: count > 0 ? revenue / count : 0
+    };
+  },
   saveReceipt: (receipt: any) => {
+    if (!receipt.id || !receipt.receiptNumber || !receipt.date || !receipt.patientName) {
+      throw new Error('Receipt missing required fields: id, receiptNumber, date, patientName');
+    }
+    if (typeof receipt.total !== 'number' || receipt.total < 0) throw new Error('Total must be a non-negative number');
+    if (receipt.items && Array.isArray(receipt.items)) {
+      for (const item of receipt.items) {
+        if (typeof item.amount !== 'number' || item.amount < 0) throw new Error('Item amount must be non-negative');
+      }
+    }
     const stmt = db.prepare(`
       INSERT OR REPLACE INTO receipts (id, receiptNumber, date, patientName, patientAge, patientGender, patientPhone, doctorId, doctorName, items, total, paymentMethod)
       VALUES (@id, @receiptNumber, @date, @patientName, @patientAge, @patientGender, @patientPhone, @doctorId, @doctorName, @items, @total, @paymentMethod)
@@ -207,10 +264,18 @@ export const database = {
       doctorName: '',
       paymentMethod: 'CASH',
       ...receipt,
+      patientName: String(receipt.patientName).substring(0, 500),
       items: JSON.stringify(receipt.items || [])
     });
   },
   updateReceipt: (receipt: any) => {
+    if (!receipt.id) throw new Error('Missing receipt ID for update');
+    if (typeof receipt.total !== 'number' || receipt.total < 0) throw new Error('Total must be a non-negative number');
+    if (receipt.items && Array.isArray(receipt.items)) {
+      for (const item of receipt.items) {
+        if (typeof item.amount !== 'number' || item.amount < 0) throw new Error('Item amount must be non-negative');
+      }
+    }
     const stmt = db.prepare(`
       UPDATE receipts SET 
         receiptNumber = @receiptNumber,
@@ -244,6 +309,30 @@ export const database = {
   setMetadata: (key: string, value: string) => {
     const stmt = db.prepare('INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)');
     return stmt.run(key, value);
+  },
+
+  // Atomic receipt save + number increment in a single transaction
+  saveReceiptAtomic: (receipt: any, metaKey: string, nextNum: string) => {
+    const saveStmt = db.prepare(`
+      INSERT OR REPLACE INTO receipts (id, receiptNumber, date, patientName, patientAge, patientGender, patientPhone, doctorId, doctorName, items, total, paymentMethod)
+      VALUES (@id, @receiptNumber, @date, @patientName, @patientAge, @patientGender, @patientPhone, @doctorId, @doctorName, @items, @total, @paymentMethod)
+    `);
+    const metaStmt = db.prepare('INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)');
+    const txn = db.transaction(() => {
+      saveStmt.run({
+        patientAge: '',
+        patientGender: 'Male',
+        patientPhone: '',
+        doctorId: '',
+        doctorName: '',
+        paymentMethod: 'CASH',
+        ...receipt,
+        patientName: String(receipt.patientName).substring(0, 500),
+        items: JSON.stringify(receipt.items || [])
+      });
+      metaStmt.run(metaKey, nextNum);
+    });
+    return txn();
   },
 
   // Batch import for doctors
@@ -306,33 +395,50 @@ export const database = {
   // Appointments
   getAppointments: () => {
     try {
-      return db.prepare(`
+      const rows = db.prepare(`
         SELECT * FROM appointments 
         ORDER BY 
           CASE WHEN status = 'PENDING' THEN 0 ELSE 1 END,
           appointmentDate ASC, 
           appointmentTime ASC
       `).all() as any[];
+
+      return rows.map((r) => ({
+        ...r,
+        appointmentDate: r.appointmentDate || r.date || '',
+        appointmentTime: r.appointmentTime || r.timeSlot || '',
+        date: r.appointmentDate || r.date || '',
+        timeSlot: r.appointmentTime || r.timeSlot || ''
+      }));
     } catch (e) {
-      return db.prepare('SELECT * FROM appointments').all() as any[];
+      console.error('[Database] Error fetching appointments:', e);
+      return [];
     }
   },
   saveAppointment: (appointment: any) => {
+    const aptDate = appointment.appointmentDate || appointment.date || new Date().toISOString().split('T')[0];
+    const aptTime = appointment.appointmentTime || appointment.timeSlot || 'Standard Slot';
     const stmt = db.prepare(`
       INSERT OR REPLACE INTO appointments (id, patientName, patientPhone, patientAge, patientGender, doctorId, doctorName, appointmentDate, appointmentTime, date, timeSlot, notes, rejectionReason, source, status, createdAt)
       VALUES (@id, @patientName, @patientPhone, @patientAge, @patientGender, @doctorId, @doctorName, @appointmentDate, @appointmentTime, @date, @timeSlot, @notes, @rejectionReason, @source, @status, @createdAt)
     `);
     return stmt.run({
-      patientAge: '30',
-      patientGender: 'Male',
-      notes: '',
-      rejectionReason: '',
-      source: 'WHATSAPP',
-      status: 'PENDING',
-      createdAt: new Date().toISOString(),
-      date: appointment.appointmentDate || new Date().toISOString().split('T')[0],
-      timeSlot: appointment.appointmentTime || 'Anytime',
-      ...appointment
+      id: appointment.id || ('APT-' + Math.floor(100000 + Math.random() * 900000)),
+      patientName: appointment.patientName || 'Unknown Patient',
+      patientPhone: appointment.patientPhone || '',
+      patientAge: appointment.patientAge || '30',
+      patientGender: appointment.patientGender || 'Male',
+      doctorId: appointment.doctorId || 'default_doc',
+      doctorName: appointment.doctorName || 'Consulting Doctor',
+      appointmentDate: aptDate,
+      appointmentTime: aptTime,
+      date: aptDate,
+      timeSlot: aptTime,
+      notes: appointment.notes || '',
+      rejectionReason: appointment.rejectionReason || '',
+      source: appointment.source || 'WHATSAPP',
+      status: appointment.status || 'PENDING',
+      createdAt: appointment.createdAt || new Date().toISOString()
     });
   },
   updateAppointmentStatus: (id: string, status: string, rejectionReason?: string) => {

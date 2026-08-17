@@ -4,10 +4,14 @@ import {
   Server, KeyRound, ShieldCheck, FolderOpen, AlertCircle, Copy, Trash2, CheckCircle
 } from 'lucide-react';
 import { type Doctor } from '../../lib/storage';
+import { useConfirm } from '../ui/ConfirmDialog';
+import { useToast } from '../ui/Toast';
 
 interface ActivationStatus {
-  status: 'NOT_ACTIVATED' | 'ACTIVATED' | 'EXPIRED' | 'TAMPERED';
+  status: 'NOT_ACTIVATED' | 'ACTIVATED' | 'EXPIRED' | 'TAMPERED' | 'INVALID';
+  daysLeft?: number;
   expiryDate?: string;
+  message?: string;
 }
 
 interface SettingsTabProps {
@@ -64,23 +68,24 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
   // Client-side: the host token the user pastes in
   const [clientSecretInput, setClientSecretInput] = useState(networkSecret || '');
   const [secretSaved, setSecretSaved] = useState(false);
+  const confirm = useConfirm();
+  const toast = useToast();
 
   const handleTestConnection = async () => {
     if (!hostIp.trim()) {
-      alert('Please enter a Host IP Address');
+      toast('Please enter a Host IP Address', { type: 'error' });
       return;
     }
     setIsTestingConnection(true);
     try {
-      // @ts-ignore
-      const result = await window.connection.testConnection(hostIp.trim(), hostPort);
+        const result = await window.connection.testConnection(hostIp.trim(), hostPort);
       if (result.success) {
-        alert('Connection Successful! The Host server is reachable.');
+        toast('Connection Successful! The Host server is reachable.', { type: 'success' });
       } else {
-        alert(`Connection Failed: ${result.error || 'Check server status and IP address.'}`);
+        toast(`Connection Failed: ${result.error || 'Check server status and IP address.'}`, { type: 'error' });
       }
     } catch (e: any) {
-      alert(`Connection Error: ${e.message}`);
+      toast(`Connection Error: ${e.message}`, { type: 'error' });
     } finally {
       setIsTestingConnection(false);
     }
@@ -88,7 +93,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
 
   const handleSaveConnectionSettings = () => {
     if (workstationMode === 'client' && !hostIp.trim()) {
-      alert('Please enter a Host IP Address');
+      toast('Please enter a Host IP Address', { type: 'error' });
       return;
     }
     onSaveConnectionSettings(workstationMode, hostIp, hostPort);
@@ -97,35 +102,43 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
   const handleAddUser = async () => {
     const userId = newUserIdInput.trim().toLowerCase();
     if (!userId) return;
-    // @ts-ignore
     const result = await window.users.addKnownUser(userId, newUserRole, newUserRole === 'doctor' ? selectedDoctorIdForUser : undefined);
     if (result.success) {
       setNewUserIdInput('');
       setNewUserRole('reception');
       setSelectedDoctorIdForUser('');
-      // @ts-ignore
-      const users = await window.users.getKnownUsers();
+        const users = await window.users.getKnownUsers();
       setKnownUsers(users);
       alert(`User ID "${userId}" has been successfully registered!`);
+      toast(`User ID "${userId}" has been successfully registered!`, { type: 'success' });
     } else {
-      alert(result.error || 'Failed to add user.');
+      toast(result.error || 'Failed to add user.', { type: 'error' });
     }
   };
 
   const handleDeleteUser = async (userId: string) => {
     if (userId === 'default') return;
-    if (confirm(`Are you sure you want to delete the User ID "${userId}"? This will lock access to this profile's database, though the database files will remain on disk.`)) {
-      // @ts-ignore
+    if (await confirm(`Are you sure you want to delete the User ID "${userId}"? This will lock access to this profile's database, though the database files will remain on disk.`, { isDanger: true })) {
       const result = await window.users.deleteKnownUser(userId);
       if (result.success) {
-        // @ts-ignore
         const users = await window.users.getKnownUsers();
         setKnownUsers(users);
-        alert(`User ID "${userId}" has been removed.`);
+        toast(`User ID "${userId}" has been removed.`, { type: 'success' });
       } else {
-        alert(result.error || 'Failed to delete user.');
+        toast(result.error || 'Failed to delete user.', { type: 'error' });
       }
     }
+  };
+
+  const handleDeactivate = async () => {
+    if (await confirm('Are you sure you want to deactivate this license? The app will return to the unactivated state.', { isDanger: true })) {
+      onDeactivateLicense();
+    }
+  };
+
+  const handleCopySecret = () => {
+    navigator.clipboard.writeText(networkSecret);
+    toast('Network Secret Copied!', { type: 'success' });
   };
 
   return (
@@ -333,12 +346,11 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                       style={{ whiteSpace: 'nowrap', padding: '0.5rem 0.75rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px', background: secretSaved ? '#059669' : undefined }}
                       disabled={!clientSecretInput.trim()}
                       onClick={async () => {
-                        // @ts-ignore
                         const res = await window.connection.saveClientSecret(clientSecretInput.trim());
                         if (res.success) {
                           setSecretSaved(true);
                         } else {
-                          alert(res.error || 'Failed to save token.');
+                          toast(res.error || 'Failed to save token.', { type: 'error' });
                         }
                       }}
                     >
@@ -390,10 +402,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                         type="button"
                         title="Copy token"
                         style={{ background: '#2563eb', color: 'white', border: 'none', borderRadius: '6px', padding: '0.35rem 0.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.75rem', fontWeight: 600 }}
-                        onClick={() => {
-                          navigator.clipboard.writeText(networkSecret);
-                          alert('Network token copied! Paste it into the Client machine\'s Settings → Workstation Connection → Network Token field.');
-                        }}
+                        onClick={handleCopySecret}
                       >
                         <Copy size={13} /> Copy
                       </button>
@@ -560,10 +569,19 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
               </div>
             </div>
 
-            <div className="center-link-container" style={{ paddingTop: '0.25rem' }}>
-              <button className="btn-link" onClick={onDeactivateLicense}>
-                Change / Renew License
+            <div className="license-footer">
+              <button className="btn-link" onClick={handleDeactivate}>
+                Deactivate License on this Device
               </button>
+            </div>
+
+            <div style={{ marginTop: '0.75rem', paddingTop: '0.85rem', borderTop: '1px solid #e2e8f0', fontSize: '0.8rem', color: '#475569' }}>
+              <div style={{ fontWeight: 600, color: '#1e293b', marginBottom: '0.25rem' }}>Service Provider: Badshah Computers</div>
+              <div>Support: <a href="mailto:burhansaifee2003@gmail.com" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 500 }}>burhansaifee2003@gmail.com</a></div>
+              <div>Phone / WhatsApp: <span style={{ fontWeight: 600 }}>+91 9981188253, +91 9039010987</span></div>
+              <div style={{ fontSize: '0.725rem', color: '#94a3b8', marginTop: '0.5rem', textAlign: 'center' }}>
+                © 2026 MedFlow Clinic • Developed by Badshah Computers
+              </div>
             </div>
           </div>
         </div>

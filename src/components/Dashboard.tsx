@@ -1,15 +1,14 @@
 import React from 'react';
-import { type Doctor, type Receipt } from '../lib/storage';
+import { type Doctor } from '../lib/storage';
 import { Users, Receipt as ReceiptIcon, DollarSign, TrendingUp, PlusCircle } from 'lucide-react';
 
 interface DashboardProps {
   doctors: Doctor[];
-  receipts: Receipt[];
+  dashboardMetrics: { totalReceipts: number; totalRevenue: number; avgPerReceipt: number };
   onNewReceipt: () => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ doctors, receipts, onNewReceipt }) => {
-  const totalRevenue = receipts.reduce((sum, r) => sum + (r.paymentMethod === 'FREE' ? 0 : r.total), 0);
+const Dashboard: React.FC<DashboardProps> = ({ doctors, dashboardMetrics, onNewReceipt }) => {
 
   return (
     <div className="dashboard no-print">
@@ -47,7 +46,7 @@ const Dashboard: React.FC<DashboardProps> = ({ doctors, receipts, onNewReceipt }
           </div>
           <div className="stat-info">
             <span className="stat-label">Receipts Generated</span>
-            <span className="stat-value">{receipts.length}</span>
+            <span className="stat-value">{dashboardMetrics.totalReceipts.toLocaleString()}</span>
           </div>
            <div className="stat-chart-mini">
              <div className="bar" style={{ height: '30%' }}></div>
@@ -63,7 +62,7 @@ const Dashboard: React.FC<DashboardProps> = ({ doctors, receipts, onNewReceipt }
           </div>
           <div className="stat-info">
             <span className="stat-label">Total Revenue</span>
-            <span className="stat-value">₹{totalRevenue.toLocaleString()}</span>
+            <span className="stat-value">₹{dashboardMetrics.totalRevenue.toLocaleString()}</span>
           </div>
            <div className="stat-chart-mini">
              <div className="bar" style={{ height: '50%' }}></div>
@@ -79,7 +78,7 @@ const Dashboard: React.FC<DashboardProps> = ({ doctors, receipts, onNewReceipt }
           </div>
           <div className="stat-info">
             <span className="stat-label">Avg. per Receipt</span>
-            <span className="stat-value">₹{receipts.length ? (totalRevenue / receipts.length).toFixed(1) : 0}</span>
+            <span className="stat-value">₹{dashboardMetrics.avgPerReceipt.toFixed(1)}</span>
           </div>
            <div className="stat-chart-mini">
              <div className="bar" style={{ height: '40%' }}></div>

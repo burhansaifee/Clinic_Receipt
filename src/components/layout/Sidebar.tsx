@@ -169,7 +169,6 @@ const Sidebar: React.FC<SidebarProps> = ({
         <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255, 255, 255, 0.08)', textAlign: 'center', width: '100%' }}>
           <div style={{ fontSize: '0.7rem', color: '#64748b' }}>Software Developed by</div>
           <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#94a3b8' }}>Badshah Computer's</div>
-          <div style={{ fontSize: '0.7rem', color: '#64748b' }}>Email:- burhansaifee2003@gmail.com</div>
         </div>
       </div>
     </aside>

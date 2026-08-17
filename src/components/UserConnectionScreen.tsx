@@ -26,10 +26,8 @@ const UserConnectionScreen: React.FC<UserConnectionScreenProps> = ({ onConnected
   useEffect(() => {
 
     // Load connection settings
-    // @ts-ignore
     if (window.connection) {
-      // @ts-ignore
-      window.connection.getSettings().then(settings => {
+        window.connection.getSettings().then(settings => {
         setWorkstationMode(settings.mode);
         setHostIp(settings.hostIp);
         setHostPort(settings.hostPort);
@@ -46,8 +44,7 @@ const UserConnectionScreen: React.FC<UserConnectionScreenProps> = ({ onConnected
     setIsTestingConnection(true);
     setTestResult(null);
     try {
-      // @ts-ignore
-      const result = await window.connection.testConnection(hostIp.trim(), hostPort);
+        const result = await window.connection.testConnection(hostIp.trim(), hostPort);
       if (result.success) {
         setTestResult({ success: true, message: 'Connection Successful! Host is reachable.' });
       } else {
@@ -67,8 +64,7 @@ const UserConnectionScreen: React.FC<UserConnectionScreenProps> = ({ onConnected
     }
     if (confirm('MedFlow Clinic needs to relaunch to apply these connection settings. Proceed?')) {
       try {
-        // @ts-ignore
-        await window.connection.saveSettings({
+            await window.connection.saveSettings({
           mode: workstationMode,
           hostIp: hostIp.trim(),
           hostPort: hostPort
@@ -88,13 +84,12 @@ const UserConnectionScreen: React.FC<UserConnectionScreenProps> = ({ onConnected
 
     try {
       if (passwordMode === 'none') {
-        // @ts-ignore
-        const result = await window.users.connectUser(userIdInput.trim());
+            const result = await window.users.connectUser(userIdInput.trim());
         if (result.success) {
           if (result.requirePasswordSetup) {
             setPasswordMode('setup');
           } else {
-            onConnected(userIdInput.trim().toLowerCase(), result.role, result.doctorId);
+            onConnected(userIdInput.trim().toLowerCase(), result.role || 'reception', result.doctorId);
           }
         } else {
           if (result.requirePasswordInput) {
@@ -104,10 +99,9 @@ const UserConnectionScreen: React.FC<UserConnectionScreenProps> = ({ onConnected
           }
         }
       } else if (passwordMode === 'input') {
-        // @ts-ignore
-        const result = await window.users.connectUser(userIdInput.trim(), password);
+            const result = await window.users.connectUser(userIdInput.trim(), password);
         if (result.success) {
-          onConnected(userIdInput.trim().toLowerCase(), result.role, result.doctorId);
+          onConnected(userIdInput.trim().toLowerCase(), result.role || 'reception', result.doctorId);
         } else {
           setError(result.error || 'Incorrect password.');
         }
@@ -123,13 +117,11 @@ const UserConnectionScreen: React.FC<UserConnectionScreenProps> = ({ onConnected
           return;
         }
 
-        // @ts-ignore
-        const setupResult = await window.users.setUserPassword(userIdInput.trim(), password);
+            const setupResult = await window.users.setUserPassword(userIdInput.trim(), password);
         if (setupResult.success) {
-          // @ts-ignore
-          const connectResult = await window.users.connectUser(userIdInput.trim(), password);
+                const connectResult = await window.users.connectUser(userIdInput.trim(), password);
           if (connectResult.success) {
-            onConnected(userIdInput.trim().toLowerCase(), connectResult.role, connectResult.doctorId);
+            onConnected(userIdInput.trim().toLowerCase(), connectResult.role || 'reception', connectResult.doctorId);
           } else {
             setError(connectResult.error || 'Failed to connect after setting password.');
           }
@@ -142,6 +134,23 @@ const UserConnectionScreen: React.FC<UserConnectionScreenProps> = ({ onConnected
       setError('Connection failed. Please check backend connection.');
     } finally {
       setIsConnecting(false);
+    }
+  };
+
+  const handleResetAdminPassword = async () => {
+    try {
+      const res = await window.users.resetAdminPassword();
+      if (res.success) {
+        setPasswordMode('none');
+        setPassword('');
+        setConfirmPassword('');
+        setUserIdInput('admin');
+        setError('✅ Admin password reset successfully! Click "Connect Workspace" to set a new password.');
+      } else {
+        setError(res.error || 'Failed to reset admin password.');
+      }
+    } catch (err: any) {
+      setError(`Reset error: ${err.message}`);
     }
   };
 
@@ -447,6 +456,17 @@ const UserConnectionScreen: React.FC<UserConnectionScreenProps> = ({ onConnected
                 <div className="error-alert">
                   <AlertCircle size={15} />
                   <span>{error}</span>
+                </div>
+              )}
+              {userIdInput.trim().toLowerCase() === 'admin' && (
+                <div style={{ marginTop: '0.65rem', textAlign: 'right' }}>
+                  <button
+                    type="button"
+                    onClick={handleResetAdminPassword}
+                    style={{ background: 'none', border: 'none', color: '#38bdf8', fontSize: '0.8rem', cursor: 'pointer', textDecoration: 'underline', fontWeight: 600 }}
+                  >
+                    Forgot Admin Password? Reset Admin Password
+                  </button>
                 </div>
               )}
             </div>

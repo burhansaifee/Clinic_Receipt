@@ -30,11 +30,7 @@ contextBridge.exposeInMainWorld('licensing', {
   deactivate: () => ipcRenderer.invoke('deactivate-license'),
 })
 
-contextBridge.exposeInMainWorld('excelStorage', {
-  saveData: (data: any) => ipcRenderer.invoke('save-to-excel', data),
-  loadData: () => ipcRenderer.invoke('load-from-excel'),
-  openFile: () => ipcRenderer.invoke('open-excel-file'),
-})
+
 
 contextBridge.exposeInMainWorld('database', {
   getDoctors: () => ipcRenderer.invoke('db-get-doctors'),
@@ -43,8 +39,10 @@ contextBridge.exposeInMainWorld('database', {
   getServices: () => ipcRenderer.invoke('db-get-services'),
   saveService: (service: any) => ipcRenderer.invoke('db-save-service', service),
   deleteService: (id: string) => ipcRenderer.invoke('db-delete-service', id),
-  getReceipts: () => ipcRenderer.invoke('db-get-receipts'),
+  getReceipts: (options?: any) => ipcRenderer.invoke('db-get-receipts', options),
+  getDashboardMetrics: () => ipcRenderer.invoke('db-get-dashboard-metrics'),
   saveReceipt: (receipt: any) => ipcRenderer.invoke('db-save-receipt', receipt),
+  saveReceiptAtomic: (receipt: any, metaKey: string, nextNum: string) => ipcRenderer.invoke('db-save-receipt-atomic', receipt, metaKey, nextNum),
   updateReceipt: (receipt: any) => ipcRenderer.invoke('db-update-receipt', receipt),
   deleteReceipt: (id: string) => ipcRenderer.invoke('db-delete-receipt', id),
   getMetadata: (key: string) => ipcRenderer.invoke('db-get-metadata', key),
@@ -87,6 +85,7 @@ contextBridge.exposeInMainWorld('users', {
   getCurrentUserRole: () => ipcRenderer.invoke('get-current-user-role'),
   getCurrentUserDoctorId: () => ipcRenderer.invoke('get-current-user-doctor-id'),
   disconnectUser: () => ipcRenderer.invoke('disconnect-user'),
+  resetAdminPassword: () => ipcRenderer.invoke('reset-admin-password'),
 })
 
 contextBridge.exposeInMainWorld('connection', {

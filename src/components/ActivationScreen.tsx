@@ -3,7 +3,7 @@ import { Lock, Smartphone, ShieldCheck, Copy, Check, AlertCircle } from 'lucide-
 
 interface ActivationScreenProps {
   onActivated: () => void;
-  status: 'NOT_ACTIVATED' | 'EXPIRED' | 'TAMPERED';
+  status: 'NOT_ACTIVATED' | 'EXPIRED' | 'TAMPERED' | 'INVALID';
   expiryDate?: string;
 }
 
@@ -15,7 +15,6 @@ const ActivationScreen: React.FC<ActivationScreenProps> = ({ onActivated, status
   const [isActivating, setIsActivating] = useState(false);
 
   useEffect(() => {
-    // @ts-ignore
     window.licensing.getMachineID().then((id: string) => {
       setMachineId(id);
     });
@@ -28,8 +27,7 @@ const ActivationScreen: React.FC<ActivationScreenProps> = ({ onActivated, status
     setError(null);
     
     try {
-      // @ts-ignore
-      const result = await window.licensing.activateLicense(licenseKey);
+        const result = await window.licensing.activateLicense(licenseKey);
       if (result.success) {
         onActivated();
       } else {
@@ -51,12 +49,14 @@ const ActivationScreen: React.FC<ActivationScreenProps> = ({ onActivated, status
   const getTitle = () => {
     if (status === 'EXPIRED') return 'License Expired';
     if (status === 'TAMPERED') return 'Security Alert';
+    if (status === 'INVALID') return 'Invalid License';
     return 'Activation Required';
   };
 
   const getMessage = () => {
     if (status === 'EXPIRED') return `Your license expired on ${expiryDate}. Please renew to continue.`;
     if (status === 'TAMPERED') return 'Date manipulation detected. Please correct your system clock.';
+    if (status === 'INVALID') return 'The provided license key is invalid or corrupted.';
     return 'Please activate your copy of MedFlow Clinic to continue.';
   };
 
@@ -95,7 +95,7 @@ const ActivationScreen: React.FC<ActivationScreenProps> = ({ onActivated, status
                 placeholder="YYYYMMDD-XXXX-XXXX-XXXX"
                 value={licenseKey}
                 onChange={(e) => setLicenseKey(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleActivate()}
+                onKeyDown={(e) => e.key === 'Enter' && handleActivate()}
               />
             </div>
             {error && (
@@ -117,11 +117,17 @@ const ActivationScreen: React.FC<ActivationScreenProps> = ({ onActivated, status
 
 
           <div className="activation-footer">
-            <p>Need a key? Contact: <strong>support@medflow.com</strong></p>
+            <div className="provider-box">
+              <p className="provider-name">Service Provider: <strong>Badshah Computers</strong></p>
+              <p className="provider-sub">Software Support & Key Activation:</p>
+              <p className="contact-line">📧 Email: <strong>burhansaifee2003@gmail.com</strong></p>
+              <p className="contact-line">📞 Phone / WhatsApp: <strong>+91 9981188253, +91 9039010987</strong></p>
+            </div>
             <div className="security-note">
               <Smartphone size={14} />
               <span>Offline activation - No internet required</span>
             </div>
+            <p className="copyright-tag">© 2026 MedFlow Clinic • Developed by Badshah Computers</p>
           </div>
         </div>
       </div>
@@ -324,6 +330,40 @@ const ActivationScreen: React.FC<ActivationScreenProps> = ({ onActivated, status
           font-size: 0.875rem;
           color: #64748b;
           margin-bottom: 1rem;
+        }
+
+        .provider-box {
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          padding: 0.85rem 1rem;
+          margin-bottom: 1rem;
+          text-align: left;
+        }
+
+        .provider-name {
+          font-size: 0.875rem !important;
+          color: #0f172a !important;
+          margin-bottom: 0.2rem !important;
+        }
+
+        .provider-sub {
+          font-size: 0.75rem !important;
+          color: #64748b !important;
+          margin-bottom: 0.4rem !important;
+        }
+
+        .contact-line {
+          font-size: 0.8rem !important;
+          color: #334155 !important;
+          margin-bottom: 0.2rem !important;
+        }
+
+        .copyright-tag {
+          font-size: 0.725rem !important;
+          color: #94a3b8 !important;
+          margin-top: 0.75rem !important;
+          margin-bottom: 0 !important;
         }
 
         .security-note {

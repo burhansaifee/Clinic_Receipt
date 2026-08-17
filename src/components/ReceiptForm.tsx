@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { storage, formatAgeGender, cleanAgeString, type Doctor, type Receipt, type ReceiptItem, type Service } from '../lib/storage';
-import { Plus, Trash2, Save, User, CreditCard } from 'lucide-react';
+import { storage, cleanAgeString, type Doctor, type Receipt, type ReceiptItem, type Service } from '../lib/storage';
+import { Plus, Trash2, Save, User, CreditCard, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface ReceiptFormProps {
   doctors: Doctor[];
   onSave: () => void;
+  onPrintRequest: (receipt: Receipt) => void;
   initialData?: Receipt | null;
 }
 
@@ -25,7 +26,7 @@ const parseAge = (ageStr: string) => {
   return { years, months };
 };
 
-const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, initialData }) => {
+const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, onPrintRequest, initialData }) => {
   const [patientName, setPatientName] = useState(initialData?.patientName || '');
   const [ageYears, setAgeYears] = useState(() => {
     if (initialData?.patientAge) {
@@ -52,6 +53,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, initialData 
   const [isReturningPatient, setIsReturningPatient] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'ONLINE' | 'FREE'>(initialData?.paymentMethod || 'CASH');
   const [appointmentDate, setAppointmentDate] = useState(initialData?.date || format(new Date(), 'yyyy-MM-dd'));
+  const [saveError, setSaveError] = useState<string | null>(null);
   const shouldFocusLastItem = useRef(false);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -75,7 +77,6 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, initialData 
         setAppointmentDate(initialData.date.split(' ')[0]);
       }
       if (!initialData || !initialData.id || !initialData.receiptNumber) {
-        setReceiptNumber(await storage.getNextReceiptNumber(paymentMethod === 'FREE'));
         if (doctors.length > 0 && !selectedDoctorId) {
           setSelectedDoctorId(doctors[0].id);
         }
@@ -85,7 +86,17 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, initialData 
       setAvailableServices(await storage.getServices());
     };
     init();
-  }, [doctors, initialData, paymentMethod]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialData]);
+
+  useEffect(() => {
+    const updateReceiptNum = async () => {
+      if (!initialData || !initialData.id || !initialData.receiptNumber) {
+        setReceiptNumber(await storage.getNextReceiptNumber(paymentMethod === 'FREE'));
+      }
+    };
+    updateReceiptNum();
+  }, [paymentMethod, initialData]);
 
   useEffect(() => {
     if (shouldFocusLastItem.current && formRef.current) {
@@ -100,7 +111,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, initialData 
 
   const addItem = () => {
     shouldFocusLastItem.current = true;
-    setItems([...items, { id: Date.now().toString(), description: '', amount: 0 }]);
+    setItems([...items, { id: crypto.randomUUID(), description: '', amount: 0 }]);
   };
 
   const removeItem = (id: string) => {
@@ -161,6 +172,11 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, initialData 
 
   const handleSave = async (e: React.FormEvent, shouldPrint: boolean = true) => {
     e.preventDefault();
+    
+    if (formRef.current && !formRef.current.reportValidity()) {
+      return;
+    }
+
     if (!selectedDoctorId) {
       alert('Please select a doctor');
       return;
@@ -170,7 +186,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, initialData 
     const isNew = !initialData || !initialData.id;
     
     const receipt: Receipt = {
-      id: isNew ? Date.now().toString() : initialData.id,
+      id: isNew ? crypto.randomUUID() : initialData.id,
       receiptNumber,
       date: appointmentDate,
       patientName,
@@ -185,23 +201,27 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, initialData 
       appointmentId: initialData?.appointmentId
     };
 
-    if (isNew) {
-      await storage.saveReceipt(receipt);
-      if (initialData?.appointmentId) {
-        await storage.updateAppointmentStatus(initialData.appointmentId, 'COMPLETED');
+    try {
+      if (isNew) {
+        await storage.saveReceipt(receipt);
+        if (initialData?.appointmentId) {
+          await storage.updateAppointmentStatus(initialData.appointmentId, 'COMPLETED');
+        }
+      } else {
+        await storage.updateReceipt(receipt);
       }
-    } else {
-      await storage.updateReceipt(receipt);
+
+      setSaveError(null);
+      if (shouldPrint) {
+        onPrintRequest(receipt);
+      }
+      onSave();
+    } catch (err: any) {
+      console.error('Failed to save receipt:', err);
+      setSaveError(err.message || 'An error occurred while saving the receipt.');
     }
-    if (shouldPrint) {
-      triggerPrint(receipt);
-    }
-    onSave();
   };
 
-  const triggerPrint = (_receipt: Receipt) => {
-    window.print();
-  };
 
   return (
     <div className="receipt-form-container">
@@ -396,6 +416,13 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, initialData 
           </div>
         </div>
 
+        {saveError && (
+          <div className="error-message" style={{ color: 'red', marginTop: '1rem', padding: '0.5rem', background: '#ffebee', borderRadius: '4px', border: '1px solid #ffcdd2' }}>
+            <AlertCircle size={16} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '0.5rem' }} />
+            {saveError}
+          </div>
+        )}
+
         <div className="form-submit-actions no-print">
           <button type="button" className="btn-secondary-lg" onClick={(e) => handleSave(e, false)}>
             <Save size={20} />
@@ -407,106 +434,6 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, initialData 
           </button>
         </div>
       </form>
-
-      {/* Hidden Print Template */}
-      <div id="receipt-print-template" className="print-only">
-        {(() => {
-          const doctorObj = doctors.find(d => d.id === selectedDoctorId);
-          const printHeader = doctorObj ? (doctorObj.printHeader !== false) : true;
-          const customTopMargin = doctorObj ? (doctorObj.customTopMargin || 0) : 0;
-
-          return (
-            <div 
-              className="print-container"
-              style={{
-                paddingTop: !printHeader && customTopMargin ? `${customTopMargin}mm` : undefined,
-                borderTop: !printHeader ? 'none' : undefined
-              }}
-            >
-              {printHeader && (
-                <div className="print-header">
-                  <div className="print-clinic-branding">
-                    <h2>{doctorObj?.name || 'DOCTOR NAME'}</h2>
-                    <p className="clinic-tagline" style={{ marginTop: '5px', whiteSpace: 'pre-wrap' }}>
-                      {doctorObj?.address || 'Doctor Address goes here'}
-                    </p>
-                  </div>
-                  <div className="print-clinic-address">
-                    <p style={{ fontWeight: 700 }}>{doctorObj?.qualifications || 'Qualifications'}</p>
-                    <p>{doctorObj?.specialization}</p>
-                    <p>Ph: {doctorObj?.phone}</p>
-                  </div>
-                </div>
-              )}
-
-              <div className="print-title-bar">
-                <h1>PAYMENT RECEIPT</h1>
-              </div>
-
-              <div className="print-info-grid">
-                <div className="info-section">
-                  <h3>PATIENT DETAILS</h3>
-                  <p><strong>Name:</strong> {patientName}</p>
-                  <p><strong>Age/Gender:</strong> {formatAgeGender(patientAge, patientGender)}</p>
-                  <p><strong>Phone No.:</strong> {patientPhone || 'N/A'}</p>
-                </div>
-                <div className="info-section">
-                  <h3>BILL DETAILS</h3>
-                  <p><strong>Receipt #:</strong> {receiptNumber}</p>
-                  <p><strong>Date:</strong> {(() => {
-                    try {
-                      return format(new Date(appointmentDate), 'dd MMM yyyy');
-                    } catch (e) {
-                      return appointmentDate || 'N/A';
-                    }
-                  })()}</p>
-                  <p><strong>Payment Mode:</strong> {paymentMethod}</p>
-                </div>
-              </div>
-
-              <table className="print-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: '40px' }}>Sr.</th>
-                    <th>Description of Services</th>
-                    <th className="text-right">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item, index) => (
-                    <tr key={item.id}>
-                      <td>{index + 1}</td>
-                      <td>{item.description}</td>
-                      <td className="text-right">₹{(paymentMethod === 'FREE' ? 0 : item.amount).toFixed(2)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <th colSpan={2} className="text-right">Total Payable Amount:</th>
-                    <th className="text-right">₹{total.toFixed(2)}</th>
-                  </tr>
-                </tfoot>
-              </table>
-
-              <div className="print-amount-words">
-                <p><strong>Total in words:</strong> Rupee {total.toLocaleString()} Only</p>
-              </div>
-
-              <div className="print-footer">
-                <div className="terms">
-                  <p>• This is a computer-generated receipt.</p>
-                  <p>• Fees once paid are non-refundable.</p>
-                </div>
-                <div className="signature-box">
-                  <div className="signature-line"></div>
-                  <p>Authorized Signatory</p>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-      </div>
 
       <style>{`
         .receipt-form {
@@ -952,6 +879,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, initialData 
           }
         }
       `}</style>
+
     </div>
   );
 };

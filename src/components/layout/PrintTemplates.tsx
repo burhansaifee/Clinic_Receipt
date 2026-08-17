@@ -119,6 +119,11 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
                     <p>Authorized Signatory</p>
                   </div>
                 </div>
+
+                <div className="software-branding" style={{ marginTop: '20px', borderTop: '1px solid #ddd', paddingTop: '8px', fontSize: '0.7rem', color: '#555', textAlign: 'center' }}>
+                  <p style={{ margin: '0 0 3px 0' }}>Software Developed by: <strong>Badshah Computers</strong></p>
+                  <p style={{ margin: 0 }}>Support: +91 9981188253, +91 9039010987 | Email: burhansaifee2003@gmail.com</p>
+                </div>
               </div>
             );
           })}

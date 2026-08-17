@@ -20,6 +20,8 @@ import DoctorManagement from './components/DoctorManagement';
 import ServiceManagement from './components/ServiceManagement';
 import ReceiptForm from './components/ReceiptForm';
 import AppointmentManagement from './components/AppointmentManagement';
+import { ConfirmProvider, useConfirm } from './components/ui/ConfirmDialog';
+import { ToastProvider, useToast } from './components/ui/Toast';
 
 // Tabs
 import HistoryTab from './components/tabs/HistoryTab';
@@ -28,19 +30,25 @@ import SettingsTab from './components/tabs/SettingsTab';
 
 import type { Tab } from './components/layout/Sidebar';
 
-const App: React.FC = () => {
+const MainApp: React.FC = () => {
+  const confirm = useConfirm();
+  const toast = useToast();
+
   // ── Core state ────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [services, setServices] = useState<Service[]>([]);
-  const [receipts, setReceipts] = useState<ReceiptType[]>([]);
+  const [dashboardMetrics, setDashboardMetrics] = useState({ totalReceipts: 0, totalRevenue: 0, avgPerReceipt: 0 });
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [pendingAppointmentsCount, setPendingAppointmentsCount] = useState(0);
+  const [isLoadingData, setIsLoadingData] = useState(false);
 
   // ── Auth state ────────────────────────────────────────────────────────────
   const [activationStatus, setActivationStatus] = useState<{
-    status: 'NOT_ACTIVATED' | 'ACTIVATED' | 'EXPIRED' | 'TAMPERED';
+    status: 'NOT_ACTIVATED' | 'ACTIVATED' | 'EXPIRED' | 'TAMPERED' | 'INVALID';
+    daysLeft?: number;
     expiryDate?: string;
+    message?: string;
   } | null>(null);
   const [currentUser, setCurrentUser] = useState<string | null>(null);
   const [currentUserRole, setCurrentUserRole] = useState('reception');
@@ -64,36 +72,37 @@ const App: React.FC = () => {
 
   // ── Data refresh ──────────────────────────────────────────────────────────
   const refreshData = React.useCallback(async () => {
-    const [d, s, r, p, apts] = await Promise.all([
-      storage.getDoctors(),
-      storage.getServices(),
-      storage.getReceipts(),
-      storage.getPrescriptions(),
-      storage.getAppointments(),
-    ]);
-    setDoctors(d);
-    setServices(s);
-    setReceipts(r);
-    setPrescriptions(p);
-    setPendingAppointmentsCount(apts.filter((a: any) => a.status === 'PENDING').length);
+    setIsLoadingData(true);
+    try {
+      const [d, s, metrics, p, apts] = await Promise.all([
+        storage.getDoctors(),
+        storage.getServices(),
+        storage.getDashboardMetrics(),
+        storage.getPrescriptions(),
+        storage.getAppointments(),
+      ]);
+      setDoctors(d);
+      setServices(s);
+      setDashboardMetrics(metrics);
+      setPrescriptions(p);
+      setPendingAppointmentsCount(apts.filter((a: any) => a.status === 'PENDING').length);
+    } finally {
+      setIsLoadingData(false);
+    }
   }, []);
 
   // ── Bootstrap effects ─────────────────────────────────────────────────────
   useEffect(() => {
-    // @ts-ignore
     window.licensing.checkActivation().then(setActivationStatus);
 
     (async () => {
       try {
-        // @ts-ignore
-        const user = await window.users.getCurrentUser();
+            const user = await window.users.getCurrentUser();
         if (user) {
           setCurrentUser(user);
-          // @ts-ignore
-          const role = await window.users.getCurrentUserRole();
+                const role = await window.users.getCurrentUserRole();
           setCurrentUserRole(role);
-          // @ts-ignore
-          const doctorId = await window.users.getCurrentUserDoctorId();
+                const doctorId = await window.users.getCurrentUserDoctorId();
           setCurrentUserDoctorId(doctorId || null);
         }
       } catch (err) {
@@ -101,13 +110,10 @@ const App: React.FC = () => {
       }
     })();
 
-    // @ts-ignore
     window.users.getKnownUsers().then(setKnownUsers).catch(console.error);
 
-    // @ts-ignore
     if (window.connection) {
-      // @ts-ignore
-      window.connection.getSettings().then((s: any) => {
+        window.connection.getSettings().then((s: any) => {
         setWorkstationMode(s.mode);
         setHostIp(s.hostIp);
         setHostPort(s.hostPort);
@@ -141,15 +147,28 @@ const App: React.FC = () => {
     return () => unsub();
   }, []);
 
+  // Live Appointment Refresh Listener from WhatsApp / DB
+  useEffect(() => {
+    if (window.ipcRenderer?.on) {
+      const listener = () => {
+        refreshData();
+      };
+        window.ipcRenderer.on('appointment-updated', listener);
+      return () => {
+            if (window.ipcRenderer?.off) window.ipcRenderer.off('appointment-updated', listener);
+      };
+    }
+  }, [refreshData]);
+
   // Load data once user is known
   useEffect(() => {
     if (!currentUser) return;
 
     (async () => {
       await storage.migrateToSQLite();
-      const [r, d] = await Promise.all([storage.getReceipts(), storage.getDoctors()]);
-      if (r.length === 0 && d.length === 0) {
-        // @ts-ignore
+      const [metrics, d] = await Promise.all([storage.getDashboardMetrics(), storage.getDoctors()]);
+      // If we literally have 0 metrics and 0 doctors, try loading excel dump as fallback
+      if (metrics.totalReceipts === 0 && d.length === 0) {
         const excelData = await window.excelStorage?.loadData();
         if (excelData) await storage.importData(JSON.stringify(excelData));
       }
@@ -169,20 +188,18 @@ const App: React.FC = () => {
   // Lazy-load machine ID when settings tab is opened
   useEffect(() => {
     if (activeTab === 'settings' && !machineId) {
-      // @ts-ignore
-      window.licensing.getMachineID().then(setMachineId);
+        window.licensing.getMachineID().then(setMachineId);
     }
   }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handleLogout = async () => {
-    if (confirm('Are you sure you want to disconnect from this profile? Your local SQLite database will remain secure on this device.')) {
-      // @ts-ignore
+    if (await confirm('Are you sure you want to disconnect from this profile? Your local SQLite database will remain secure on this device.')) {
       await window.users.disconnectUser();
       setCurrentUser(null);
       setCurrentUserRole('reception');
       setCurrentUserDoctorId(null);
-      setDoctors([]); setServices([]); setReceipts([]);
+      setDoctors([]); setServices([]); setDashboardMetrics({ totalReceipts: 0, totalRevenue: 0, avgPerReceipt: 0 });
       setActiveTab('dashboard');
     }
   };
@@ -202,22 +219,14 @@ const App: React.FC = () => {
     setActiveTab('new-receipt');
   };
 
-  const handleDeleteReceipt = (id: string) => {
-    if (confirm('Are you sure you want to delete this receipt? This action cannot be undone.')) {
-      storage.deleteReceipt(id);
-      refreshData();
-    }
-  };
-
-  const handleSaveConnectionSettings = (
+  const handleSaveConnectionSettings = async (
     mode: 'standalone' | 'host' | 'client',
     ip: string,
-    port: number,
+    port: number
   ) => {
-    if (confirm('MedFlow Clinic needs to relaunch to apply these network connection settings. Proceed?')) {
-      // @ts-ignore
-      window.connection.saveSettings({ mode, hostIp: ip, hostPort: port }).catch((err: any) => {
-        alert(`Failed to save settings: ${err.message}`);
+    if (await confirm('MedFlow Clinic needs to relaunch to apply these network connection settings. Proceed?')) {
+        window.connection.saveSettings({ mode, hostIp: ip, hostPort: port }).catch((err: any) => {
+        toast(`Failed to save settings: ${err.message}`, { type: 'error' });
       });
     }
   };
@@ -226,18 +235,17 @@ const App: React.FC = () => {
     const reader = new FileReader();
     reader.onload = async event => {
       if (await storage.importData(event.target?.result as string)) {
-        alert('Data imported successfully! The app will now reload.');
-        window.location.reload();
+        toast('Data imported successfully! The app will now reload.', { type: 'success' });
+        setTimeout(() => window.location.reload(), 1500);
       } else {
-        alert('Error: This file is not a valid MedFlow backup.');
+        toast('Error: This file is not a valid MedFlow backup.', { type: 'error' });
       }
     };
     reader.readAsText(file);
   };
 
-  const handleDeactivateLicense = () => {
-    if (confirm('Are you sure you want to remove the current license?')) {
-      // @ts-ignore
+  const handleDeactivateLicense = async () => {
+    if (await confirm('Are you sure you want to remove the current license?', { isDanger: true })) {
       window.licensing.deactivate();
       window.location.reload();
     }
@@ -265,8 +273,7 @@ const App: React.FC = () => {
           setCurrentUser(userId);
           setCurrentUserRole(role);
           setCurrentUserDoctorId(doctorId || null);
-          // @ts-ignore
-          window.users.getKnownUsers().then(setKnownUsers);
+                window.users.getKnownUsers().then(setKnownUsers);
         }}
       />
     );
@@ -285,6 +292,11 @@ const App: React.FC = () => {
   // ── Main layout ───────────────────────────────────────────────────────────
   return (
     <div className="app-container">
+      {isLoadingData && (
+        <div className="loading-screen" style={{ position: 'absolute', zIndex: 9999, background: 'rgba(255, 255, 255, 0.8)', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', color: '#0284c7' }}>
+          Loading data...
+        </div>
+      )}
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -336,8 +348,8 @@ const App: React.FC = () => {
           {activeTab === 'dashboard' && (
             <Dashboard
               doctors={doctors}
-              receipts={receipts}
-              onNewReceipt={() => { setEditingReceipt(null); setActiveTab('new-receipt'); }}
+              dashboardMetrics={dashboardMetrics}
+              onNewReceipt={() => setActiveTab('new-receipt')}
             />
           )}
           {activeTab === 'doctors' && <DoctorManagement doctors={doctors} onUpdate={refreshData} />}
@@ -347,14 +359,23 @@ const App: React.FC = () => {
               doctors={doctors}
               initialData={editingReceipt}
               onSave={() => { refreshData(); setEditingReceipt(null); setActiveTab('history'); }}
+              onPrintRequest={(receipt) => {
+                setReceiptsToPrint([receipt]);
+                setTimeout(() => window.print(), 150);
+              }}
             />
           )}
           {activeTab === 'history' && (
             <HistoryTab
-              receipts={receipts}
               onPrint={handlePrint}
               onEdit={handleEditReceipt}
-              onDelete={handleDeleteReceipt}
+              onDelete={async (id) => {
+                if (await confirm('Are you sure you want to delete this receipt?', { isDanger: true })) {
+                  await storage.deleteReceipt(id);
+                  refreshData();
+                  toast('Receipt deleted', { type: 'success' });
+                }
+              }}
               onExportCsv={() => storage.exportToExcel()}
             />
           )}
@@ -418,6 +439,16 @@ const App: React.FC = () => {
         doctors={doctors}
       />
     </div>
+  );
+};
+
+const App: React.FC = () => {
+  return (
+    <ConfirmProvider>
+      <ToastProvider>
+        <MainApp />
+      </ToastProvider>
+    </ConfirmProvider>
   );
 };
 

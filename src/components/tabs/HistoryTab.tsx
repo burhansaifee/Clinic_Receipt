@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Filter, Search, Calendar, Users, FileText,
-  Printer, Edit2, Trash2
+  Printer, Edit2, Trash2, CheckCircle
 } from 'lucide-react';
-import { type Receipt } from '../../lib/storage';
+import { type Receipt, storage } from '../../lib/storage';
 
 interface HistoryTabProps {
-  receipts: Receipt[];
   onPrint: (receipts: Receipt[]) => void;
   onEdit: (receipt: Receipt) => void;
   onDelete: (id: string) => void;
@@ -16,12 +15,12 @@ interface HistoryTabProps {
 const INITIAL_LIMIT = 20;
 
 const HistoryTab: React.FC<HistoryTabProps> = ({
-  receipts,
   onPrint,
   onEdit,
   onDelete,
   onExportCsv,
 }) => {
+  const [localReceipts, setLocalReceipts] = useState<Receipt[]>([]);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -33,31 +32,33 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
     setDisplayLimit(INITIAL_LIMIT);
   }, [startDate, endDate, searchQuery]);
 
-  const filteredReceipts = useMemo(() => {
-    return receipts.filter(r => {
-      const rDate = r.date.split(' ')[0];
-      const afterStart = !startDate || rDate >= startDate;
-      const beforeEnd = !endDate || rDate <= endDate;
-      const matchesSearch = !searchQuery ||
-        r.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (r.patientPhone && r.patientPhone.includes(searchQuery)) ||
-        r.receiptNumber.includes(searchQuery);
-      return afterStart && beforeEnd && matchesSearch;
-    });
-  }, [receipts, startDate, endDate, searchQuery]);
-
-  const sortedFilteredReceipts = useMemo(() => {
-    return [...filteredReceipts].sort((a, b) => {
-      if (b.date !== a.date) return b.date.localeCompare(a.date);
-      return (b.receiptNumber || '').localeCompare(a.receiptNumber || '');
-    });
-  }, [filteredReceipts]);
+  // Fetch receipts from backend with filters and pagination
+  useEffect(() => {
+    let active = true;
+    const fetchReceipts = async () => {
+      try {
+        const fetched = await storage.getReceipts({
+          limit: displayLimit + 1, // Fetch one extra to determine if hasMore
+          search: searchQuery,
+          startDate: startDate,
+          endDate: endDate
+        });
+        if (active && fetched) {
+          setLocalReceipts(fetched);
+        }
+      } catch (err) {
+        console.error("Failed to fetch paginated receipts", err);
+      }
+    };
+    fetchReceipts();
+    return () => { active = false; };
+  }, [displayLimit, searchQuery, startDate, endDate]);
 
   const visibleReceipts = useMemo(() => {
-    return sortedFilteredReceipts.slice(0, displayLimit);
-  }, [sortedFilteredReceipts, displayLimit]);
+    return localReceipts.slice(0, displayLimit);
+  }, [localReceipts, displayLimit]);
 
-  const hasMore = displayLimit < sortedFilteredReceipts.length;
+  const hasMore = localReceipts.length > displayLimit;
 
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useCallback(
@@ -68,7 +69,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
       observerRef.current = new IntersectionObserver(
         entries => {
           if (entries[0].isIntersecting && hasMore) {
-            setDisplayLimit(prev => Math.min(prev + 20, sortedFilteredReceipts.length));
+            setDisplayLimit(prev => prev + 20);
           }
         },
         { rootMargin: '200px' }
@@ -76,7 +77,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
 
       observerRef.current.observe(node);
     },
-    [hasMore, sortedFilteredReceipts.length]
+    [hasMore]
   );
 
   const visibleGroups = useMemo(() => {
@@ -110,7 +111,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
   const clearSelection = () => setSelectedIds(new Set());
 
   const handleBulkPrint = () => {
-    onPrint(filteredReceipts.filter(r => selectedIds.has(r.id)));
+    onPrint(localReceipts.filter(r => selectedIds.has(r.id)));
   };
 
   const handleDeleteReceipt = (id: string) => {
@@ -191,8 +192,14 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
         </div>
 
         <div className="summary-grid">
+          <span className="summary-value">₹{
+            localReceipts.reduce((acc, r) => {
+              const rTotal = typeof r.total === 'number' ? r.total : parseFloat(r.total as any) || 0;
+              return acc + (r.paymentMethod !== 'FREE' ? rTotal : 0);
+            }, 0)
+          }</span>
           {Object.entries(
-            filteredReceipts.reduce((acc, r) => {
+            localReceipts.reduce((acc, r) => {
               const name = r.doctorName || 'General';
               const amount = r.paymentMethod === 'FREE' ? 0 : (Number(r.total) || 0);
               acc[name] = (acc[name] || 0) + amount;
@@ -224,14 +231,15 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
           </div>
         )}
 
-        {sortedFilteredReceipts.length === 0 ? (
+        <div className="history-timeline">
+        {localReceipts.length === 0 ? (
           <div className="card empty-state" style={{ textAlign: 'center', padding: '3rem' }}>
             <p className="text-muted">No receipts found for the selected period.</p>
           </div>
         ) : (
           <>
             {visibleGroups.map(({ date, dateReceipts }) => {
-              const dateAllReceipts = filteredReceipts.filter(r => r.date.split(' ')[0] === date);
+              const dateAllReceipts = localReceipts.filter(r => r.date.split(' ')[0] === date);
               const dailyDoctorTotals = dateAllReceipts.reduce((acc, r) => {
                 const name = r.doctorName || 'General';
                 const amount = r.paymentMethod === 'FREE' ? 0 : (Number(r.total) || 0);
@@ -262,7 +270,25 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
                           });
                         }}
                       >
-                        {dateAllReceipts.every(r => selectedIds.has(r.id)) ? 'Deselect All' : 'Select All'}
+                        <input
+                          type="checkbox"
+                          checked={dateAllReceipts.every(r => selectedIds.has(r.id))}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedIds(prev => {
+                                const next = new Set(prev);
+                                dateAllReceipts.forEach(r => next.add(r.id));
+                                return next;
+                              });
+                            } else {
+                              setSelectedIds(prev => {
+                                const next = new Set(prev);
+                                dateAllReceipts.forEach(r => next.delete(r.id));
+                                return next;
+                              });
+                            }
+                          }}
+                        />{dateAllReceipts.every(r => selectedIds.has(r.id)) ? 'Deselect All' : 'Select All'}
                       </button>
                     </div>
                     <div className="date-totals">
@@ -289,59 +315,62 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
                         </tr>
                       </thead>
                       <tbody>
-                        {dateReceipts.map(r => (
-                          <tr key={r.id} className={`receipt-table-row ${selectedIds.has(r.id) ? 'selected' : ''}`}>
-                            <td className="center-cell">
-                              <input
-                                type="checkbox"
-                                checked={selectedIds.has(r.id)}
-                                onChange={() => toggleSelection(r.id)}
-                                className="row-checkbox"
-                              />
-                            </td>
-                            <td>
-                              <span className="r-num">#{r.receiptNumber}</span>
-                            </td>
-                            <td>
-                              <div className="r-name">{r.patientName}</div>
-                              {r.patientPhone && <div className="r-ph">{r.patientPhone}</div>}
-                            </td>
-                            <td>
-                              <div className="r-dr">by {r.doctorName}</div>
-                              <span className={`payment-badge ${(r.paymentMethod || 'CASH').toLowerCase()}`}>
-                                {r.paymentMethod || 'CASH'}
-                              </span>
-                            </td>
-                            <td className="text-right">
-                              <span className="r-amt">₹{(Number(r.total) || 0).toFixed(2)}</span>
-                            </td>
-                            <td className="text-right">
-                              <div className="action-buttons">
-                                <button
-                                  className="btn-icon-xs print-btn"
-                                  onClick={() => onPrint([r])}
-                                  title="Print Receipt"
-                                >
-                                  <Printer size={14} />
-                                </button>
-                                <button
-                                  className="btn-icon-xs edit-btn"
-                                  onClick={() => onEdit(r)}
-                                  title="Edit Receipt"
-                                >
-                                  <Edit2 size={14} />
-                                </button>
-                                <button
-                                  className="btn-icon-xs delete-btn"
-                                  onClick={() => handleDeleteReceipt(r.id)}
-                                  title="Delete Receipt"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
+                        {dateReceipts.map(r => {
+                          const totalNum = typeof r.total === 'number' ? r.total : parseFloat(r.total as any) || 0;
+                          return (
+                            <tr key={r.id} className={`receipt-table-row ${selectedIds.has(r.id) ? 'selected' : ''}`}>
+                              <td className="center-cell">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedIds.has(r.id)}
+                                  onChange={() => toggleSelection(r.id)}
+                                  className="row-checkbox"
+                                />
+                              </td>
+                              <td>
+                                <span className="r-num">#{r.receiptNumber}</span>
+                              </td>
+                              <td>
+                                <div className="r-name">{r.patientName}</div>
+                                {r.patientPhone && <div className="r-ph">{r.patientPhone}</div>}
+                              </td>
+                              <td>
+                                <div className="r-dr">by {r.doctorName}</div>
+                                <span className={`payment-badge ${(r.paymentMethod || 'CASH').toLowerCase()}`}>
+                                  {r.paymentMethod || 'CASH'}
+                                </span>
+                              </td>
+                              <td className="text-right">
+                                <span className="r-amt">₹{totalNum.toFixed(2)}</span>
+                              </td>
+                              <td className="text-right">
+                                <div className="action-buttons">
+                                  <button
+                                    className="btn-icon-xs print-btn"
+                                    onClick={() => onPrint([r])}
+                                    title="Print Receipt"
+                                  >
+                                    <Printer size={14} />
+                                  </button>
+                                  <button
+                                    className="btn-icon-xs edit-btn"
+                                    onClick={() => onEdit(r)}
+                                    title="Edit Receipt"
+                                  >
+                                    <Edit2 size={14} />
+                                  </button>
+                                  <button
+                                    className="btn-icon-xs delete-btn"
+                                    onClick={() => handleDeleteReceipt(r.id)}
+                                    title="Delete Receipt"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -350,37 +379,28 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
             })}
 
             {hasMore && (
-              <div
-                ref={loadMoreRef}
-                style={{
-                  textAlign: 'center',
-                  padding: '1.5rem',
-                  color: 'var(--text-muted)',
-                }}
-              >
-                <button
-                  className="btn-secondary-sm"
-                  onClick={() => setDisplayLimit(prev => Math.min(prev + 20, sortedFilteredReceipts.length))}
-                  style={{ margin: '0 auto', padding: '0.6rem 1.25rem', fontSize: '0.85rem' }}
+              <div className="load-more-container" ref={loadMoreRef}>
+                <button 
+                  className="btn-secondary"
+                  onClick={() => setDisplayLimit(prev => prev + 20)}
                 >
-                  Load More Records ({visibleReceipts.length} of {sortedFilteredReceipts.length} shown)
+                  Load More Records
                 </button>
               </div>
             )}
-            {!hasMore && sortedFilteredReceipts.length > 0 && (
-              <div
-                style={{
-                  textAlign: 'center',
-                  padding: '1.5rem',
-                  color: 'var(--text-muted)',
-                  fontSize: '0.85rem',
-                }}
-              >
-                Showing all {sortedFilteredReceipts.length} record{sortedFilteredReceipts.length !== 1 ? 's' : ''}
+            
+            {!hasMore && localReceipts.length > 0 && (
+              <div className="end-of-results">
+                <div className="end-divider"></div>
+                <p>
+                  <CheckCircle size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />
+                  Showing all records for this query
+                </p>
               </div>
             )}
           </>
         )}
+      </div>
       </div>
     </div>
   );

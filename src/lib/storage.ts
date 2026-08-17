@@ -112,16 +112,14 @@ export const storage = {
       if (doctorsStr) {
         const doctors = JSON.parse(doctorsStr);
         console.log(`Migrating ${doctors.length} doctors...`);
-        // @ts-ignore
-        await window.database.batchImportDoctors(doctors);
+            await window.database.batchImportDoctors(doctors);
       }
       
       if (servicesStr) {
         const services = JSON.parse(servicesStr);
         console.log(`Migrating ${services.length} services...`);
         for (const s of services) {
-          // @ts-ignore
-          await window.database.saveService(s);
+                await window.database.saveService(s);
         }
       }
 
@@ -129,26 +127,20 @@ export const storage = {
         const receipts = JSON.parse(receiptsStr);
         console.log(`Migrating ${receipts.length} receipts...`);
         for (const r of receipts) {
-          // @ts-ignore
-          await window.database.saveReceipt(r);
+                await window.database.saveReceipt(r);
         }
       }
 
       if (lastNum) {
-        // @ts-ignore
-        await window.database.setMetadata('last_receipt_num', lastNum);
+            await window.database.setMetadata('last_receipt_num', lastNum);
       }
 
       if (lastFreeNum) {
-        // @ts-ignore
-        await window.database.setMetadata('last_free_receipt_num', lastFreeNum);
+            await window.database.setMetadata('last_free_receipt_num', lastFreeNum);
       }
 
       localStorage.setItem(STORAGE_KEYS.SQLITE_MIGRATED, 'true');
       console.log('Migration successfully completed!');
-      
-      // Perform a single sync to Excel after full migration
-      await storage.syncToExcel();
     } catch (error) {
       console.error('Migration failed:', error);
       // We don't set the flag so it tries again next time
@@ -156,96 +148,67 @@ export const storage = {
   },
 
   getDoctors: async (): Promise<Doctor[]> => {
-    // @ts-ignore
     return window.database.getDoctors();
   },
   
   saveDoctor: async (doctor: Doctor) => {
-    // @ts-ignore
     await window.database.saveDoctor(doctor);
   },
 
   deleteDoctor: async (id: string) => {
-    // @ts-ignore
     await window.database.deleteDoctor(id);
   },
 
   getServices: async (): Promise<Service[]> => {
-    // @ts-ignore
     return window.database.getServices();
   },
 
   saveService: async (service: Service) => {
-    // @ts-ignore
     await window.database.saveService(service);
   },
 
   deleteService: async (id: string) => {
-    // @ts-ignore
     await window.database.deleteService(id);
   },
 
-  getReceipts: async (): Promise<Receipt[]> => {
-    // @ts-ignore
-    return window.database.getReceipts();
+  getReceipts: async (options?: { limit?: number; offset?: number; search?: string; startDate?: string; endDate?: string }) => {
+    return window.database?.getReceipts(options) || [];
+  },
+  getDashboardMetrics: async () => {
+    return window.database?.getDashboardMetrics() || { totalReceipts: 0, totalRevenue: 0, avgPerReceipt: 0 };
   },
 
   saveReceipt: async (receipt: Receipt) => {
-    // @ts-ignore
-    await window.database.saveReceipt(receipt);
-    
-    // Increment correct receipt number
+    // Increment correct receipt number atomically
     const isFree = receipt.paymentMethod === 'FREE';
     const key = isFree ? 'last_free_receipt_num' : 'last_receipt_num';
-    const nextNum = parseInt(receipt.receiptNumber.replace(/\D/g, '')) + 1;
+    const nextNumValue = parseInt(receipt.receiptNumber.replace(/\D/g, '')) + 1;
     const prefix = isFree ? 'F' : '';
-    // @ts-ignore
-    await window.database.setMetadata(key, prefix + nextNum.toString());
+    const nextNum = prefix + nextNumValue.toString();
+    
+    if (window.database?.saveReceiptAtomic) {
+        await window.database.saveReceiptAtomic(receipt, key, nextNum);
+    } else {
+      // Fallback for older host
+        await window.database.saveReceipt(receipt);
+        await window.database.setMetadata(key, nextNum);
+    }
   },
 
   deleteReceipt: async (id: string) => {
-    // @ts-ignore
     await window.database.deleteReceipt(id);
   },
 
   updateReceipt: async (receipt: Receipt) => {
-    // @ts-ignore
     await window.database.updateReceipt(receipt);
     return true;
   },
 
   getNextReceiptNumber: async (isFree: boolean = false): Promise<string> => {
     const key = isFree ? 'last_free_receipt_num' : 'last_receipt_num';
-    // @ts-ignore
     const meta = await window.database.getMetadata(key);
     if (meta) return meta.value;
     return isFree ? 'F1001' : '1001';
-  },
-
-  syncToExcel: async () => {
-    const doctors = await storage.getDoctors();
-    const services = await storage.getServices();
-    const receipts = await storage.getReceipts();
-    const lastNum = await storage.getNextReceiptNumber(false);
-    
-    // Safety check: Don't sync if everything is empty but we have a flag
-    // (This avoids overwriting Excel with empty data if SQLite fails to load)
-    if (doctors.length === 0 && receipts.length === 0 && localStorage.getItem(STORAGE_KEYS.SQLITE_MIGRATED) === 'true') {
-      console.warn('Sync aborted: SQLite returned empty data. Not overwriting Excel.');
-      return;
-    }
-
-    const data = {
-      doctors,
-      services,
-      receipts: receipts.map(r => ({
-        ...r,
-        items: JSON.stringify(r.items)
-      })),
-      lastReceiptNum: lastNum
-    };
-    // @ts-ignore
-    window.excelStorage?.saveData(data);
   },
 
   exportData: async () => {
@@ -266,26 +229,29 @@ export const storage = {
 
   importData: async (jsonData: string): Promise<boolean> => {
     try {
+      // Auto-backup before import (H5)
+      try {
+        await storage.exportData();
+      } catch (err) {
+        console.warn('Pre-import backup failed', err);
+      }
+
       const data = JSON.parse(jsonData);
       if (data.doctors) {
-        // @ts-ignore
-        await window.database.batchImportDoctors(data.doctors);
+            await window.database.batchImportDoctors(data.doctors);
       }
       if (data.services) {
         for (const s of data.services) {
-          // @ts-ignore
-          await window.database.saveService(s);
+                await window.database.saveService(s);
         }
       }
       if (data.receipts) {
         for (const r of data.receipts) {
-          // @ts-ignore
-          await window.database.saveReceipt(r);
+                await window.database.saveReceipt(r);
         }
       }
       if (data.lastReceiptNum) {
-        // @ts-ignore
-        await window.database.setMetadata('last_receipt_num', data.lastReceiptNum);
+            await window.database.setMetadata('last_receipt_num', data.lastReceiptNum);
       }
       return true;
     } catch (e) {
@@ -337,8 +303,7 @@ export const storage = {
       const jsonStr = atob(syncKey);
       const newDoctors = JSON.parse(jsonStr);
       if (Array.isArray(newDoctors)) {
-        // @ts-ignore
-        await window.database.batchImportDoctors(newDoctors);
+            await window.database.batchImportDoctors(newDoctors);
         return true;
       }
       return false;
@@ -349,50 +314,39 @@ export const storage = {
   },
 
   getPrescriptions: async (): Promise<Prescription[]> => {
-    // @ts-ignore
     return window.database.getPrescriptions();
   },
 
   savePrescription: async (prescription: Prescription) => {
-    // @ts-ignore
     await window.database.savePrescription(prescription);
   },
 
   deletePrescription: async (id: string) => {
-    // @ts-ignore
     await window.database.deletePrescription(id);
   },
 
   getAppointments: async (): Promise<Appointment[]> => {
-    // @ts-ignore
     if (window.database?.getAppointments) {
-      // @ts-ignore
-      return window.database.getAppointments();
+        return window.database.getAppointments();
     }
     return [];
   },
 
   saveAppointment: async (appointment: Appointment) => {
-    // @ts-ignore
     if (window.database?.saveAppointment) {
-      // @ts-ignore
-      await window.database.saveAppointment(appointment);
+        await window.database.saveAppointment(appointment);
     }
   },
 
   updateAppointmentStatus: async (id: string, status: AppointmentStatus, rejectionReason?: string) => {
-    // @ts-ignore
     if (window.database?.updateAppointmentStatus) {
-      // @ts-ignore
-      await window.database.updateAppointmentStatus(id, status, rejectionReason);
+        await window.database.updateAppointmentStatus(id, status, rejectionReason);
     }
   },
 
   deleteAppointment: async (id: string) => {
-    // @ts-ignore
     if (window.database?.deleteAppointment) {
-      // @ts-ignore
-      await window.database.deleteAppointment(id);
+        await window.database.deleteAppointment(id);
     }
   }
 };

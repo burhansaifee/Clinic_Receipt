@@ -7,8 +7,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build && electron-builder",
-    "build:mac": "tsc -b && vite build && electron-builder --mac --dir && hdiutil create -volname \"MedFlow Clinic\" -srcfolder release/1.0.2/mac-arm64 -ov -format UDZO release/1.0.2/MedFlow_Clinic-1.0.2-mac.dmg",
+    "build:mac": "xattr -cr public src 2>/dev/null || true && tsc -b && vite build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --dir && hdiutil create -volname \"MedFlow Clinic\" -srcfolder release/1.0.3/mac-arm64 -ov -format UDZO release/1.0.3/MedFlow_Clinic-1.0.3-mac.dmg",
     "build:win": "tsc -b && vite build && electron-builder --windows",
+    "postinstall": "npx @electron/rebuild -f -w better-sqlite3",
+    "key": "node scripts/generate-key.js",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -69,7 +71,8 @@
       "target": [
         "dmg"
       ],
-      "icon": "public/icon.png"
+      "icon": "public/icon.png",
+      "identity": null
     },
     "win": {
       "target": [

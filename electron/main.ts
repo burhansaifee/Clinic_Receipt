@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { createRequire } from 'node:module'
@@ -6,7 +6,6 @@ import Store from 'electron-store'
 import crypto from 'node:crypto'
 import http from 'node:http'
 import os from 'node:os'
-import { excelStorage } from './excelStorage'
 import { database } from './database'
 import { whatsappBot } from './whatsappBot'
 import { shell } from 'electron'
@@ -18,7 +17,15 @@ const { machineIdSync } = require('node-machine-id')
 const Database = require('better-sqlite3')
 
 const store = new Store()
-const SECRET_SALT = 'MEDFLOW-OFFLINE-LICENSE-2024-X99'
+
+// License salt — used ONLY for license key generation/validation
+const LICENSE_SALT = 'MEDFLOW-OFFLINE-LICENSE-2024-X99'
+// Password salt — separate from license salt for security isolation
+// Generated per-installation and stored in electron-store
+if (!store.get('password_salt')) {
+  store.set('password_salt', crypto.randomBytes(32).toString('hex'));
+}
+const PASSWORD_SALT = store.get('password_salt') as string;
 
 // Ensure a network secret exists for RPC authentication
 if (!store.get('network_secret')) {
@@ -32,10 +39,7 @@ let knownUsersList: any[] = [];
 if (!rawUsers) {
   knownUsersList = [
     { id: 'default', role: 'reception' },
-    { id: 'admin', role: 'reception' },
-    { id: 'reception1', role: 'reception' },
-    { id: 'doctor1', role: 'doctor' },
-    { id: 'doctor2', role: 'doctor' }
+    { id: 'admin', role: 'reception' }
   ];
   store.set('known_users', knownUsersList);
 } else if (Array.isArray(rawUsers)) {
@@ -48,6 +52,9 @@ if (!rawUsers) {
     knownUsersList = rawUsers;
   }
   
+  // Clean out legacy demo profiles
+  knownUsersList = knownUsersList.filter(u => u && !['reception1', 'doctor1', 'doctor2'].includes(u.id));
+
   // Ensure 'admin' user profile is always present
   const hasAdmin = knownUsersList.some(u => u && u.id === 'admin');
   if (!hasAdmin) {
@@ -73,7 +80,6 @@ const savedUser = store.get('current_user') as string || '';
 if (workstationMode !== 'client') {
   if (savedUser) {
     database.init(Database, savedUser)
-    excelStorage.setUserId(savedUser)
   } else {
     database.init(Database)
   }
@@ -112,9 +118,16 @@ function startHostServer() {
 
   const port = store.get('host_port') as number || 49152;
 
+  // Simple rate limiter: max 60 requests per minute per IP
+  const rpcRateMap = new Map<string, { count: number; resetAt: number }>();
+
   hostServer = http.createServer((req, res) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
+    // Restrict CORS to local network origins only (no wildcard)
+    const origin = req.headers.origin;
+    if (origin && /^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01]))/.test(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+    }
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-MedFlow-Auth');
 
     if (req.method === 'OPTIONS') {
@@ -124,6 +137,21 @@ function startHostServer() {
     }
 
     if (req.url === '/api/rpc' && req.method === 'POST') {
+      // Rate limiting
+      const clientIp = req.socket.remoteAddress || 'unknown';
+      const now = Date.now();
+      const entry = rpcRateMap.get(clientIp);
+      if (entry && entry.resetAt > now) {
+        entry.count++;
+        if (entry.count > 60) {
+          res.writeHead(429, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Too many requests. Try again later.' }));
+          return;
+        }
+      } else {
+        rpcRateMap.set(clientIp, { count: 1, resetAt: now + 60000 });
+      }
+
       const authHeader = req.headers['x-medflow-auth'];
       const expectedSecret = store.get('network_secret') as string;
       if (authHeader !== expectedSecret) {
@@ -133,8 +161,21 @@ function startHostServer() {
       }
 
       let body = '';
-      req.on('data', chunk => body += chunk);
+      let bodySize = 0;
+      const MAX_BODY_SIZE = 1024 * 1024; // 1MB limit
+
+      req.on('data', (chunk: Buffer) => {
+        bodySize += chunk.length;
+        if (bodySize > MAX_BODY_SIZE) {
+          res.writeHead(413, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Request body too large (max 1MB)' }));
+          req.destroy();
+          return;
+        }
+        body += chunk;
+      });
       req.on('end', async () => {
+        if (bodySize > MAX_BODY_SIZE) return; // Already handled
         try {
           const { method, args } = JSON.parse(body);
           let result;
@@ -147,10 +188,6 @@ function startHostServer() {
             } else {
               throw new Error(`Database method ${camelMethod} not found`);
             }
-          } else if (method === 'save-to-excel') {
-            result = await excelStorage.saveData(args[0]);
-          } else if (method === 'load-from-excel') {
-            result = await excelStorage.loadData();
           } else if (method === 'get-known-users') {
             result = store.get('known_users') || [];
           } else if (method === 'add-known-user') {
@@ -300,7 +337,7 @@ const getMachineID = () => {
 
 // Full Key Format: YYYYMMDD-XXXX-XXXX-XXXX-XXXX
 const generateDateBoundKey = (id: string, dateStr: string) => {
-  const hash = crypto.createHash('sha256').update(id + dateStr + SECRET_SALT).digest('hex').toUpperCase()
+  const hash = crypto.createHash('sha256').update(id + dateStr + LICENSE_SALT).digest('hex').toUpperCase()
   return `${dateStr}-${hash.substring(0, 4)}-${hash.substring(4, 8)}-${hash.substring(8, 12)}-${hash.substring(12, 16)}`
 }
 
@@ -374,22 +411,7 @@ ipcMain.handle('deactivate-license', () => {
   return { success: true }
 })
 
-// Excel Storage IPCs
-ipcMain.handle('save-to-excel', (_, data: any) => {
-  if (workstationMode === 'client') return clientRequest('save-to-excel', data);
-  return excelStorage.saveData(data)
-})
-
-ipcMain.handle('load-from-excel', () => {
-  if (workstationMode === 'client') return clientRequest('load-from-excel');
-  return excelStorage.loadData()
-})
-
-ipcMain.handle('open-excel-file', () => {
-  if (workstationMode === 'client') return;
-  shell.openPath(excelStorage.getExcelPath())
-})
-
+// Database folder IPC
 ipcMain.handle('open-db-folder', () => {
   if (workstationMode === 'client') return;
   const dbDir = path.join(app.getPath('userData'), 'ClinicData');
@@ -423,13 +445,23 @@ ipcMain.handle('db-delete-service', (_, id) => {
   return database.deleteService(id);
 })
 
-ipcMain.handle('db-get-receipts', () => {
-  if (workstationMode === 'client') return clientRequest('db-get-receipts');
-  return database.getReceipts();
-})
+ipcMain.handle('db-get-receipts', (_, options) => {
+  if (workstationMode === 'client') return clientRequest('db-get-receipts', [options]);
+  return database.getReceipts(options);
+});
+
+ipcMain.handle('db-get-dashboard-metrics', () => {
+  if (workstationMode === 'client') return clientRequest('db-get-dashboard-metrics');
+  return database.getDashboardMetrics();
+});
+
 ipcMain.handle('db-save-receipt', (_, receipt) => {
   if (workstationMode === 'client') return clientRequest('db-save-receipt', receipt);
   return database.saveReceipt(receipt);
+})
+ipcMain.handle('db-save-receipt-atomic', (_, receipt, metaKey, nextNum) => {
+  if (workstationMode === 'client') return clientRequest('db-save-receipt-atomic', receipt, metaKey, nextNum);
+  return database.saveReceiptAtomic(receipt, metaKey, nextNum);
 })
 ipcMain.handle('db-update-receipt', (_, receipt) => {
   if (workstationMode === 'client') return clientRequest('db-update-receipt', receipt);
@@ -472,6 +504,10 @@ ipcMain.handle('db-delete-appointment', (_, id) => {
 })
 
 // WhatsApp Bot IPCs
+whatsappBot.setOnAppointmentSavedCallback(() => {
+  if (win) win.webContents.send('appointment-updated');
+});
+
 ipcMain.handle('whatsapp-start', async () => {
   return whatsappBot.start((state) => {
     if (win) win.webContents.send('whatsapp-state-update', state);
@@ -523,10 +559,7 @@ ipcMain.handle('get-known-users', async () => {
   }
   return store.get('known_users') || [
     { id: 'default', role: 'reception' },
-    { id: 'admin', role: 'reception' },
-    { id: 'reception1', role: 'reception' },
-    { id: 'doctor1', role: 'doctor' },
-    { id: 'doctor2', role: 'doctor' }
+    { id: 'admin', role: 'reception' }
   ];
 });
 
@@ -572,7 +605,6 @@ ipcMain.handle('delete-known-user', (_, userId: string) => {
   const currentUser = store.get('current_user') as string || '';
   if (currentUser === cleanId) {
     store.set('current_user', '');
-    excelStorage.setUserId(null);
     database.init(Database);
   }
   
@@ -594,7 +626,7 @@ ipcMain.handle('connect-user', async (_, userId: string, password?: string) => {
   }
   
   const hashPassword = (pwd: string) => {
-    return crypto.createHash('sha256').update(pwd + SECRET_SALT).digest('hex');
+    return crypto.createHash('sha256').update(pwd + PASSWORD_SALT).digest('hex');
   };
 
   const user = knownUsers.find(u => u.id === cleanId);
@@ -610,22 +642,15 @@ ipcMain.handle('connect-user', async (_, userId: string, password?: string) => {
     return { success: false, requirePasswordInput: true };
   }
   
-  const isPlaintextMatch = user.password === password;
+  // Only compare hashed passwords — no plaintext comparison
   const isHashedMatch = user.password === hashPassword(password);
   
-  if (!isPlaintextMatch && !isHashedMatch) {
+  if (!isHashedMatch) {
     return { success: false, error: 'Incorrect password' };
-  }
-  
-  // Auto-migrate plaintext password to hash
-  if (isPlaintextMatch && password !== '') {
-    user.password = hashPassword(password);
-    store.set('known_users', knownUsers);
   }
   
   if (workstationMode !== 'client') {
     database.init(Database, cleanId);
-    excelStorage.setUserId(cleanId);
   }
   store.set('current_user', cleanId);
   return { success: true, role: user.role, doctorId: user.doctorId };
@@ -638,12 +663,25 @@ ipcMain.handle('set-user-password', (_, userId: string, password?: string) => {
   const knownUsers = store.get('known_users') as { id: string, role: string, doctorId?: string, password?: string }[] || [];
   const idx = knownUsers.findIndex(u => u.id === cleanId);
   if (idx !== -1) {
-    const hashPassword = (pwd: string) => crypto.createHash('sha256').update(pwd + SECRET_SALT).digest('hex');
+    const hashPassword = (pwd: string) => crypto.createHash('sha256').update(pwd + PASSWORD_SALT).digest('hex');
     knownUsers[idx].password = password ? hashPassword(password) : '';
     store.set('known_users', knownUsers);
     return { success: true };
   }
   return { success: false, error: 'User ID not found' };
+});
+
+ipcMain.handle('reset-admin-password', () => {
+  if (workstationMode === 'client') return clientRequest('reset-admin-password');
+
+  const knownUsers = store.get('known_users') as any[] || [];
+  const idx = knownUsers.findIndex(u => u && u.id === 'admin');
+  if (idx !== -1) {
+    knownUsers[idx].password = '';
+    store.set('known_users', knownUsers);
+    return { success: true, message: 'Admin password reset successfully! Enter "admin" to set a new password.' };
+  }
+  return { success: false, error: 'Admin user not found.' };
 });
 
 ipcMain.handle('get-current-user', () => {
@@ -689,7 +727,6 @@ ipcMain.handle('get-current-user-doctor-id', async () => {
 ipcMain.handle('disconnect-user', () => {
   store.set('current_user', '');
   if (workstationMode !== 'client') {
-    excelStorage.setUserId(null);
     database.init(Database);
   }
   return true;
@@ -794,6 +831,18 @@ function createWindow() {
     },
   })
 
+  // Content Security Policy — restrict script/style sources
+  win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' http://localhost:* http://127.0.0.1:* http://192.168.*:*;"
+        ],
+      },
+    });
+  });
+
   // Test active push message to Renderer-process.
   win.webContents.on('did-finish-load', () => {
     win?.webContents.send('main-process-message', (new Date()).toLocaleString())
@@ -802,7 +851,6 @@ function createWindow() {
   if (VITE_DEV_SERVER_URL) {
     win.loadURL(VITE_DEV_SERVER_URL)
   } else {
-    // win.loadFile('dist/index.html')
     win.loadFile(path.join(RENDERER_DIST, 'index.html'))
   }
 }
@@ -832,8 +880,21 @@ app.whenReady().then(() => {
   autoUpdater.checkForUpdatesAndNotify()
 })
 
-// Automatically install the update when downloaded
+// Prompt user before installing update — don't interrupt work unexpectedly
 autoUpdater.on('update-downloaded', () => {
-  autoUpdater.quitAndInstall()
+  if (win) {
+    dialog.showMessageBox(win, {
+      type: 'info',
+      title: 'Update Ready',
+      message: 'A new version has been downloaded. The application will restart to apply the update.',
+      buttons: ['Restart Now', 'Later'],
+      defaultId: 0,
+    }).then(({ response }) => {
+      if (response === 0) {
+        autoUpdater.quitAndInstall();
+      }
+    });
+  } else {
+    autoUpdater.quitAndInstall();
+  }
 })
-

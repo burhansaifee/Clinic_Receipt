@@ -24,7 +24,7 @@ const ServiceManagement: React.FC<ServiceManagementProps> = ({ services, onUpdat
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     const service: Service = {
-      id: editingId || Date.now().toString(),
+      id: editingId || crypto.randomUUID(),
       name,
       amount
     };

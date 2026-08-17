@@ -34,7 +34,7 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate }
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     const doctor: Doctor = {
-      id: editingId || Date.now().toString(),
+      id: editingId || crypto.randomUUID(),
       name,
       specialization,
       qualifications,

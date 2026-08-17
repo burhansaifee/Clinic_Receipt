@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { storage, formatAgeGender, type Doctor, type Appointment, type AppointmentStatus } from '../lib/storage';
 import { Calendar, Search, CheckCircle, XCircle, Clock, Plus, Trash2, MessageSquare, Phone, Tag, Save, Check, CalendarDays, RefreshCw } from 'lucide-react';
+import { useConfirm } from './ui/ConfirmDialog';
+import { useToast } from './ui/Toast';
 
 interface AppointmentManagementProps {
   doctors: Doctor[];
@@ -24,6 +26,9 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
   const [selectedDoctorId, setSelectedDoctorId] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
   const [filterDate, setFilterDate] = useState('');
+  
+  const confirm = useConfirm();
+  const toast = useToast();
 
   // Modal State - New Appointment
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -61,10 +66,7 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
   const loadAppointments = async () => {
     try {
       const data = await storage.getAppointments();
-      setAppointments(prev => {
-        if (JSON.stringify(prev) === JSON.stringify(data)) return prev;
-        return data;
-      });
+      setAppointments(data);
     } catch (err) {
       console.error('Failed to load appointments:', err);
     }
@@ -99,7 +101,7 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
     const trimmed = newSlotInput.trim();
     if (!trimmed) return;
     if (timeSlots.includes(trimmed)) {
-      alert('This time slot is already in the list.');
+      toast('This time slot is already in the list.', { type: 'error' });
       return;
     }
     setTimeSlots([...timeSlots, trimmed]);
@@ -125,22 +127,22 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
 
   const handleSaveSchedule = async () => {
     if (allowedDays.length === 0) {
-      alert('Please select at least one active operating day.');
+      toast('Please select at least one active operating day.', { type: 'error' });
       return;
     }
     if (timeSlots.length === 0) {
-      alert('Please add at least one available time slot.');
+      toast('Please add at least one available time slot.', { type: 'error' });
       return;
     }
     setIsSavingSchedule(true);
     try {
       if ((window as any).whatsappBot?.saveSchedule) {
         await (window as any).whatsappBot.saveSchedule({ allowedDays, timeSlots });
-        alert('✅ WhatsApp Booking Schedule & Time Slots saved successfully!\n\nThe WhatsApp bot will now strictly offer and validate these exact days and time slots to patients during chat.');
+        toast('✅ WhatsApp Booking Schedule & Time Slots saved successfully!', { type: 'success' });
         setIsScheduleModalOpen(false);
       }
     } catch (err: any) {
-      alert(`Failed to save schedule: ${err.message}`);
+      toast(`Failed to save schedule: ${err.message}`, { type: 'error' });
     } finally {
       setIsSavingSchedule(false);
     }
@@ -179,7 +181,7 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
     const finalReason = selectedReasonOption === 'Other (Specify below)' ? customReasonText.trim() : selectedReasonOption;
 
     if (!finalReason) {
-      alert('Please select or enter a valid rejection reason.');
+      toast('Please select or enter a valid rejection reason.', { type: 'error' });
       return;
     }
 
@@ -206,30 +208,32 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
 
       setRejectingApt(null);
       loadAppointments();
+      toast('Appointment rejected successfully.', { type: 'success' });
     } catch (err: any) {
-      alert(`Failed to reject appointment: ${err.message}`);
+      toast(`Failed to reject appointment: ${err.message}`, { type: 'error' });
     } finally {
       setIsSubmittingReject(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm('Are you sure you want to delete this appointment record?')) {
+    if (await confirm('Are you sure you want to delete this appointment record?', { isDanger: true })) {
       await storage.deleteAppointment(id);
       loadAppointments();
+      toast('Appointment deleted.', { type: 'success' });
     }
   };
 
   const handleCreateAppointment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPatientName || !newDoctorId || !newDate || !newTime) {
-      alert('Please fill in Patient Name, Doctor, Date, and Time.');
+      toast('Please fill in Patient Name, Doctor, Date, and Time.', { type: 'error' });
       return;
     }
 
     const doctor = doctors.find((d) => d.id === newDoctorId);
     const newApt: Appointment = {
-      id: 'APT-' + Math.floor(100000 + Math.random() * 900000),
+      id: crypto.randomUUID(),
       patientName: newPatientName,
       patientPhone: newPatientPhone,
       patientAge: newPatientAge,

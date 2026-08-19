@@ -9,6 +9,9 @@ export interface Doctor {
   address: string;
   printHeader?: boolean;
   customTopMargin?: number;
+  upiId?: string;
+  qrCodeText?: string;
+  showQrCodeOnReceipt?: boolean;
 }
 
 export interface ReceiptItem {
@@ -37,6 +40,8 @@ export interface Receipt {
   total: number;
   paymentMethod: 'CASH' | 'ONLINE' | 'FREE';
   appointmentId?: string;
+  showQrCode?: boolean;
+  qrCodeText?: string;
 }
 
 export interface PrescribedMedicine {

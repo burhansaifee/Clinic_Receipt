@@ -1,6 +1,7 @@
 import React from 'react';
 import { format } from 'date-fns';
 import { formatAgeGender, type Doctor, type Receipt, type Prescription } from '../../lib/storage';
+import QRCodeImage from '../ui/QRCodeImage';
 
 interface PrintTemplatesProps {
   receiptsToPrint: Receipt[];
@@ -31,6 +32,19 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
             const printHeader = doctorObj ? doctorObj.printHeader !== false : true;
             const customTopMargin = doctorObj ? doctorObj.customTopMargin || 0 : 0;
 
+            const qrPayload = r.qrCodeText || (r.showQrCode && doctorObj?.upiId ? `upi://pay?pa=${encodeURIComponent(doctorObj.upiId)}&pn=${encodeURIComponent(doctorObj.name)}&am=${(Number(r.total) || 0).toFixed(2)}&cu=INR` : (r.showQrCode ? doctorObj?.qrCodeText : ''));
+
+            let displayUpiId = doctorObj?.upiId || '';
+            if (qrPayload && qrPayload.startsWith('upi://')) {
+              try {
+                const match = qrPayload.match(/[?&]pa=([^&]+)/);
+                if (match && match[1]) {
+                  displayUpiId = decodeURIComponent(match[1]);
+                }
+              } catch (e) {}
+            }
+            const isUpi = Boolean(qrPayload && (qrPayload.startsWith('upi://') || qrPayload.includes('@upi') || displayUpiId));
+
             return (
               <div
                 key={r.id}
@@ -60,7 +74,7 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
                   <h1>PAYMENT RECEIPT (DUPLICATE)</h1>
                 </div>
 
-                <div className="print-info-grid">
+                <div className="print-info-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
                   <div className="info-section">
                     <h3>PATIENT DETAILS</h3>
                     <p><strong>Name:</strong> {r.patientName}</p>
@@ -105,6 +119,25 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
                 <div className="print-amount-words">
                   <p><strong>Total in words:</strong> Rupee {(Number(r.total) || 0).toLocaleString()} Only</p>
                 </div>
+
+                {qrPayload && (
+                  <div className="print-qr-section" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '12px', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', backgroundColor: '#f8fafc' }}>
+                    <QRCodeImage text={qrPayload} size={75} />
+                    <div>
+                      <p style={{ margin: 0, fontWeight: 700, fontSize: '0.85rem', color: '#0f172a' }}>
+                        {isUpi ? 'Scan to Pay via UPI' : 'Scan QR Code'}
+                      </p>
+                      {isUpi && displayUpiId && (
+                        <p style={{ margin: '2px 0 0 0', fontSize: '0.75rem', color: '#334155' }}>
+                          UPI VPA: <strong>{displayUpiId}</strong>
+                        </p>
+                      )}
+                      <p style={{ margin: '2px 0 0 0', fontSize: '0.7rem', color: '#64748b' }}>
+                        {isUpi ? 'Supported: GPay / PhonePe / Paytm / BHIM / Any UPI App' : 'Scan for details'}
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 <div className="print-footer">
                   <div className="terms">

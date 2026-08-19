@@ -18,6 +18,9 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate }
   const [address, setAddress] = useState('');
   const [printHeader, setPrintHeader] = useState(true);
   const [customTopMargin, setCustomTopMargin] = useState(0);
+  const [upiId, setUpiId] = useState('');
+  const [qrCodeText, setQrCodeText] = useState('');
+  const [showQrCodeOnReceipt, setShowQrCodeOnReceipt] = useState(false);
 
   const resetForm = () => {
     setName('');
@@ -27,6 +30,9 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate }
     setAddress('');
     setPrintHeader(true);
     setCustomTopMargin(0);
+    setUpiId('');
+    setQrCodeText('');
+    setShowQrCodeOnReceipt(false);
     setIsAdding(false);
     setEditingId(null);
   };
@@ -41,7 +47,10 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate }
       phone,
       address,
       printHeader,
-      customTopMargin
+      customTopMargin,
+      upiId,
+      qrCodeText,
+      showQrCodeOnReceipt
     };
     await storage.saveDoctor(doctor);
     onUpdate();
@@ -56,6 +65,9 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate }
     setAddress(doctor.address || '');
     setPrintHeader(doctor.printHeader !== false);
     setCustomTopMargin(doctor.customTopMargin || 0);
+    setUpiId(doctor.upiId || '');
+    setQrCodeText(doctor.qrCodeText || '');
+    setShowQrCodeOnReceipt(doctor.showQrCodeOnReceipt || false);
     setEditingId(doctor.id);
     setIsAdding(true);
   };
@@ -115,6 +127,25 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate }
                 placeholder="+91 98765 43210" 
               />
             </div>
+
+            <div className="form-group">
+              <label>UPI VPA / PhonePe / GPay ID (For Payment QR)</label>
+              <input 
+                value={upiId} 
+                onChange={e => setUpiId(e.target.value)} 
+                placeholder="e.g. clinicdoctor@upi or 9876543210@paytm" 
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Custom QR Text / Web Link (Optional)</label>
+              <input 
+                value={qrCodeText} 
+                onChange={e => setQrCodeText(e.target.value)} 
+                placeholder="e.g. https://myclinic.com or review link" 
+              />
+            </div>
+
             <div className="form-group" style={{ gridColumn: '1 / -1' }}>
               <label>Specific Address (For Receipt Header)</label>
               <textarea 
@@ -123,6 +154,19 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate }
                 placeholder="Enter the specific clinic/chamber address for this doctor"
                 rows={2}
               />
+            </div>
+
+            <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', gridColumn: '1 / -1', margin: '0.25rem 0' }}>
+              <input 
+                type="checkbox"
+                id="show-qr-default-checkbox"
+                checked={showQrCodeOnReceipt}
+                onChange={e => setShowQrCodeOnReceipt(e.target.checked)}
+                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+              />
+              <label htmlFor="show-qr-default-checkbox" style={{ margin: 0, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
+                Include QR Code on Printed Receipts by Default for this Doctor
+              </label>
             </div>
             
             <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', gridColumn: '1 / -1', margin: '0.25rem 0' }}>
@@ -180,6 +224,8 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate }
                 <div className="doctor-badges">
                   <span className="badge">{doctor.specialization}</span>
                   {doctor.qualifications && <span className="badge secondary">{doctor.qualifications}</span>}
+                  {doctor.upiId && <span className="badge" style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>UPI: {doctor.upiId}</span>}
+                  {doctor.showQrCodeOnReceipt && <span className="badge" style={{ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' }}>QR Enabled</span>}
                   {doctor.printHeader === false && (
                     <span className="badge" style={{ background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0' }}>
                       Pre-Printed Pad ({doctor.customTopMargin || 0}mm margin)

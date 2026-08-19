@@ -36,7 +36,10 @@ export const database = {
         phone TEXT,
         address TEXT,
         printHeader INTEGER DEFAULT 1,
-        customTopMargin INTEGER DEFAULT 0
+        customTopMargin INTEGER DEFAULT 0,
+        upiId TEXT,
+        qrCodeText TEXT,
+        showQrCodeOnReceipt INTEGER DEFAULT 0
       );
 
       CREATE TABLE IF NOT EXISTS services (
@@ -57,7 +60,9 @@ export const database = {
         doctorName TEXT,
         items TEXT, -- JSON string
         total REAL,
-        paymentMethod TEXT
+        paymentMethod TEXT,
+        showQrCode INTEGER DEFAULT 0,
+        qrCodeText TEXT
       );
 
       CREATE TABLE IF NOT EXISTS prescriptions (
@@ -107,6 +112,21 @@ export const database = {
     } catch (e) {}
     try {
       db.exec('ALTER TABLE doctors ADD COLUMN customTopMargin INTEGER DEFAULT 0;');
+    } catch (e) {}
+    try {
+      db.exec('ALTER TABLE doctors ADD COLUMN upiId TEXT;');
+    } catch (e) {}
+    try {
+      db.exec('ALTER TABLE doctors ADD COLUMN qrCodeText TEXT;');
+    } catch (e) {}
+    try {
+      db.exec('ALTER TABLE doctors ADD COLUMN showQrCodeOnReceipt INTEGER DEFAULT 0;');
+    } catch (e) {}
+    try {
+      db.exec('ALTER TABLE receipts ADD COLUMN showQrCode INTEGER DEFAULT 0;');
+    } catch (e) {}
+    try {
+      db.exec('ALTER TABLE receipts ADD COLUMN qrCodeText TEXT;');
     } catch (e) {}
 
     // Appointments Migrations
@@ -159,17 +179,23 @@ export const database = {
     return docs.map(d => ({
       ...d,
       printHeader: d.printHeader === 1 || d.printHeader === null || d.printHeader === undefined ? true : false,
+      showQrCodeOnReceipt: d.showQrCodeOnReceipt === 1 ? true : false,
+      upiId: d.upiId || '',
+      qrCodeText: d.qrCodeText || '',
     }));
   },
   saveDoctor: (doctor: any) => {
     const stmt = db.prepare(`
-      INSERT OR REPLACE INTO doctors (id, name, specialization, qualifications, phone, address, printHeader, customTopMargin)
-      VALUES (@id, @name, @specialization, @qualifications, @phone, @address, @printHeader, @customTopMargin)
+      INSERT OR REPLACE INTO doctors (id, name, specialization, qualifications, phone, address, printHeader, customTopMargin, upiId, qrCodeText, showQrCodeOnReceipt)
+      VALUES (@id, @name, @specialization, @qualifications, @phone, @address, @printHeader, @customTopMargin, @upiId, @qrCodeText, @showQrCodeOnReceipt)
     `);
     return stmt.run({
       ...doctor,
       printHeader: doctor.printHeader !== false ? 1 : 0,
-      customTopMargin: doctor.customTopMargin || 0
+      customTopMargin: doctor.customTopMargin || 0,
+      upiId: doctor.upiId || '',
+      qrCodeText: doctor.qrCodeText || '',
+      showQrCodeOnReceipt: doctor.showQrCodeOnReceipt ? 1 : 0
     });
   },
   deleteDoctor: (id: string) => db.prepare('DELETE FROM doctors WHERE id = ?').run(id),
@@ -218,12 +244,16 @@ export const database = {
       try {
         return {
           ...r,
+          showQrCode: r.showQrCode === 1 ? true : false,
+          qrCodeText: r.qrCodeText || '',
           items: JSON.parse(r.items || '[]')
         };
       } catch (e) {
         console.error('Failed to parse receipt items:', r.id, e);
         return {
           ...r,
+          showQrCode: r.showQrCode === 1 ? true : false,
+          qrCodeText: r.qrCodeText || '',
           items: []
         };
       }
@@ -253,8 +283,8 @@ export const database = {
       }
     }
     const stmt = db.prepare(`
-      INSERT OR REPLACE INTO receipts (id, receiptNumber, date, patientName, patientAge, patientGender, patientPhone, doctorId, doctorName, items, total, paymentMethod)
-      VALUES (@id, @receiptNumber, @date, @patientName, @patientAge, @patientGender, @patientPhone, @doctorId, @doctorName, @items, @total, @paymentMethod)
+      INSERT OR REPLACE INTO receipts (id, receiptNumber, date, patientName, patientAge, patientGender, patientPhone, doctorId, doctorName, items, total, paymentMethod, showQrCode, qrCodeText)
+      VALUES (@id, @receiptNumber, @date, @patientName, @patientAge, @patientGender, @patientPhone, @doctorId, @doctorName, @items, @total, @paymentMethod, @showQrCode, @qrCodeText)
     `);
     return stmt.run({
       patientAge: '',
@@ -265,7 +295,9 @@ export const database = {
       paymentMethod: 'CASH',
       ...receipt,
       patientName: String(receipt.patientName).substring(0, 500),
-      items: JSON.stringify(receipt.items || [])
+      items: JSON.stringify(receipt.items || []),
+      showQrCode: receipt.showQrCode ? 1 : 0,
+      qrCodeText: receipt.qrCodeText || ''
     });
   },
   updateReceipt: (receipt: any) => {
@@ -288,7 +320,9 @@ export const database = {
         doctorName = @doctorName,
         items = @items,
         total = @total,
-        paymentMethod = @paymentMethod
+        paymentMethod = @paymentMethod,
+        showQrCode = @showQrCode,
+        qrCodeText = @qrCodeText
       WHERE id = @id
     `);
     return stmt.run({
@@ -299,7 +333,9 @@ export const database = {
       doctorName: '',
       paymentMethod: 'CASH',
       ...receipt,
-      items: JSON.stringify(receipt.items || [])
+      items: JSON.stringify(receipt.items || []),
+      showQrCode: receipt.showQrCode ? 1 : 0,
+      qrCodeText: receipt.qrCodeText || ''
     });
   },
   deleteReceipt: (id: string) => db.prepare('DELETE FROM receipts WHERE id = ?').run(id),

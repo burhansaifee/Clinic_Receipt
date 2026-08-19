@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { storage, cleanAgeString, type Doctor, type Receipt, type ReceiptItem, type Service } from '../lib/storage';
-import { Plus, Trash2, Save, User, CreditCard, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Save, User, CreditCard, AlertCircle, QrCode } from 'lucide-react';
 import { format } from 'date-fns';
+import QRCodeImage from './ui/QRCodeImage';
 
 interface ReceiptFormProps {
   doctors: Doctor[];
@@ -54,6 +55,12 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, onPrintReque
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'ONLINE' | 'FREE'>(initialData?.paymentMethod || 'CASH');
   const [appointmentDate, setAppointmentDate] = useState(initialData?.date || format(new Date(), 'yyyy-MM-dd'));
   const [saveError, setSaveError] = useState<string | null>(null);
+  
+  // QR Code states
+  const [showQrCode, setShowQrCode] = useState<boolean>(initialData?.showQrCode ?? false);
+  const [qrMode, setQrMode] = useState<'UPI' | 'CUSTOM'>('UPI');
+  const [customQrInput, setCustomQrInput] = useState<string>(initialData?.qrCodeText || '');
+
   const shouldFocusLastItem = useRef(false);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -79,6 +86,9 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, onPrintReque
       if (!initialData || !initialData.id || !initialData.receiptNumber) {
         if (doctors.length > 0 && !selectedDoctorId) {
           setSelectedDoctorId(doctors[0].id);
+          if (doctors[0].showQrCodeOnReceipt !== undefined) {
+            setShowQrCode(doctors[0].showQrCodeOnReceipt);
+          }
         }
       } else {
         setReceiptNumber(initialData.receiptNumber);
@@ -88,6 +98,15 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, onPrintReque
     init();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialData]);
+
+  useEffect(() => {
+    if (selectedDoctorId && (!initialData || !initialData.id)) {
+      const doc = doctors.find(d => d.id === selectedDoctorId);
+      if (doc && doc.showQrCodeOnReceipt !== undefined) {
+        setShowQrCode(doc.showQrCodeOnReceipt);
+      }
+    }
+  }, [selectedDoctorId, doctors, initialData]);
 
   useEffect(() => {
     const updateReceiptNum = async () => {
@@ -170,6 +189,21 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, onPrintReque
 
   const total = paymentMethod === 'FREE' ? 0 : items.reduce((sum, item) => sum + Number(item.amount), 0);
 
+  const selectedDoctor = doctors.find(d => d.id === selectedDoctorId);
+
+  const getEffectiveQrText = () => {
+    if (qrMode === 'UPI') {
+      const upi = selectedDoctor?.upiId || customQrInput;
+      if (upi) {
+        const doctorName = selectedDoctor?.name || 'Clinic';
+        return `upi://pay?pa=${encodeURIComponent(upi)}&pn=${encodeURIComponent(doctorName)}&am=${total.toFixed(2)}&cu=INR`;
+      }
+    }
+    return customQrInput || selectedDoctor?.qrCodeText || selectedDoctor?.upiId || '';
+  };
+
+  const effectiveQrText = getEffectiveQrText();
+
   const handleSave = async (e: React.FormEvent, shouldPrint: boolean = true) => {
     e.preventDefault();
     
@@ -198,7 +232,9 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, onPrintReque
       items,
       total,
       paymentMethod,
-      appointmentId: initialData?.appointmentId
+      appointmentId: initialData?.appointmentId,
+      showQrCode,
+      qrCodeText: showQrCode ? effectiveQrText : undefined,
     };
 
     try {
@@ -332,6 +368,111 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, onPrintReque
               </div>
             </div>
           </div>
+        </div>
+
+        {/* QR Code Options & Preview Card */}
+        <div className="card qr-code-card">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showQrCode ? '0.85rem' : 0 }}>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0, fontSize: '1rem', color: 'var(--text-main)' }}>
+              <QrCode size={18} color="var(--primary)" /> Receipt QR Code
+            </h3>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-main)' }}>
+              <input 
+                type="checkbox" 
+                checked={showQrCode} 
+                onChange={e => setShowQrCode(e.target.checked)} 
+                style={{ width: '16px', height: '16px', accentColor: 'var(--primary)' }}
+              />
+              Show QR Code on Receipt
+            </label>
+          </div>
+
+          {showQrCode && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '1rem', alignItems: 'center', background: '#f8fafc', padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button 
+                    type="button" 
+                    className={`btn-subtle ${qrMode === 'UPI' ? 'active' : ''}`}
+                    onClick={() => setQrMode('UPI')}
+                    style={{
+                      padding: '0.35rem 0.75rem',
+                      fontSize: '0.8rem',
+                      borderRadius: '6px',
+                      border: '1px solid',
+                      borderColor: qrMode === 'UPI' ? 'var(--primary)' : '#cbd5e1',
+                      background: qrMode === 'UPI' ? 'var(--primary)' : '#ffffff',
+                      color: qrMode === 'UPI' ? '#ffffff' : '#334155',
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Dynamic UPI Payment
+                  </button>
+                  <button 
+                    type="button" 
+                    className={`btn-subtle ${qrMode === 'CUSTOM' ? 'active' : ''}`}
+                    onClick={() => setQrMode('CUSTOM')}
+                    style={{
+                      padding: '0.35rem 0.75rem',
+                      fontSize: '0.8rem',
+                      borderRadius: '6px',
+                      border: '1px solid',
+                      borderColor: qrMode === 'CUSTOM' ? 'var(--primary)' : '#cbd5e1',
+                      background: qrMode === 'CUSTOM' ? 'var(--primary)' : '#ffffff',
+                      color: qrMode === 'CUSTOM' ? '#ffffff' : '#334155',
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Custom Text / Link
+                  </button>
+                </div>
+
+                {qrMode === 'UPI' ? (
+                  <div>
+                    <p style={{ fontSize: '0.8rem', color: '#475569', margin: '0 0 0.35rem 0' }}>
+                      {selectedDoctor?.upiId ? (
+                        <>Doctor UPI: <strong>{selectedDoctor.upiId}</strong> (Bill Total: ₹{total.toFixed(2)})</>
+                      ) : (
+                        <span style={{ color: '#d97706', fontWeight: 500 }}>No UPI ID set for {selectedDoctor?.name || 'doctor'}. Enter VPA below or configure in Doctor Management.</span>
+                      )}
+                    </p>
+                    {(!selectedDoctor?.upiId || customQrInput) && (
+                      <input 
+                        type="text" 
+                        placeholder="Enter UPI VPA (e.g. 9876543210@upi)" 
+                        value={customQrInput} 
+                        onChange={e => setCustomQrInput(e.target.value)} 
+                        style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
+                      />
+                    )}
+                  </div>
+                ) : (
+                  <input 
+                    type="text" 
+                    placeholder="Enter URL or payload for QR Code (e.g. https://clinic.com)" 
+                    value={customQrInput} 
+                    onChange={e => setCustomQrInput(e.target.value)} 
+                    style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
+                  />
+                )}
+              </div>
+
+              <div style={{ textAlign: 'center', background: 'white', padding: '0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                {effectiveQrText ? (
+                  <>
+                    <QRCodeImage text={effectiveQrText} size={75} />
+                    <span style={{ display: 'block', fontSize: '0.65rem', color: '#64748b', marginTop: '2px', fontWeight: 600 }}>Live QR Preview</span>
+                  </>
+                ) : (
+                  <div style={{ width: '75px', height: '75px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '0.7rem', textAlign: 'center', border: '1px dashed #cbd5e1' }}>
+                    Enter UPI or QR Text
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="card items-card">

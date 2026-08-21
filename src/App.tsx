@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
+import { Menu } from 'lucide-react';
 
-import { storage, type Doctor, type Receipt as ReceiptType, type Service, type Prescription } from './lib/storage';
+import { storage, type Doctor, type Receipt as ReceiptType, type Service, type Prescription, type ReceiptPaperType, type PrescriptionPaperType } from './lib/storage';
 import './index.css';
 import './App.css';
 
@@ -42,6 +43,7 @@ const MainApp: React.FC = () => {
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [pendingAppointmentsCount, setPendingAppointmentsCount] = useState(0);
   const [isLoadingData, setIsLoadingData] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // ── Auth state ────────────────────────────────────────────────────────────
   const [activationStatus, setActivationStatus] = useState<{
@@ -60,6 +62,8 @@ const MainApp: React.FC = () => {
   const [editingReceipt, setEditingReceipt] = useState<ReceiptType | null>(null);
   const [receiptsToPrint, setReceiptsToPrint] = useState<ReceiptType[]>([]);
   const [activePrintPrescription, setActivePrintPrescription] = useState<Prescription | null>(null);
+  const [receiptPaperType, setReceiptPaperType] = useState<ReceiptPaperType>('A5');
+  const [prescriptionPaperType, setPrescriptionPaperType] = useState<PrescriptionPaperType>('A4');
 
   // ── Settings state ────────────────────────────────────────────────────────
   const [machineId, setMachineId] = useState('');
@@ -74,18 +78,21 @@ const MainApp: React.FC = () => {
   const refreshData = React.useCallback(async () => {
     setIsLoadingData(true);
     try {
-      const [d, s, metrics, p, apts] = await Promise.all([
+      const [d, s, metrics, p, apts, paperSettings] = await Promise.all([
         storage.getDoctors(),
         storage.getServices(),
         storage.getDashboardMetrics(),
         storage.getPrescriptions(),
         storage.getAppointments(),
+        storage.getPrintPaperSettings()
       ]);
       setDoctors(d);
       setServices(s);
       setDashboardMetrics(metrics);
       setPrescriptions(p);
       setPendingAppointmentsCount(apts.filter((a: any) => a.status === 'PENDING').length);
+      setReceiptPaperType(paperSettings.receiptPaper);
+      setPrescriptionPaperType(paperSettings.prescriptionPaper);
     } finally {
       setIsLoadingData(false);
     }
@@ -224,7 +231,7 @@ const MainApp: React.FC = () => {
     ip: string,
     port: number
   ) => {
-    if (await confirm('MedFlow Clinic needs to relaunch to apply these network connection settings. Proceed?')) {
+    if (await confirm('Buvora needs to relaunch to apply these network connection settings. Proceed?')) {
         window.connection.saveSettings({ mode, hostIp: ip, hostPort: port }).catch((err: any) => {
         toast(`Failed to save settings: ${err.message}`, { type: 'error' });
       });
@@ -238,7 +245,7 @@ const MainApp: React.FC = () => {
         toast('Data imported successfully! The app will now reload.', { type: 'success' });
         setTimeout(() => window.location.reload(), 1500);
       } else {
-        toast('Error: This file is not a valid MedFlow backup.', { type: 'error' });
+        toast('Error: This file is not a valid Buvora backup.', { type: 'error' });
       }
     };
     reader.readAsText(file);
@@ -253,7 +260,7 @@ const MainApp: React.FC = () => {
 
   // ── Render gates ──────────────────────────────────────────────────────────
   if (activationStatus === null) {
-    return <div className="loading-screen">Loading MedFlow Clinic...</div>;
+    return <div className="loading-screen">Loading Buvora...</div>;
   }
 
   if (activationStatus.status !== 'ACTIVATED') {
@@ -297,14 +304,28 @@ const MainApp: React.FC = () => {
           Loading data...
         </div>
       )}
+      <div className="mobile-header no-print">
+        <div className="logo" style={{ color: 'white' }}>
+          <svg className="logo-svg" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="32" y="32" width="448" height="448" rx="110" fill="white" />
+            <path d="M256 128 V384 M128 256 H384" stroke="#0ea5e9" strokeWidth="64" strokeLinecap="round" />
+          </svg>
+          <span>Buvora</span>
+        </div>
+        <button className="btn-mobile-menu" onClick={() => setIsMobileMenuOpen(true)}>
+          <Menu size={24} />
+        </button>
+      </div>
       <Sidebar
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={(tab) => { setActiveTab(tab); setIsMobileMenuOpen(false); }}
         currentUser={currentUser}
         isOnline={isOnline}
         pendingAppointmentsCount={pendingAppointmentsCount}
         onLogout={handleLogout}
-        onNewReceipt={() => { setEditingReceipt(null); setActiveTab('new-receipt'); }}
+        onNewReceipt={() => { setEditingReceipt(null); setActiveTab('new-receipt'); setIsMobileMenuOpen(false); }}
+        isMobileMenuOpen={isMobileMenuOpen}
+        closeMenu={() => setIsMobileMenuOpen(false)}
       />
 
       <main className="main-content">
@@ -423,6 +444,10 @@ const MainApp: React.FC = () => {
               knownUsers={knownUsers}
               setKnownUsers={setKnownUsers}
               doctors={doctors}
+              receiptPaperType={receiptPaperType}
+              setReceiptPaperType={setReceiptPaperType}
+              prescriptionPaperType={prescriptionPaperType}
+              setPrescriptionPaperType={setPrescriptionPaperType}
               onExportData={() => storage.exportData()}
               onImportData={handleImportData}
               onExportCsv={() => storage.exportToExcel()}
@@ -437,6 +462,8 @@ const MainApp: React.FC = () => {
         receiptsToPrint={receiptsToPrint}
         activePrintPrescription={activePrintPrescription}
         doctors={doctors}
+        receiptPaperType={receiptPaperType}
+        prescriptionPaperType={prescriptionPaperType}
       />
     </div>
   );

@@ -62,7 +62,7 @@ const UserConnectionScreen: React.FC<UserConnectionScreenProps> = ({ onConnected
       alert('Please enter a Host IP Address');
       return;
     }
-    if (confirm('MedFlow Clinic needs to relaunch to apply these connection settings. Proceed?')) {
+    if (confirm('Buvora needs to relaunch to apply these connection settings. Proceed?')) {
       try {
             await window.connection.saveSettings({
           mode: workstationMode,
@@ -398,7 +398,7 @@ const UserConnectionScreen: React.FC<UserConnectionScreenProps> = ({ onConnected
                 <Server size={28} className="logo-icon animate-pulse-slow" />
               </div>
               <h1>
-                {passwordMode === 'none' && 'MedFlow Portal'}
+                {passwordMode === 'none' && 'Buvora Portal'}
                 {passwordMode === 'input' && 'Password Protected'}
                 {passwordMode === 'setup' && 'First-Time Setup'}
               </h1>

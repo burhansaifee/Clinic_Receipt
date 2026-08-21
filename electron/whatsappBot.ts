@@ -146,7 +146,7 @@ export const whatsappBot = {
       socket = makeWASocket({
         auth: authState,
         printQRInTerminal: false,
-        browser: ['MedFlow Clinic', 'Chrome', '1.0.0'],
+        browser: ['Buvora', 'Chrome', '1.0.0'],
       });
 
       socket.ev.on('creds.update', saveCreds);
@@ -376,7 +376,7 @@ async function handleIncomingBookingFlow(socket: any, jid: string, phone: string
 
   if (!doctors || doctors.length === 0) {
     await socket.sendMessage(jid, {
-      text: ' *MedFlow Clinic*\n\nThank you for reaching out! Our clinic directory is currently being updated. Please call our reception directly.',
+      text: ' *Buvora*\n\nThank you for reaching out! Our clinic directory is currently being updated. Please call our reception directly.',
     });
     return;
   }
@@ -396,7 +396,7 @@ async function handleIncomingBookingFlow(socket: any, jid: string, phone: string
         .join('\n');
 
       const greetingMsg =
-        ` *Welcome to MedFlow Clinic Appointment Booking!*\n\n` +
+        ` *Welcome to Buvora Appointment Booking!*\n\n` +
         `Please select a doctor by replying with their number:\n\n` +
         `${docListStr}\n\n` +
         `_Reply with the number (e.g. 1 or 2)_`;
@@ -567,7 +567,7 @@ async function handleIncomingBookingFlow(socket: any, jid: string, phone: string
         `• *Date:* ${userState.selectedDateFormatted || userState.selectedDate}\n` +
         `• *Time Slot:* ${userState.selectedTimeSlot}\n` +
         `• *Status:* ⏳ Pending Reception Approval\n\n` +
-        `Our clinic reception will review and confirm your slot shortly. Thank you for choosing MedFlow Clinic!`;
+        `Our clinic reception will review and confirm your slot shortly. Thank you for choosing Buvora!`;
 
       await socket.sendMessage(jid, { text: confirmationMsg });
       break;

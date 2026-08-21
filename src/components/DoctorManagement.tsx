@@ -197,7 +197,7 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate }
                     min="0"
                   />
                   <span style={{ fontSize: '0.775rem', color: '#64748b' }}>
-                    Leave this much blank space at the top of the print page so MedFlow text does not overlap your pad's pre-printed letterhead.
+                    Leave this much blank space at the top of the print page so Buvora text does not overlap your pad's pre-printed letterhead.
                   </span>
                 </div>
               </div>

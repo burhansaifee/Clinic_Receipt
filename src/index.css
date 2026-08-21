@@ -61,26 +61,6 @@ input:focus, select:focus {
 
 /* Print Styles */
 @media print {
-  @page {
-    margin: 0.8cm;
-  }
-  
-  @page receipt-page {
-    size: A5 portrait;
-  }
-
-  @page prescription-page {
-    size: A4 portrait;
-  }
-
-  #receipt-print-template {
-    page: receipt-page;
-  }
-
-  #prescription-print-template {
-    page: prescription-page;
-  }
-  
   html, body, #root, .app-container {
     display: block !important;
     width: 100% !important;

@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   LayoutDashboard, Users, Receipt, PlusCircle, Settings,
-  Calendar, FileText, Briefcase, LogOut, KeyRound
+  Calendar, FileText, Briefcase, LogOut, KeyRound, X
 } from 'lucide-react';
 
 export type Tab =
@@ -22,6 +22,8 @@ interface SidebarProps {
   pendingAppointmentsCount: number;
   onLogout: () => void;
   onNewReceipt: () => void;
+  isMobileMenuOpen?: boolean;
+  closeMenu?: () => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -32,9 +34,13 @@ const Sidebar: React.FC<SidebarProps> = ({
   pendingAppointmentsCount,
   onLogout,
   onNewReceipt,
+  isMobileMenuOpen,
+  closeMenu,
 }) => {
   return (
-    <aside className="sidebar no-print">
+    <>
+      {isMobileMenuOpen && <div className="sidebar-overlay" onClick={closeMenu}></div>}
+      <aside className={`sidebar no-print ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
       <div className="sidebar-header">
         <div className="logo">
           <svg className="logo-svg" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -47,8 +53,13 @@ const Sidebar: React.FC<SidebarProps> = ({
             <rect x="32" y="32" width="448" height="448" rx="110" fill="url(#logoGrad)" />
             <path d="M256 128 V384 M128 256 H384" stroke="#ffffff" strokeWidth="64" strokeLinecap="round" />
           </svg>
-          <span>MedFlow</span>
+          <span>Buvora</span>
         </div>
+        {isMobileMenuOpen && (
+          <button className="btn-close-menu" onClick={closeMenu}>
+            <X size={24} />
+          </button>
+        )}
       </div>
 
       <nav className="nav-menu">
@@ -172,6 +183,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
     </aside>
+    </>
   );
 };
 

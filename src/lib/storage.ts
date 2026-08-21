@@ -86,13 +86,23 @@ export interface Appointment {
   createdAt: string;
 }
 
+export type ReceiptPaperType = 'A5' | 'A4' | 'A6' | 'Letter' | 'Thermal80' | 'Thermal58';
+export type PrescriptionPaperType = 'A4' | 'A5' | 'Letter' | 'A6';
+
+export interface PrintPaperSettings {
+  receiptPaper: ReceiptPaperType;
+  prescriptionPaper: PrescriptionPaperType;
+}
+
 const STORAGE_KEYS = {
   DOCTORS: 'clinic_doctors',
   SERVICES: 'clinic_services',
   RECEIPTS: 'clinic_receipts',
   LAST_RECEIPT_NUM: 'clinic_last_receipt_num',
   LAST_FREE_RECEIPT_NUM: 'clinic_last_free_receipt_num',
-  SQLITE_MIGRATED: 'clinic_sqlite_migrated'
+  SQLITE_MIGRATED: 'clinic_sqlite_migrated',
+  RECEIPT_PAPER: 'clinic_receipt_paper_type',
+  PRESCRIPTION_PAPER: 'clinic_prescription_paper_type'
 };
 
 export const storage = {
@@ -352,6 +362,55 @@ export const storage = {
   deleteAppointment: async (id: string) => {
     if (window.database?.deleteAppointment) {
         await window.database.deleteAppointment(id);
+    }
+  },
+
+  getPrintPaperSettings: async (): Promise<PrintPaperSettings> => {
+    let receiptPaper: ReceiptPaperType = (localStorage.getItem(STORAGE_KEYS.RECEIPT_PAPER) as ReceiptPaperType) || 'A5';
+    let prescriptionPaper: PrescriptionPaperType = (localStorage.getItem(STORAGE_KEYS.PRESCRIPTION_PAPER) as PrescriptionPaperType) || 'A4';
+
+    if (window.database?.getMetadata) {
+      try {
+        const [rMeta, pMeta] = await Promise.all([
+          window.database.getMetadata('receipt_paper_type'),
+          window.database.getMetadata('prescription_paper_type')
+        ]);
+        if (rMeta?.value) {
+          receiptPaper = rMeta.value as ReceiptPaperType;
+          localStorage.setItem(STORAGE_KEYS.RECEIPT_PAPER, receiptPaper);
+        }
+        if (pMeta?.value) {
+          prescriptionPaper = pMeta.value as PrescriptionPaperType;
+          localStorage.setItem(STORAGE_KEYS.PRESCRIPTION_PAPER, prescriptionPaper);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch print paper metadata:', err);
+      }
+    }
+
+    return { receiptPaper, prescriptionPaper };
+  },
+
+  savePrintPaperSettings: async (settings: Partial<PrintPaperSettings>): Promise<void> => {
+    if (settings.receiptPaper) {
+      localStorage.setItem(STORAGE_KEYS.RECEIPT_PAPER, settings.receiptPaper);
+      if (window.database?.setMetadata) {
+        try {
+          await window.database.setMetadata('receipt_paper_type', settings.receiptPaper);
+        } catch (err) {
+          console.warn('Failed to save receipt paper metadata:', err);
+        }
+      }
+    }
+    if (settings.prescriptionPaper) {
+      localStorage.setItem(STORAGE_KEYS.PRESCRIPTION_PAPER, settings.prescriptionPaper);
+      if (window.database?.setMetadata) {
+        try {
+          await window.database.setMetadata('prescription_paper_type', settings.prescriptionPaper);
+        } catch (err) {
+          console.warn('Failed to save prescription paper metadata:', err);
+        }
+      }
     }
   }
 };

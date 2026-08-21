@@ -14,7 +14,7 @@ const hash = crypto.createHash('sha256').update(machineId + dateStr + SECRET_SAL
 const key = `${dateStr}-${hash.substring(0, 4)}-${hash.substring(4, 8)}-${hash.substring(8, 12)}-${hash.substring(12, 16)}`;
 
 console.log('\n===========================================');
-console.log('            MEDFLOW LICENSE GENERATOR      ');
+console.log('            BUVORA LICENSE GENERATOR       ');
 console.log('===========================================');
 console.log(' Machine ID  :', machineId);
 console.log(' Expiry Date :', `${dateStr.substring(0, 4)}-${dateStr.substring(4, 6)}-${dateStr.substring(6, 8)}`);

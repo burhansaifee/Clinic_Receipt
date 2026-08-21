@@ -121,6 +121,17 @@ function startHostServer() {
   // Simple rate limiter: max 60 requests per minute per IP
   const rpcRateMap = new Map<string, { count: number; resetAt: number }>();
 
+  // Periodically clean up expired rate limiter entries every 5 minutes to prevent memory leaks
+  const rateLimitCleanupInterval = setInterval(() => {
+    const now = Date.now();
+    for (const [ip, entry] of rpcRateMap.entries()) {
+      if (entry.resetAt <= now) {
+        rpcRateMap.delete(ip);
+      }
+    }
+  }, 5 * 60 * 1000);
+  rateLimitCleanupInterval.unref();
+
   hostServer = http.createServer((req, res) => {
     // Restrict CORS to local network origins only (no wildcard)
     const origin = req.headers.origin;
@@ -242,6 +253,38 @@ function startHostServer() {
             const [schedule] = args;
             store.set('whatsapp_schedule', schedule);
             result = { success: true };
+          } else if (method === 'validate-client-license') {
+            const [machineId, fullKey] = args;
+            if (!fullKey) {
+              result = { status: 'NOT_ACTIVATED' };
+            } else {
+              const cleanKey = fullKey.trim().toUpperCase();
+              const parts = cleanKey.split('-');
+              const dateStr = parts[0];
+              
+              if (!dateStr || dateStr.length !== 8) {
+                result = { status: 'INVALID' };
+              } else {
+                const expectedKey = generateDateBoundKey(machineId, dateStr);
+                if (cleanKey !== expectedKey) {
+                  result = { status: 'INVALID' };
+                } else {
+                  const expiryDate = new Date(
+                    parseInt(dateStr.substring(0, 4)),
+                    parseInt(dateStr.substring(4, 6)) - 1,
+                    parseInt(dateStr.substring(6, 8)),
+                    23, 59, 59
+                  );
+                  const now = new Date();
+                  if (now > expiryDate) {
+                    result = { status: 'EXPIRED', expiryDate: expiryDate.toLocaleDateString() };
+                  } else {
+                    const daysLeft = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                    result = { status: 'ACTIVATED', daysLeft, expiryDate: expiryDate.toLocaleDateString() };
+                  }
+                }
+              }
+            }
           } else if (method === 'ping') {
             result = { pong: true };
           } else {
@@ -256,6 +299,60 @@ function startHostServer() {
           res.end(JSON.stringify({ error: err.message }));
         }
       });
+    } else if (req.method === 'GET' && !req.url?.startsWith('/api/')) {
+      try {
+        const fs = require('node:fs');
+        const urlPath = req.url === '/' || !req.url ? '/index.html' : req.url;
+        const cleanUrl = urlPath.split('?')[0];
+        
+        const myDirname = path.dirname(fileURLToPath(import.meta.url));
+        const staticBasePath = app.isPackaged 
+          ? path.join(process.resourcesPath, 'app.asar', 'dist')
+          : path.join(myDirname, '..', 'dist');
+
+        const targetPath = path.resolve(staticBasePath, '.' + (cleanUrl.startsWith('/') ? cleanUrl : '/' + cleanUrl));
+        const rel = path.relative(staticBasePath, targetPath);
+        if (rel.startsWith('..') || path.isAbsolute(rel)) {
+          res.writeHead(403);
+          res.end('Forbidden');
+          return;
+        }
+
+        let filePath = targetPath;
+
+        if (!fs.existsSync(filePath) && !path.extname(cleanUrl)) {
+          filePath = path.join(staticBasePath, 'index.html');
+        }
+
+        if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+          const extname = path.extname(filePath).toLowerCase();
+          const mimeTypes: Record<string, string> = {
+            '.html': 'text/html',
+            '.js': 'text/javascript',
+            '.mjs': 'text/javascript',
+            '.css': 'text/css',
+            '.json': 'application/json',
+            '.png': 'image/png',
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.svg': 'image/svg+xml',
+            '.ico': 'image/x-icon',
+            '.woff': 'font/woff',
+            '.woff2': 'font/woff2'
+          };
+          const contentType = mimeTypes[extname] || 'application/octet-stream';
+          const content = fs.readFileSync(filePath);
+          res.writeHead(200, { 'Content-Type': contentType });
+          res.end(content);
+        } else {
+          res.writeHead(404);
+          res.end('Not Found');
+        }
+      } catch (err: any) {
+        console.error('Static server error:', err);
+        res.writeHead(500);
+        res.end('Internal Server Error');
+      }
     } else {
       res.writeHead(404);
       res.end('Not Found');
@@ -263,7 +360,7 @@ function startHostServer() {
   });
 
   hostServer.listen(port, '0.0.0.0', () => {
-    console.log(`MedFlow Host Server listening on 0.0.0.0:${port}`);
+    console.log(`Buvora Host Server listening on 0.0.0.0:${port}`);
   });
 }
 
@@ -824,7 +921,7 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1280,
     height: 900,
-    title: 'MedFlow Clinic Management',
+    title: 'Buvora Management',
     icon: path.join(process.env.VITE_PUBLIC || RENDERER_DIST, 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),

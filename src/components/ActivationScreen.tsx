@@ -57,7 +57,7 @@ const ActivationScreen: React.FC<ActivationScreenProps> = ({ onActivated, status
     if (status === 'EXPIRED') return `Your license expired on ${expiryDate}. Please renew to continue.`;
     if (status === 'TAMPERED') return 'Date manipulation detected. Please correct your system clock.';
     if (status === 'INVALID') return 'The provided license key is invalid or corrupted.';
-    return 'Please activate your copy of MedFlow Clinic to continue.';
+    return 'Please activate your copy of Buvora to continue.';
   };
 
   return (
@@ -127,7 +127,7 @@ const ActivationScreen: React.FC<ActivationScreenProps> = ({ onActivated, status
               <Smartphone size={14} />
               <span>Offline activation - No internet required</span>
             </div>
-            <p className="copyright-tag">© 2026 MedFlow Clinic • Developed by Badshah Computers</p>
+            <p className="copyright-tag">© 2026 Buvora • Developed by Badshah Computers</p>
           </div>
         </div>
       </div>

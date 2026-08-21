@@ -27,11 +27,6 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [displayLimit, setDisplayLimit] = useState(INITIAL_LIMIT);
 
-  // Reset pagination limit whenever filters change
-  useEffect(() => {
-    setDisplayLimit(INITIAL_LIMIT);
-  }, [startDate, endDate, searchQuery]);
-
   // Fetch receipts from backend with filters and pagination
   useEffect(() => {
     let active = true;
@@ -139,7 +134,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
           {(startDate || endDate || searchQuery) && (
             <button
               className="btn-reset"
-              onClick={() => { setStartDate(''); setEndDate(''); setSearchQuery(''); }}
+              onClick={() => { setStartDate(''); setEndDate(''); setSearchQuery(''); setDisplayLimit(INITIAL_LIMIT); }}
             >
               Show All Records
             </button>
@@ -153,7 +148,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
                 type="text"
                 placeholder="Search patient, phone, receipt..."
                 value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
+                onChange={e => { setSearchQuery(e.target.value); setDisplayLimit(INITIAL_LIMIT); }}
               />
             </div>
             <div className="filter-input-wrapper date-picker-group">
@@ -161,7 +156,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
               <input
                 type="date"
                 value={startDate}
-                onChange={e => setStartDate(e.target.value)}
+                onChange={e => { setStartDate(e.target.value); setDisplayLimit(INITIAL_LIMIT); }}
                 className="date-input"
               />
             </div>
@@ -170,7 +165,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
               <input
                 type="date"
                 value={endDate}
-                onChange={e => setEndDate(e.target.value)}
+                onChange={e => { setEndDate(e.target.value); setDisplayLimit(INITIAL_LIMIT); }}
                 className="date-input"
               />
             </div>
@@ -192,12 +187,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
         </div>
 
         <div className="summary-grid">
-          <span className="summary-value">₹{
-            localReceipts.reduce((acc, r) => {
-              const rTotal = typeof r.total === 'number' ? r.total : parseFloat(r.total as any) || 0;
-              return acc + (r.paymentMethod !== 'FREE' ? rTotal : 0);
-            }, 0)
-          }</span>
+
           {Object.entries(
             localReceipts.reduce((acc, r) => {
               const name = r.doctorName || 'General';

@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import {
   DownloadCloud, UploadCloud, FileText, MessageSquare, Bot,
-  Server, KeyRound, ShieldCheck, FolderOpen, AlertCircle, Copy, Trash2, CheckCircle
+  Server, KeyRound, ShieldCheck, FolderOpen, AlertCircle, Copy, Trash2, CheckCircle, Printer
 } from 'lucide-react';
-import { type Doctor } from '../../lib/storage';
+import { storage, type Doctor, type ReceiptPaperType, type PrescriptionPaperType } from '../../lib/storage';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
 
@@ -31,6 +31,10 @@ interface SettingsTabProps {
   knownUsers: { id: string; role: string; doctorId?: string }[];
   setKnownUsers: (users: { id: string; role: string; doctorId?: string }[]) => void;
   doctors: Doctor[];
+  receiptPaperType: ReceiptPaperType;
+  setReceiptPaperType: (type: ReceiptPaperType) => void;
+  prescriptionPaperType: PrescriptionPaperType;
+  setPrescriptionPaperType: (type: PrescriptionPaperType) => void;
   onExportData: () => void;
   onImportData: (file: File) => void;
   onExportCsv: () => void;
@@ -55,6 +59,10 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
   knownUsers,
   setKnownUsers,
   doctors,
+  receiptPaperType,
+  setReceiptPaperType,
+  prescriptionPaperType,
+  setPrescriptionPaperType,
   onExportData,
   onImportData,
   onExportCsv,
@@ -141,6 +149,18 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
     toast('Network Secret Copied!', { type: 'success' });
   };
 
+  const handleReceiptPaperChange = async (type: ReceiptPaperType) => {
+    setReceiptPaperType(type);
+    await storage.savePrintPaperSettings({ receiptPaper: type });
+    toast(`Receipt print paper format updated to ${type}`, { type: 'success' });
+  };
+
+  const handlePrescriptionPaperChange = async (type: PrescriptionPaperType) => {
+    setPrescriptionPaperType(type);
+    await storage.savePrintPaperSettings({ prescriptionPaper: type });
+    toast(`Prescription (Rx) paper format updated to ${type}`, { type: 'success' });
+  };
+
   return (
     <div className="control-center">
       {/* Banner */}
@@ -163,21 +183,89 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
         </div>
         <h2 style={{ fontSize: '1.65rem', margin: '0 0 0.4rem 0', fontWeight: 700, fontFamily: 'Outfit, sans-serif', color: 'white' }}>System Control Center</h2>
         <p style={{ margin: 0, fontSize: '0.875rem', color: '#94a3b8', maxWidth: '640px', lineHeight: 1.5 }}>
-          Manage your clinic's database backups, system license, automated WhatsApp booking bot, workstation user profiles, and local network sync.
+          Manage your clinic's database backups, printer formats, system license, automated WhatsApp booking bot, workstation user profiles, and local network sync.
         </p>
       </div>
 
       <div className="control-grid">
-        {/* Data Safety & Reports */}
-        <div className="card control-card" style={{ padding: '1.5rem', gap: '0.85rem' }}>
+        {/* ROW 1 — CARD 1: Printer & Paper Setup */}
+        <div className="card control-card" style={{ padding: '1.6rem', gap: '0.85rem', height: '100%' }}>
           <div className="card-icon-header inline">
-            <div className="header-icon blue" style={{ background: 'linear-gradient(135deg, #0ea5e9, #2563eb)', color: 'white', boxShadow: '0 4px 10px rgba(14,165,233,0.3)' }}><DownloadCloud size={18} /></div>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Data Safety &amp; Reports</h3>
+            <div className="header-icon purple" style={{ background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', color: 'white', boxShadow: '0 4px 10px rgba(139,92,246,0.3)' }}>
+              <Printer size={18} />
+            </div>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>Printer &amp; Paper Setup</h3>
+          </div>
+          <p className="card-description">Select the default print paper format and page layout for patient receipts and doctor prescriptions.</p>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', marginTop: 'auto', paddingTop: '0.5rem' }}>
+            {/* Receipt Paper Selection */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>
+                  RECEIPT PAPER FORMAT
+                </label>
+                <span style={{ fontSize: '0.7rem', color: '#6366f1', background: '#eef2ff', padding: '2px 8px', borderRadius: '4px', fontWeight: 700 }}>
+                  {receiptPaperType === 'Thermal80' ? '80mm Roll' : receiptPaperType === 'Thermal58' ? '58mm Roll' : receiptPaperType}
+                </span>
+              </div>
+              <select
+                value={receiptPaperType}
+                onChange={e => handleReceiptPaperChange(e.target.value as ReceiptPaperType)}
+                className="select-profile-dropdown"
+                style={{ padding: '0.55rem 0.75rem', fontSize: '0.85rem' }}
+              >
+                <option value="A5">A5 (148 × 210 mm) • Standard Half Sheet (Default)</option>
+                <option value="A4">A4 (210 × 297 mm) • Full Sheet Invoice</option>
+                <option value="A6">A6 (105 × 148 mm) • Compact Slip</option>
+                <option value="Letter">US Letter (8.5 × 11 in)</option>
+                <option value="Thermal80">Thermal 80mm (3-inch POS Roll)</option>
+                <option value="Thermal58">Thermal 58mm (2-inch POS Roll)</option>
+              </select>
+            </div>
+
+            {/* Prescription Paper Selection */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>
+                  PRESCRIPTION (Rx) PAPER FORMAT
+                </label>
+                <span style={{ fontSize: '0.7rem', color: '#0ea5e9', background: '#f0f9ff', padding: '2px 8px', borderRadius: '4px', fontWeight: 700 }}>
+                  {prescriptionPaperType}
+                </span>
+              </div>
+              <select
+                value={prescriptionPaperType}
+                onChange={e => handlePrescriptionPaperChange(e.target.value as PrescriptionPaperType)}
+                className="select-profile-dropdown"
+                style={{ padding: '0.55rem 0.75rem', fontSize: '0.85rem' }}
+              >
+                <option value="A4">A4 (210 × 297 mm) • Standard Full Sheet Rx (Default)</option>
+                <option value="A5">A5 (148 × 210 mm) • Doctor Memo / Half Sheet</option>
+                <option value="Letter">US Letter (8.5 × 11 in)</option>
+                <option value="A6">A6 (105 × 148 mm) • Pocket Rx Pad</option>
+              </select>
+            </div>
+
+            <div style={{ background: '#f8fafc', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.55rem 0.75rem', fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <CheckCircle size={14} style={{ color: '#10b981', flexShrink: 0 }} />
+              <span>Print formats apply automatically across all workstations.</span>
+            </div>
+          </div>
+        </div>
+
+        {/* ROW 1 — CARD 2: Data Safety & Reports */}
+        <div className="card control-card" style={{ padding: '1.6rem', gap: '0.85rem', height: '100%' }}>
+          <div className="card-icon-header inline">
+            <div className="header-icon blue" style={{ background: 'linear-gradient(135deg, #0ea5e9, #2563eb)', color: 'white', boxShadow: '0 4px 10px rgba(14,165,233,0.3)' }}>
+              <DownloadCloud size={18} />
+            </div>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>Data Safety &amp; Reports</h3>
           </div>
           <p className="card-description">Export SQLite database backups, import backup files, view raw data folders, or download CSV reports.</p>
 
-          <div className="card-actions-row" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.5rem', marginTop: 'auto', paddingTop: '0.5rem' }}>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div className="card-actions-row" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.6rem', marginTop: 'auto', paddingTop: '0.5rem' }}>
+            <div style={{ display: 'flex', gap: '0.6rem' }}>
               <button className="btn-primary-sm" style={{ flex: 1, padding: '0.65rem 0.75rem' }} onClick={onExportData}>
                 <DownloadCloud size={15} /> Export DB
               </button>
@@ -185,7 +273,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                 <UploadCloud size={15} /> Import DB
               </button>
             </div>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', gap: '0.6rem' }}>
               <button
                 className="btn-ghost-sm"
                 style={{ flex: 1, border: '1px solid var(--border)', padding: '0.65rem 0.75rem', borderRadius: '8px', color: 'var(--text-main)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontWeight: 600 }}
@@ -211,77 +299,18 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
             onChange={e => {
               const file = e.target.files?.[0];
               if (file) onImportData(file);
-              // reset input so same file can be re-imported
               e.target.value = '';
             }}
           />
         </div>
 
-        {/* WhatsApp Bot */}
-        <div className="card control-card" style={{ padding: '1.5rem', gap: '0.85rem' }}>
+        {/* ROW 2 — CARD 3: Workstation Connection */}
+        <div className="card control-card" style={{ padding: '1.6rem', gap: '0.85rem', height: '100%' }}>
           <div className="card-icon-header inline">
-            <div className="header-icon green" style={{ background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', boxShadow: '0 4px 10px rgba(16,185,129,0.3)' }}><MessageSquare size={18} /></div>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>WhatsApp Bot Setup</h3>
-          </div>
-          <p className="card-description">Enable automated patient appointment booking and instant WhatsApp notifications for your clinic.</p>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: 'auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '0.6rem 0.85rem', borderRadius: '10px', border: '1px solid var(--border)' }}>
-              <span className="label-caps" style={{ color: '#64748b' }}>STATUS</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '0.825rem' }}>
-                <div className={`dot ${botStatus?.status === 'CONNECTED' ? 'green' : botStatus?.status === 'QR_READY' ? 'amber' : ''}`} />
-                <span style={{ color: botStatus?.status === 'CONNECTED' ? '#047857' : botStatus?.status === 'QR_READY' ? '#b45309' : '#64748b' }}>
-                  {botStatus?.status || 'DISCONNECTED'}
-                </span>
-              </div>
+            <div className="header-icon cyan" style={{ background: 'linear-gradient(135deg, #06b6d4, #0d9488)', color: 'white', boxShadow: '0 4px 10px rgba(6,182,212,0.3)' }}>
+              <Server size={18} />
             </div>
-
-            {botStatus?.status === 'QR_READY' && botStatus?.qrCodeDataUrl && (
-              <div style={{ textAlign: 'center', background: '#f0f9ff', padding: '1rem', borderRadius: '12px', border: '1px solid #bae6fd' }}>
-                <p style={{ fontSize: '0.8rem', color: '#0369a1', fontWeight: 600, marginBottom: '0.5rem' }}>
-                  📱 Scan with WhatsApp (Settings → Linked Devices)
-                </p>
-                <img src={botStatus.qrCodeDataUrl} alt="WhatsApp QR Code" style={{ width: '170px', height: '170px', margin: '0 auto', display: 'block', borderRadius: '8px', border: '2px solid white' }} />
-              </div>
-            )}
-
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              {botStatus?.status !== 'CONNECTED' ? (
-                <button
-                  className="btn-primary-sm"
-                  style={{ flex: 1, background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', padding: '0.65rem 0.75rem', borderRadius: '8px', fontWeight: 700 }}
-                  onClick={async () => {
-                    if ((window as any).whatsappBot) {
-                      const res = await (window as any).whatsappBot.start();
-                      setBotStatus(res);
-                    }
-                  }}
-                >
-                  <Bot size={16} /> Connect WhatsApp
-                </button>
-              ) : (
-                <button
-                  className="btn-secondary-sm"
-                  style={{ flex: 1, color: '#ef4444', borderColor: '#fee2e2', background: '#fef2f2', padding: '0.65rem 0.75rem', fontWeight: 700 }}
-                  onClick={async () => {
-                    if ((window as any).whatsappBot) {
-                      const res = await (window as any).whatsappBot.stop();
-                      setBotStatus(res);
-                    }
-                  }}
-                >
-                  Disconnect
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Workstation Connection */}
-        <div className="card control-card" style={{ padding: '1.5rem', gap: '0.85rem' }}>
-          <div className="card-icon-header inline">
-            <div className="header-icon cyan" style={{ background: 'linear-gradient(135deg, #06b6d4, #0d9488)', color: 'white', boxShadow: '0 4px 10px rgba(6,182,212,0.3)' }}><Server size={18} /></div>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Workstation Connection</h3>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>Workstation &amp; Network Sync</h3>
           </div>
           <p className="card-description">Configure network connection mode (Standalone, Central Host Server, or Client workstation).</p>
 
@@ -302,7 +331,6 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
 
             {workstationMode === 'client' && (
               <>
-                {/* IP + Port */}
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <div style={{ flex: 2, display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>HOST IP ADDRESS</label>
@@ -328,7 +356,6 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                   </div>
                 </div>
 
-                {/* Network Token — paste from Host */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>NETWORK TOKEN (from Host)</label>
                   <div style={{ display: 'flex', gap: '6px' }}>
@@ -357,12 +384,8 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                       {secretSaved ? <><CheckCircle size={14} /> Saved</> : 'Save Token'}
                     </button>
                   </div>
-                  <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                    Token is saved immediately — no relaunch needed.
-                  </p>
                 </div>
 
-                {/* Test + Apply buttons */}
                 <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
                   <button type="button" className="btn-secondary-sm" style={{ flex: 1, padding: '0.6rem', fontSize: '0.8rem' }} onClick={handleTestConnection} disabled={isTestingConnection}>
                     {isTestingConnection ? 'Testing...' : 'Test Connection'}
@@ -390,7 +413,6 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                   </div>
                 </div>
 
-                {/* Network Token to share with clients */}
                 {networkSecret && (
                   <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '0.65rem', fontSize: '0.8rem', color: '#1e40af', lineHeight: '1.5' }}>
                     <div style={{ fontWeight: 700, marginBottom: '4px', fontSize: '0.72rem', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Network Token — share with Client machines</div>
@@ -434,17 +456,81 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
           </div>
         </div>
 
-        {/* Clinic Profiles & Users */}
-        <div className="card control-card" style={{ padding: '1.5rem', gap: '0.85rem' }}>
+        {/* ROW 2 — CARD 4: WhatsApp Bot */}
+        <div className="card control-card" style={{ padding: '1.6rem', gap: '0.85rem', height: '100%' }}>
           <div className="card-icon-header inline">
-            <div className="header-icon red" style={{ background: 'linear-gradient(135deg, #f43f5e, #e11d48)', color: 'white', boxShadow: '0 4px 10px rgba(244,63,94,0.3)' }}><KeyRound size={18} /></div>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Clinic Profiles &amp; Users</h3>
+            <div className="header-icon green" style={{ background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', boxShadow: '0 4px 10px rgba(16,185,129,0.3)' }}>
+              <MessageSquare size={18} />
+            </div>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>WhatsApp Bot Setup</h3>
+          </div>
+          <p className="card-description">Enable automated patient appointment booking and instant WhatsApp notifications for your clinic.</p>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: 'auto', paddingTop: '0.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '0.6rem 0.85rem', borderRadius: '10px', border: '1px solid var(--border)' }}>
+              <span className="label-caps" style={{ color: '#64748b' }}>STATUS</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '0.825rem' }}>
+                <div className={`dot ${botStatus?.status === 'CONNECTED' ? 'green' : botStatus?.status === 'QR_READY' ? 'amber' : ''}`} />
+                <span style={{ color: botStatus?.status === 'CONNECTED' ? '#047857' : botStatus?.status === 'QR_READY' ? '#b45309' : '#64748b' }}>
+                  {botStatus?.status || 'DISCONNECTED'}
+                </span>
+              </div>
+            </div>
+
+            {botStatus?.status === 'QR_READY' && botStatus?.qrCodeDataUrl && (
+              <div style={{ textAlign: 'center', background: '#f0f9ff', padding: '0.85rem', borderRadius: '12px', border: '1px solid #bae6fd' }}>
+                <p style={{ fontSize: '0.78rem', color: '#0369a1', fontWeight: 600, marginBottom: '0.4rem' }}>
+                  📱 Scan with WhatsApp (Settings → Linked Devices)
+                </p>
+                <img src={botStatus.qrCodeDataUrl} alt="WhatsApp QR Code" style={{ width: '150px', height: '150px', margin: '0 auto', display: 'block', borderRadius: '8px', border: '2px solid white' }} />
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              {botStatus?.status !== 'CONNECTED' ? (
+                <button
+                  className="btn-primary-sm"
+                  style={{ flex: 1, background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', padding: '0.65rem 0.75rem', borderRadius: '8px', fontWeight: 700 }}
+                  onClick={async () => {
+                    if ((window as any).whatsappBot) {
+                      const res = await (window as any).whatsappBot.start();
+                      setBotStatus(res);
+                    }
+                  }}
+                >
+                  <Bot size={16} /> Connect WhatsApp
+                </button>
+              ) : (
+                <button
+                  className="btn-secondary-sm"
+                  style={{ flex: 1, color: '#ef4444', borderColor: '#fee2e2', background: '#fef2f2', padding: '0.65rem 0.75rem', fontWeight: 700 }}
+                  onClick={async () => {
+                    if ((window as any).whatsappBot) {
+                      const res = await (window as any).whatsappBot.stop();
+                      setBotStatus(res);
+                    }
+                  }}
+                >
+                  Disconnect
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ROW 3 — CARD 5: Clinic Profiles & Users */}
+        <div className="card control-card" style={{ padding: '1.6rem', gap: '0.85rem', height: '100%' }}>
+          <div className="card-icon-header inline">
+            <div className="header-icon red" style={{ background: 'linear-gradient(135deg, #f43f5e, #e11d48)', color: 'white', boxShadow: '0 4px 10px rgba(244,63,94,0.3)' }}>
+              <KeyRound size={18} />
+            </div>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>Clinic Profiles &amp; Users</h3>
           </div>
           <p className="card-description">Manage User IDs authorized to access workspace profiles on this workstation.</p>
 
           {currentUser === 'admin' ? (
-            <div className="user-management-section">
-              <div className="add-user-row" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '1rem' }}>
+            <div className="user-management-section" style={{ marginTop: 'auto', paddingTop: '0.5rem' }}>
+              <div className="add-user-row" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '0.85rem' }}>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <input
                     type="text"
@@ -498,8 +584,8 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
               </div>
 
               <div className="users-list-container">
-                <span className="label-caps" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>REGISTERED PROFILES</span>
-                <div className="users-list" style={{ maxHeight: '120px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '8px' }}>
+                <span className="label-caps" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: '0.4rem' }}>REGISTERED PROFILES</span>
+                <div className="users-list" style={{ maxHeight: '110px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '8px' }}>
                   {knownUsers.map(user => (
                     <div key={user.id} className="user-list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.45rem 0.75rem', borderBottom: '1px solid var(--border)' }}>
                       <span className="user-list-name" style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>
@@ -523,22 +609,24 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
               </div>
             </div>
           ) : (
-            <div style={{ padding: '0.75rem 1rem', background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: '8px', color: '#b45309', fontSize: '0.825rem', display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
+            <div style={{ padding: '0.75rem 1rem', background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: '8px', color: '#b45309', fontSize: '0.825rem', display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: 'auto' }}>
               <AlertCircle size={16} />
               <span>Only administrator (<strong>admin</strong>) can manage clinic accounts.</span>
             </div>
           )}
         </div>
 
-        {/* System License */}
-        <div className="card control-card" style={{ gridColumn: 'span 2', justifySelf: 'center', width: '100%', maxWidth: '480px', padding: '1.5rem', gap: '0.85rem' }}>
+        {/* ROW 3 — CARD 6: System License & Support */}
+        <div className="card control-card" style={{ padding: '1.6rem', gap: '0.85rem', height: '100%' }}>
           <div className="card-icon-header inline">
-            <div className="header-icon gray" style={{ background: 'linear-gradient(135deg, #475569, #1e293b)', color: 'white', boxShadow: '0 4px 10px rgba(71,85,105,0.3)' }}><ShieldCheck size={18} /></div>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>System License</h3>
+            <div className="header-icon gray" style={{ background: 'linear-gradient(135deg, #475569, #1e293b)', color: 'white', boxShadow: '0 4px 10px rgba(71,85,105,0.3)' }}>
+              <ShieldCheck size={18} />
+            </div>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>System License &amp; Support</h3>
           </div>
           <p className="card-description">View active license duration, device machine ID, or renew your system registration.</p>
 
-          <div className="license-status-section" style={{ paddingTop: '0.25rem', gap: '0.75rem' }}>
+          <div className="license-status-section" style={{ paddingTop: '0.25rem', gap: '0.75rem', marginTop: 'auto' }}>
             <div className="license-row">
               <span className="label-caps">STATUS</span>
               <div
@@ -561,7 +649,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                   className="copy-btn"
                   onClick={() => {
                     navigator.clipboard.writeText(machineId);
-                    alert('Machine ID copied!');
+                    toast('Machine ID copied!', { type: 'success' });
                   }}
                 >
                   <Copy size={13} />
@@ -575,12 +663,12 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
               </button>
             </div>
 
-            <div style={{ marginTop: '0.75rem', paddingTop: '0.85rem', borderTop: '1px solid #e2e8f0', fontSize: '0.8rem', color: '#475569' }}>
-              <div style={{ fontWeight: 600, color: '#1e293b', marginBottom: '0.25rem' }}>Service Provider: Badshah Computers</div>
+            <div style={{ marginTop: '0.5rem', paddingTop: '0.75rem', borderTop: '1px solid #e2e8f0', fontSize: '0.78rem', color: '#475569', lineHeight: 1.4 }}>
+              <div style={{ fontWeight: 600, color: '#1e293b', marginBottom: '0.2rem' }}>Service Provider: Badshah Computers</div>
               <div>Support: <a href="mailto:burhansaifee2003@gmail.com" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 500 }}>burhansaifee2003@gmail.com</a></div>
               <div>Phone / WhatsApp: <span style={{ fontWeight: 600 }}>+91 9981188253, +91 9039010987</span></div>
-              <div style={{ fontSize: '0.725rem', color: '#94a3b8', marginTop: '0.5rem', textAlign: 'center' }}>
-                © 2026 MedFlow Clinic • Developed by Badshah Computers
+              <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '0.4rem', textAlign: 'center' }}>
+                © 2026 Buvora • Developed by Badshah Computers
               </div>
             </div>
           </div>

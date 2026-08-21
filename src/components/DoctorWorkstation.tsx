@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ClipboardList, FileText, Search, Plus, Trash2, Printer, PlusCircle, AlertCircle, LogOut, CheckCircle, Save, History, KeyRound } from 'lucide-react';
-import { storage, formatAgeGender, type Doctor, type Receipt, type Prescription, type PrescribedMedicine } from '../lib/storage';
+import { storage, formatAgeGender, type Doctor, type Receipt, type Prescription, type PrescribedMedicine, type PrescriptionPaperType } from '../lib/storage';
 
 interface DoctorWorkstationProps {
   currentUser: string;
@@ -14,6 +14,7 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
+  const [prescriptionPaperType, setPrescriptionPaperType] = useState<PrescriptionPaperType>('A4');
   
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -34,22 +35,45 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
   // Load Data
   const refreshData = React.useCallback(async () => {
     try {
-      const [allDoctors, allReceipts, allPrescriptions] = await Promise.all([
+      const [allDoctors, allReceipts, allPrescriptions, paperSettings] = await Promise.all([
         storage.getDoctors(),
         storage.getReceipts(),
-        storage.getPrescriptions()
+        storage.getPrescriptions(),
+        storage.getPrintPaperSettings()
       ]);
       setDoctors(allDoctors);
       setReceipts(allReceipts);
       setPrescriptions(allPrescriptions);
+      setPrescriptionPaperType(paperSettings.prescriptionPaper);
     } catch (e) {
       console.error('Failed to load doctor data:', e);
     }
   }, []);
 
   useEffect(() => {
-    refreshData();
-  }, [refreshData]);
+    let active = true;
+    (async () => {
+      try {
+        const [allDoctors, allReceipts, allPrescriptions, paperSettings] = await Promise.all([
+          storage.getDoctors(),
+          storage.getReceipts(),
+          storage.getPrescriptions(),
+          storage.getPrintPaperSettings()
+        ]);
+        if (active) {
+          setDoctors(allDoctors);
+          setReceipts(allReceipts);
+          setPrescriptions(allPrescriptions);
+          setPrescriptionPaperType(paperSettings.prescriptionPaper);
+        }
+      } catch (e) {
+        console.error('Failed to load doctor data:', e);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     const handleAfterPrint = () => {
@@ -163,12 +187,15 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
     e.preventDefault();
     if (!selectedReceipt) return;
 
+    const currentTime = new Date();
+    const existingId = prescriptions.find(p => p.receiptId === selectedReceipt.id)?.id;
+    const rxId = existingId || `rx_${currentTime.getTime()}`;
     const filteredMedicines = medicines.filter(m => m.name.trim() !== '');
 
     const prescription: Prescription = {
-      id: prescriptions.find(p => p.receiptId === selectedReceipt.id)?.id || Date.now().toString(),
+      id: rxId,
       receiptId: selectedReceipt.id,
-      date: format(new Date(), 'yyyy-MM-dd HH:mm'),
+      date: format(currentTime, 'yyyy-MM-dd HH:mm'),
       patientName: selectedReceipt.patientName,
       patientAge: selectedReceipt.patientAge,
       patientGender: selectedReceipt.patientGender,
@@ -214,7 +241,7 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
             <ClipboardList size={22} className="text-white" />
           </div>
           <div className="title-group">
-            <h2>MedFlow Doctor Console</h2>
+            <h2>Buvora Doctor Console</h2>
           </div>
         </div>
 
@@ -707,16 +734,22 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
         const doctorObj = doctors.find(d => d.id === activePrintPrescription.doctorId);
         const printHeader = doctorObj ? (doctorObj.printHeader !== false) : true;
         const customTopMargin = doctorObj ? (doctorObj.customTopMargin || 0) : 0;
+        const pageCss = prescriptionPaperType === 'A5' ? '@page { size: A5 portrait; margin: 0.6cm; }'
+          : prescriptionPaperType === 'Letter' ? '@page { size: letter portrait; margin: 0.8cm; }'
+          : prescriptionPaperType === 'A6' ? '@page { size: A6 portrait; margin: 0.4cm; }'
+          : '@page { size: A4 portrait; margin: 0.8cm; }';
 
         return (
-          <div id="prescription-print-template" className="print-only">
-            <div 
-              className="print-container"
-              style={{
-                paddingTop: !printHeader && customTopMargin ? `${customTopMargin}mm` : undefined,
-                borderTop: !printHeader ? 'none' : undefined
-              }}
-            >
+          <>
+            <style dangerouslySetInnerHTML={{ __html: `@media print { ${pageCss} }` }} />
+            <div id="prescription-print-template" className={`print-only paper-${prescriptionPaperType.toLowerCase()}`}>
+              <div 
+                className="print-container"
+                style={{
+                  paddingTop: !printHeader && customTopMargin ? `${customTopMargin}mm` : undefined,
+                  borderTop: !printHeader ? 'none' : undefined
+                }}
+              >
               {/* Header / Clinic Doctor Info */}
               {printHeader && (
                 <div className="print-header">
@@ -823,7 +856,9 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
             </div>
           </div>
         </div>
-      )})()}
+      </>
+        );
+      })()}
 
       {/* Styled Workstation Component */}
       <style>{`
@@ -1721,6 +1756,53 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
           font-size: 0.75rem;
           color: #64748b;
           margin: 0;
+        }
+        /* ── Tablet & Mobile Adjustments ── */
+        @media (max-width: 1024px) {
+          .writer-modal-content {
+            flex-direction: column;
+            overflow-y: auto;
+          }
+          .writer-form-column {
+            flex: none;
+            overflow-y: visible;
+          }
+          .writer-history-column {
+            flex: none;
+            border-left: none;
+            border-top: 1px solid #cbd5e1;
+            padding-left: 0;
+            padding-top: 1.5rem;
+            overflow-y: visible;
+          }
+          .form-row {
+            grid-template-columns: 1fr;
+          }
+          .medicines-table-wrapper {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+          }
+          .medicines-table {
+            min-width: 600px;
+          }
+          .writer-modal {
+            height: 95vh;
+          }
+        }
+        
+        @media (max-width: 768px) {
+          .writer-overlay {
+            padding: 0.5rem;
+          }
+          .writer-modal-content {
+            padding: 1rem;
+          }
+          .writer-header {
+            padding: 1rem;
+          }
+          .medicines-section {
+            padding: 0.75rem;
+          }
         }
       `}</style>
     </div>

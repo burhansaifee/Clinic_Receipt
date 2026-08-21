@@ -12,17 +12,25 @@ export const QRCodeImage: React.FC<QRCodeImageProps> = ({ text, size = 110, clas
   const [dataUrl, setDataUrl] = useState<string>('');
 
   useEffect(() => {
-    if (!text || !text.trim()) {
-      setDataUrl('');
+    let active = true;
+    const cleanText = text?.trim();
+    if (!cleanText) {
       return;
     }
+
     // Set 3x scale for crystal-clear resolution on printouts
-    QRCode.toDataURL(text, { width: size * 3, margin: 1, errorCorrectionLevel: 'M' })
-      .then(url => setDataUrl(url))
+    QRCode.toDataURL(cleanText, { width: size * 3, margin: 1, errorCorrectionLevel: 'M' })
+      .then(url => {
+        if (active) setDataUrl(url);
+      })
       .catch(err => console.error('Failed to generate QR code:', err));
+
+    return () => {
+      active = false;
+    };
   }, [text, size]);
 
-  if (!dataUrl) return null;
+  if (!text || !text.trim() || !dataUrl) return null;
 
   return (
     <img

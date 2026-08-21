@@ -1,18 +1,63 @@
 import React from 'react';
 import { format } from 'date-fns';
-import { formatAgeGender, type Doctor, type Receipt, type Prescription } from '../../lib/storage';
+import {
+  formatAgeGender,
+  type Doctor,
+  type Receipt,
+  type Prescription,
+  type ReceiptPaperType,
+  type PrescriptionPaperType
+} from '../../lib/storage';
 import QRCodeImage from '../ui/QRCodeImage';
 
 interface PrintTemplatesProps {
   receiptsToPrint: Receipt[];
   activePrintPrescription: Prescription | null;
   doctors: Doctor[];
+  receiptPaperType?: ReceiptPaperType;
+  prescriptionPaperType?: PrescriptionPaperType;
 }
+
+const getReceiptPageStyle = (paper: ReceiptPaperType = 'A5') => {
+  switch (paper) {
+    case 'A4':
+      return `@page { size: A4 portrait; margin: 1.2cm; }`;
+    case 'A5':
+      return `@page { size: A5 portrait; margin: 0.8cm; }`;
+    case 'A6':
+      return `@page { size: A6 portrait; margin: 0.5cm; }`;
+    case 'Letter':
+      return `@page { size: letter portrait; margin: 1.2cm; }`;
+    case 'Thermal80':
+      return `@page { size: 80mm auto; margin: 2mm 3mm; }`;
+    case 'Thermal58':
+      return `@page { size: 58mm auto; margin: 1mm 2mm; }`;
+    default:
+      return `@page { size: A5 portrait; margin: 0.8cm; }`;
+  }
+};
+
+const getPrescriptionPageStyle = (paper: PrescriptionPaperType = 'A4') => {
+  switch (paper) {
+    case 'A4':
+      return `@page { size: A4 portrait; margin: 0.8cm; }`;
+    case 'A5':
+      return `@page { size: A5 portrait; margin: 0.6cm; }`;
+    case 'Letter':
+      return `@page { size: letter portrait; margin: 0.8cm; }`;
+    case 'A6':
+      return `@page { size: A6 portrait; margin: 0.4cm; }`;
+    default:
+      return `@page { size: A4 portrait; margin: 0.8cm; }`;
+  }
+};
 
 const PrintTemplates: React.FC<PrintTemplatesProps> = ({
   receiptsToPrint,
   activePrintPrescription,
   doctors,
+  receiptPaperType = 'A5',
+  prescriptionPaperType = 'A4',
 }) => {
   const formatDate = (dateStr: string) => {
     try {
@@ -22,11 +67,311 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
     }
   };
 
+  const isReceiptActive = receiptsToPrint.length > 0;
+  const isPrescriptionActive = Boolean(activePrintPrescription);
+
+  const dynamicPageCss = isPrescriptionActive
+    ? getPrescriptionPageStyle(prescriptionPaperType)
+    : isReceiptActive
+    ? getReceiptPageStyle(receiptPaperType)
+    : '';
+
+  const receiptPaperClass = `paper-${receiptPaperType.toLowerCase()}`;
+  const prescriptionPaperClass = `paper-${prescriptionPaperType.toLowerCase()}`;
+
   return (
     <>
+      {/* Dynamic @page style */}
+      {dynamicPageCss && (
+        <style dangerouslySetInnerHTML={{ __html: `
+          @media print {
+            ${dynamicPageCss}
+          }
+        ` }} />
+      )}
+
+      {/* Specific CSS overrides for thermal and compact paper types */}
+      <style>{`
+        /* Thermal 80mm Layout */
+        #receipt-print-template.paper-thermal80 .print-container {
+          max-width: 76mm !important;
+          margin: 0 auto !important;
+          padding: 4px 6px !important;
+          font-size: 8.5pt !important;
+          line-height: 1.25 !important;
+        }
+        #receipt-print-template.paper-thermal80 .print-header {
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: center !important;
+          text-align: center !important;
+          gap: 4px !important;
+          padding-bottom: 6px !important;
+          margin-bottom: 8px !important;
+          border-bottom: 1px dashed black !important;
+        }
+        #receipt-print-template.paper-thermal80 .print-clinic-branding h2 {
+          font-size: 13pt !important;
+          text-align: center !important;
+        }
+        #receipt-print-template.paper-thermal80 .clinic-tagline {
+          font-size: 8pt !important;
+          text-align: center !important;
+        }
+        #receipt-print-template.paper-thermal80 .print-clinic-address {
+          text-align: center !important;
+          font-size: 8pt !important;
+        }
+        #receipt-print-template.paper-thermal80 .print-title-bar {
+          padding: 3px 6px !important;
+          margin-bottom: 8px !important;
+        }
+        #receipt-print-template.paper-thermal80 .print-title-bar h1 {
+          font-size: 9pt !important;
+          letter-spacing: 1px !important;
+        }
+        #receipt-print-template.paper-thermal80 .print-info-grid {
+          grid-template-columns: 1fr !important;
+          gap: 6px !important;
+          margin-bottom: 8px !important;
+        }
+        #receipt-print-template.paper-thermal80 .info-section h3 {
+          font-size: 8pt !important;
+          margin-bottom: 2px !important;
+        }
+        #receipt-print-template.paper-thermal80 .info-section p {
+          font-size: 8pt !important;
+          margin: 1px 0 !important;
+        }
+        #receipt-print-template.paper-thermal80 .print-table {
+          margin-bottom: 8px !important;
+        }
+        #receipt-print-template.paper-thermal80 .print-table th,
+        #receipt-print-template.paper-thermal80 .print-table td {
+          padding: 3px 4px !important;
+          font-size: 8pt !important;
+        }
+        #receipt-print-template.paper-thermal80 .print-table tfoot th {
+          padding: 4px !important;
+          font-size: 8.5pt !important;
+        }
+        #receipt-print-template.paper-thermal80 .print-amount-words {
+          font-size: 7.5pt !important;
+          margin-bottom: 10px !important;
+        }
+        #receipt-print-template.paper-thermal80 .print-qr-section {
+          padding: 6px 8px !important;
+          margin-top: 8px !important;
+        }
+        #receipt-print-template.paper-thermal80 .print-footer {
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: center !important;
+          gap: 10px !important;
+          text-align: center !important;
+          margin-top: 8px !important;
+        }
+        #receipt-print-template.paper-thermal80 .terms {
+          text-align: center !important;
+          font-size: 7.5pt !important;
+        }
+        #receipt-print-template.paper-thermal80 .signature-box {
+          margin: 0 auto !important;
+        }
+        #receipt-print-template.paper-thermal80 .signature-line {
+          width: 110px !important;
+        }
+        #receipt-print-template.paper-thermal80 .software-branding {
+          font-size: 6.5pt !important;
+          margin-top: 8px !important;
+        }
+
+        /* Thermal 58mm Layout */
+        #receipt-print-template.paper-thermal58 .print-container {
+          max-width: 52mm !important;
+          margin: 0 auto !important;
+          padding: 2px 4px !important;
+          font-size: 7.5pt !important;
+          line-height: 1.2 !important;
+        }
+        #receipt-print-template.paper-thermal58 .print-header {
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: center !important;
+          text-align: center !important;
+          gap: 2px !important;
+          padding-bottom: 4px !important;
+          margin-bottom: 6px !important;
+          border-bottom: 1px dashed black !important;
+        }
+        #receipt-print-template.paper-thermal58 .print-clinic-branding h2 {
+          font-size: 11pt !important;
+          text-align: center !important;
+        }
+        #receipt-print-template.paper-thermal58 .clinic-tagline {
+          font-size: 7pt !important;
+          text-align: center !important;
+        }
+        #receipt-print-template.paper-thermal58 .print-clinic-address {
+          text-align: center !important;
+          font-size: 7pt !important;
+        }
+        #receipt-print-template.paper-thermal58 .print-title-bar {
+          padding: 2px 4px !important;
+          margin-bottom: 6px !important;
+        }
+        #receipt-print-template.paper-thermal58 .print-title-bar h1 {
+          font-size: 8pt !important;
+          letter-spacing: 0.5px !important;
+        }
+        #receipt-print-template.paper-thermal58 .print-info-grid {
+          grid-template-columns: 1fr !important;
+          gap: 4px !important;
+          margin-bottom: 6px !important;
+        }
+        #receipt-print-template.paper-thermal58 .info-section h3 {
+          font-size: 7.5pt !important;
+          margin-bottom: 2px !important;
+        }
+        #receipt-print-template.paper-thermal58 .info-section p {
+          font-size: 7.5pt !important;
+          margin: 1px 0 !important;
+        }
+        #receipt-print-template.paper-thermal58 .print-table {
+          margin-bottom: 6px !important;
+        }
+        #receipt-print-template.paper-thermal58 .print-table th,
+        #receipt-print-template.paper-thermal58 .print-table td {
+          padding: 2px 3px !important;
+          font-size: 7pt !important;
+        }
+        #receipt-print-template.paper-thermal58 .print-table tfoot th {
+          padding: 3px !important;
+          font-size: 7.5pt !important;
+        }
+        #receipt-print-template.paper-thermal58 .print-amount-words {
+          font-size: 7pt !important;
+          margin-bottom: 6px !important;
+        }
+        #receipt-print-template.paper-thermal58 .print-qr-section {
+          padding: 4px 6px !important;
+          margin-top: 6px !important;
+        }
+        #receipt-print-template.paper-thermal58 .print-footer {
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: center !important;
+          gap: 8px !important;
+          text-align: center !important;
+          margin-top: 6px !important;
+        }
+        #receipt-print-template.paper-thermal58 .terms {
+          text-align: center !important;
+          font-size: 6.5pt !important;
+        }
+        #receipt-print-template.paper-thermal58 .signature-box {
+          margin: 0 auto !important;
+        }
+        #receipt-print-template.paper-thermal58 .signature-line {
+          width: 90px !important;
+        }
+        #receipt-print-template.paper-thermal58 .software-branding {
+          font-size: 6pt !important;
+          margin-top: 6px !important;
+        }
+
+        /* A6 Receipt Layout */
+        #receipt-print-template.paper-a6 .print-container {
+          padding: 10px 14px !important;
+          font-size: 8.5pt !important;
+          line-height: 1.3 !important;
+        }
+        #receipt-print-template.paper-a6 .print-header {
+          padding-bottom: 6px !important;
+          margin-bottom: 8px !important;
+        }
+        #receipt-print-template.paper-a6 .print-clinic-branding h2 {
+          font-size: 13pt !important;
+        }
+        #receipt-print-template.paper-a6 .print-info-grid {
+          gap: 8px !important;
+          margin-bottom: 8px !important;
+        }
+        #receipt-print-template.paper-a6 .print-table th,
+        #receipt-print-template.paper-a6 .print-table td {
+          padding: 3px 5px !important;
+          font-size: 8.5pt !important;
+        }
+        #receipt-print-template.paper-a6 .print-table tfoot th {
+          padding: 4px 6px !important;
+          font-size: 9pt !important;
+        }
+
+        /* Prescription A5 Layout */
+        #prescription-print-template.paper-a5 .print-container {
+          padding: 1.25rem 1.5rem !important;
+          font-size: 9.5pt !important;
+        }
+        #prescription-print-template.paper-a5 .print-header {
+          margin-bottom: 0.75rem !important;
+          padding-bottom: 0.5rem !important;
+        }
+        #prescription-print-template.paper-a5 .print-clinic-branding h2 {
+          font-size: 1.3rem !important;
+        }
+        #prescription-print-template.paper-a5 .print-patient-meta-grid {
+          padding: 0.6rem 0.8rem !important;
+          margin-bottom: 0.75rem !important;
+          gap: 0.5rem !important;
+        }
+        #prescription-print-template.paper-a5 .print-clinical-grid {
+          gap: 0.75rem !important;
+          margin-bottom: 0.75rem !important;
+          padding-bottom: 0.75rem !important;
+        }
+        #prescription-print-template.paper-a5 .print-meds-table th,
+        #prescription-print-template.paper-a5 .print-meds-table td {
+          padding: 5px 8px !important;
+          font-size: 8.5pt !important;
+        }
+        #prescription-print-template.paper-a5 .print-rx-section {
+          margin-bottom: 1rem !important;
+        }
+
+        /* Prescription A6 Layout */
+        #prescription-print-template.paper-a6 .print-container {
+          padding: 0.75rem !important;
+          font-size: 8.5pt !important;
+        }
+        #prescription-print-template.paper-a6 .print-header {
+          margin-bottom: 0.5rem !important;
+          padding-bottom: 0.4rem !important;
+        }
+        #prescription-print-template.paper-a6 .print-clinic-branding h2 {
+          font-size: 1.1rem !important;
+        }
+        #prescription-print-template.paper-a6 .print-patient-meta-grid {
+          grid-template-columns: 1fr 1fr !important;
+          padding: 0.4rem 0.6rem !important;
+          margin-bottom: 0.5rem !important;
+          gap: 0.4rem !important;
+        }
+        #prescription-print-template.paper-a6 .print-clinical-grid {
+          grid-template-columns: 1fr !important;
+          gap: 0.5rem !important;
+          margin-bottom: 0.5rem !important;
+          padding-bottom: 0.5rem !important;
+        }
+        #prescription-print-template.paper-a6 .print-meds-table th,
+        #prescription-print-template.paper-a6 .print-meds-table td {
+          padding: 3px 5px !important;
+          font-size: 7.5pt !important;
+        }
+      `}</style>
+
       {/* Receipt print template — supports multi-receipt bulk print */}
       {receiptsToPrint.length > 0 && (
-        <div id="receipt-print-template" className="print-only">
+        <div id="receipt-print-template" className={`print-only ${receiptPaperClass}`}>
           {receiptsToPrint.map((r, idx) => {
             const doctorObj = doctors.find(d => d.id === r.doctorId);
             const printHeader = doctorObj ? doctorObj.printHeader !== false : true;
@@ -41,7 +386,9 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
                 if (match && match[1]) {
                   displayUpiId = decodeURIComponent(match[1]);
                 }
-              } catch (e) {}
+              } catch {
+                /* Ignore malformed URI parameter */
+              }
             }
             const isUpi = Boolean(qrPayload && (qrPayload.startsWith('upi://') || qrPayload.includes('@upi') || displayUpiId));
 
@@ -122,7 +469,7 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
 
                 {qrPayload && (
                   <div className="print-qr-section" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '12px', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', backgroundColor: '#f8fafc' }}>
-                    <QRCodeImage text={qrPayload} size={75} />
+                    <QRCodeImage text={qrPayload} size={receiptPaperType === 'Thermal58' ? 50 : receiptPaperType === 'Thermal80' ? 65 : 75} />
                     <div>
                       <p style={{ margin: 0, fontWeight: 700, fontSize: '0.85rem', color: '#0f172a' }}>
                         {isUpi ? 'Scan to Pay via UPI' : 'Scan QR Code'}
@@ -167,7 +514,7 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
       {activePrintPrescription && (() => {
         const doc = doctors.find(d => d.id === activePrintPrescription.doctorId);
         return (
-          <div id="prescription-print-template" className="print-only">
+          <div id="prescription-print-template" className={`print-only ${prescriptionPaperClass}`}>
             <div
               className="print-container"
               style={{

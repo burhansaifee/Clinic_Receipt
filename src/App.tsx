@@ -330,7 +330,46 @@ const MainApp: React.FC = () => {
 
       <main className="main-content">
         <header className="content-header no-print">
-          <h1>{activeTab.replace('-', ' ').toUpperCase()}</h1>
+          <div>
+            <h1 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.01em' }}>
+              {activeTab === 'dashboard' && 'Executive Dashboard'}
+              {activeTab === 'new-receipt' && 'Create Patient Receipt'}
+              {activeTab === 'history' && 'Invoices & Billing History'}
+              {activeTab === 'prescriptions' && 'Prescriptions (Rx) Registry'}
+              {activeTab === 'appointments' && 'Appointment Booking Desk'}
+              {activeTab === 'doctors' && 'Doctors Registry'}
+              {activeTab === 'services' && 'Clinic Services Catalog'}
+              {activeTab === 'settings' && 'System Control Center'}
+            </h1>
+            <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+              {activeTab === 'dashboard' && 'Overview of clinic operations, revenue, and live queue'}
+              {activeTab === 'new-receipt' && 'Generate and print patient consultation invoices'}
+              {activeTab === 'history' && 'Search, filter, reprint, and export financial records'}
+              {activeTab === 'prescriptions' && 'Patient consultation records, diagnoses & medication charts'}
+              {activeTab === 'appointments' && 'Manage WhatsApp & reception patient appointment requests'}
+              {activeTab === 'doctors' && 'Manage consulting physicians, qualifications & UPI QR setups'}
+              {activeTab === 'services' && 'Standard consultation and treatment fee pricing'}
+              {activeTab === 'settings' && 'Backups, printer paper presets, network sync & licensing'}
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#f8fafc', border: '1px solid var(--border)', padding: '0.4rem 0.85rem', borderRadius: '8px', fontSize: '0.78rem', color: '#475569', fontWeight: 600 }}>
+              <span>🖨️ {receiptPaperType === 'Thermal80' ? 'Thermal 80mm' : receiptPaperType === 'Thermal58' ? 'Thermal 58mm' : receiptPaperType}</span>
+              <span style={{ opacity: 0.4 }}>•</span>
+              <span>Rx: {prescriptionPaperType}</span>
+            </div>
+
+            {activeTab !== 'new-receipt' && (
+              <button
+                className="btn-primary"
+                onClick={() => { setEditingReceipt(null); setActiveTab('new-receipt'); }}
+                style={{ padding: '0.45rem 1rem', fontSize: '0.825rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+              >
+                + New Receipt
+              </button>
+            )}
+          </div>
         </header>
 
         <div className="content-inner">
@@ -370,6 +409,15 @@ const MainApp: React.FC = () => {
             <Dashboard
               doctors={doctors}
               dashboardMetrics={dashboardMetrics}
+              prescriptions={prescriptions}
+              pendingAppointmentsCount={pendingAppointmentsCount}
+              receiptPaperType={receiptPaperType}
+              prescriptionPaperType={prescriptionPaperType}
+              botStatus={botStatus}
+              workstationMode={workstationMode}
+              currentUser={currentUser}
+              currentUserRole={currentUserRole}
+              onNavigate={(tab) => setActiveTab(tab)}
               onNewReceipt={() => setActiveTab('new-receipt')}
             />
           )}

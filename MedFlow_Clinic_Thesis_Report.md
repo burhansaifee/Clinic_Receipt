@@ -1,10 +1,10 @@
-# MedFlow Clinic Management System: An Intelligent, Offline-First, Secure Desktop Application for Healthcare Informatics and Financial Management
+# Buvora Clinic Management System: An Intelligent, Offline-First, Secure Desktop Application for Healthcare Informatics and Financial Management
 
 ---
 
 ## Technical Project Report & Academic Thesis
 
-**Project Title:** MedFlow Clinic Management System: Designing and Deploying an Offline-First, Cryptographically Secured, Hybrid-Storage Desktop Platform for Clinical Operations and Auditing
+**Project Title:** Buvora Clinic Management System: Designing and Deploying an Offline-First, Cryptographically Secured, Hybrid-Storage Desktop Platform for Clinical Operations and Auditing
 
 **Author:** Burhan Saifee  
 **Academic Program:** Computer Science & Software Engineering  
@@ -15,7 +15,7 @@
 
 ## Abstract
 
-In contemporary healthcare informatics, clinic management solutions frequently suffer from operational vulnerability, latency, and confidentiality risks due to heavy reliance on centralized cloud infrastructure. To address these limitations, this thesis presents the **MedFlow Clinic Management System**, an offline-first desktop application designed to streamline inpatient/outpatient reception, financial bookkeeping, medical personnel configurations, and payment auditing. Developed using an advanced desktop system architecture comprising **Electron**, **React 19**, **TypeScript**, and **Vite**, MedFlow implements a robust **hybrid data-tier** that combines **SQLite** (`better-sqlite3`) as the core transaction database with an automatic **Excel synchronization engine** (`xlsx`) for local offline audits. Furthermore, the application introduces a security boundary featuring **SHA-256 date-bound hardware licensing keys**, dynamic **anti-clock-tampering protection**, and automated CSS-controlled **batch printing engines**. Our evaluations demonstrate that MedFlow guarantees sub-millisecond database queries, absolute offline operation without reliance on cloud APIs, and a comprehensive billing structure that isolates operational patient records.
+In contemporary healthcare informatics, clinic management solutions frequently suffer from operational vulnerability, latency, and confidentiality risks due to heavy reliance on centralized cloud infrastructure. To address these limitations, this thesis presents the **Buvora Clinic Management System**, an offline-first desktop application designed to streamline inpatient/outpatient reception, financial bookkeeping, medical personnel configurations, and payment auditing. Developed using an advanced desktop system architecture comprising **Electron**, **React 19**, **TypeScript**, and **Vite**, Buvora implements a robust **hybrid data-tier** that combines **SQLite** (`better-sqlite3`) as the core transaction database with an automatic **Excel synchronization engine** (`xlsx`) for local offline audits. Furthermore, the application introduces a security boundary featuring **SHA-256 date-bound hardware licensing keys**, dynamic **anti-clock-tampering protection**, and automated CSS-controlled **batch printing engines**. Our evaluations demonstrate that Buvora guarantees sub-millisecond database queries, absolute offline operation without reliance on cloud APIs, and a comprehensive billing structure that isolates operational patient records.
 
 ---
 
@@ -30,7 +30,7 @@ Medical institutions, ranging from private multi-doctor clinics to large clinica
 To bypass these problems, a desktop-based, offline-first application that stores records in local databases is highly desirable. However, local storage systems like basic browser-level `localStorage` or pure Excel spreadsheets lack relational integrity, security controls, and transactional atomicity. This project bridges this gap by engineering a secure, hybrid-storage offline desktop solution.
 
 ### 1.2 System Objectives
-The core engineering requirements of the MedFlow application are defined as follows:
+The core engineering requirements of the Buvora application are defined as follows:
 - **Zero Cloud Dependence:** Maintain 100% functionality (reporting, editing, searching, printing, authentication) in a fully isolated local hardware environment.
 - **Relational & Ledger Consistency:** Design an offline data warehouse supporting transactional operations, preventing corrupt writes during power losses, and ensuring data persists beyond standard browser state boundaries.
 - **Dynamic Ledger Reporting:** Calculate earnings in real-time and segment collections according to customized parameters (CASH, ONLINE, FREE pro bono streams) across individual physicians.
@@ -41,7 +41,7 @@ The core engineering requirements of the MedFlow application are defined as foll
 
 ## Chapter 2: High-Level System Architecture
 
-MedFlow uses a modular, decoupled architecture separating the **Renderer Process** (User Interface) from the **Main Process** (Operating System Operations) via a secure IPC (Inter-Process Communication) bridge. This architecture follows the security guidelines recommended for modern Electron development.
+Buvora uses a modular, decoupled architecture separating the **Renderer Process** (User Interface) from the **Main Process** (Operating System Operations) via a secure IPC (Inter-Process Communication) bridge. This architecture follows the security guidelines recommended for modern Electron development.
 
 ```mermaid
 graph TD
@@ -57,8 +57,8 @@ graph TD
 
     subgraph Main_Desktop_Process ["Main Process (Electron Runtime)"]
         E -->|IPC Handlers| F[App Controller]
-        F -->|better-sqlite3| G[(SQLite Database: medflow.db)]
-        F -->|xlsx engine| H[(Excel backup: MedFlow_Database.xlsx)]
+        F -->|better-sqlite3| G[(SQLite Database: buvora.db)]
+        F -->|xlsx engine| H[(Excel backup: Buvora_Database.xlsx)]
         F -->|node-machine-id| I[Hardware Licensing Core]
         F -->|electron-store| J[(Config Store)]
     end
@@ -99,10 +99,10 @@ contextBridge.exposeInMainWorld('database', {
 
 ## Chapter 3: Hybrid Storage & Data Migration Tier
 
-MedFlow implements a highly resilient **hybrid offline database layer**. SQLite acts as the primary relational database, and an automated background synchronization mechanism copies state changes into Microsoft Excel worksheets (`.xlsx`) to serve as local backups and ease administrative audits.
+Buvora implements a highly resilient **hybrid offline database layer**. SQLite acts as the primary relational database, and an automated background synchronization mechanism copies state changes into Microsoft Excel worksheets (`.xlsx`) to serve as local backups and ease administrative audits.
 
 ### 3.1 SQLite Relational Layer (`better-sqlite3`)
-For performance, MedFlow uses `better-sqlite3` over asynchronous wrappers such as `sqlite3` or heavy cloud ORMs. Direct synchronous database handles run faster in desktop environments because they eliminate network roundtrips and IPC delays. Below is the SQL database initialization schema:
+For performance, Buvora uses `better-sqlite3` over asynchronous wrappers such as `sqlite3` or heavy cloud ORMs. Direct synchronous database handles run faster in desktop environments because they eliminate network roundtrips and IPC delays. Below is the SQL database initialization schema:
 
 ```sql
 -- Database schema executed in electron/database.ts
@@ -143,7 +143,7 @@ CREATE TABLE IF NOT EXISTS metadata (
 ```
 
 ### 3.2 Dynamic Data Migration Engine (LocalStorage to SQLite)
-To support backward compatibility, MedFlow implements a transparent startup migration module in `src/lib/storage.ts`. If the application detects a legacy web build running on native storage models, it loads the data from standard browser `localStorage`, constructs synchronous SQL inserts, imports the data to SQLite, and updates a migration completed flag:
+To support backward compatibility, Buvora implements a transparent startup migration module in `src/lib/storage.ts`. If the application detects a legacy web build running on native storage models, it loads the data from standard browser `localStorage`, constructs synchronous SQL inserts, imports the data to SQLite, and updates a migration completed flag:
 
 ```typescript
 // src/lib/storage.ts (Migration excerpt)
@@ -184,7 +184,7 @@ migrateToSQLite: async () => {
 ```
 
 ### 3.3 Asynchronous Excel Synchronization & Backup (`xlsx`)
-To prevent total data loss in the event of hardware failures or database corruption, MedFlow features a non-blocking background excel backup system. Upon any write operation inside the SQLite transaction wrapper (such as saving a doctor, registering a service, or saving a payment receipt), a background IPC command is scheduled to dump the database state into `MedFlow_Database.xlsx` at `userData/ClinicData`:
+To prevent total data loss in the event of hardware failures or database corruption, Buvora features a non-blocking background excel backup system. Upon any write operation inside the SQLite transaction wrapper (such as saving a doctor, registering a service, or saving a payment receipt), a background IPC command is scheduled to dump the database state into `Buvora_Database.xlsx` at `userData/ClinicData`:
 
 ```typescript
 // electron/excelStorage.ts
@@ -227,7 +227,7 @@ This dual backup strategy ensures both maximum transactional integrity (via ACID
 
 ## Chapter 4: Cryptographic Licensing & Security Framework
 
-To secure the proprietary desktop distribution without connecting to a remote authorization server, MedFlow features a advanced local cryptography and system security architecture.
+To secure the proprietary desktop distribution without connecting to a remote authorization server, Buvora features a advanced local cryptography and system security architecture.
 
 ```
 +------------------------------------------+
@@ -276,7 +276,7 @@ const generateDateBoundKey = (id: string, dateStr: string) => {
 ```
 
 ### 4.2 Local Anti-Clock-Tampering Engine
-A common attack vector on offline licensing bounds involves moving the system clock back in time (e.g. from 2026 to 2020) to bypass expiration blocks. MedFlow counteracts this by keeping a record of the last time the application was actively run, saved in the secure configuration vault.
+A common attack vector on offline licensing bounds involves moving the system clock back in time (e.g. from 2026 to 2020) to bypass expiration blocks. Buvora counteracts this by keeping a record of the last time the application was actively run, saved in the secure configuration vault.
 
 On system launch, the application cross-references the current local system clock against the stored historical timestamp. If the current time is more than one hour prior to the stored time, the system flags clock manipulation, locks operational interfaces, and prompts the administrator.
 
@@ -294,13 +294,13 @@ store.set('last_seen_date', new Date().toISOString())
 ```
 
 ### 4.3 Interactive Developer Security Gate
-To guard physical data entry structures (such as modifying clinic physician directories or raw service pricing matrices), MedFlow implements a physical access key gate. In order to access critical control directories, the user must activate developer tools by keying in a secure sequence (`Ctrl + Shift + D`) and logging in with a developer master PIN (`"Burhan2003"`). This keeps patient billing details secure even on shared office terminals.
+To guard physical data entry structures (such as modifying clinic physician directories or raw service pricing matrices), Buvora implements a physical access key gate. In order to access critical control directories, the user must activate developer tools by keying in a secure sequence (`Ctrl + Shift + D`) and logging in with a developer master PIN (`"Burhan2003"`). This keeps patient billing details secure even on shared office terminals.
 
 ---
 
 ## Chapter 5: Frontend Design System & Interaction Mechanics
 
-MedFlow has been built to be visually elegant, highly interactive, and intuitive for clinical personnel. 
+Buvora has been built to be visually elegant, highly interactive, and intuitive for clinical personnel. 
 
 ### 5.1 Design Aesthetics and UI Architecture
 The layout uses a curated theme designed to minimize cognitive overload during busy clinical shifts:
@@ -310,7 +310,7 @@ The layout uses a curated theme designed to minimize cognitive overload during b
 
 ```
 +--------------------------------------------------------+
-|                      MEDFLOW CLINIC                    |
+|                      BUVORA CLINIC                     |
 +--------------------------------------------------------+
 |  [Sidebar]      |  [Dashboard Panel]                   |
 |  - Dashboard    |  ---------------------------------   |
@@ -330,10 +330,10 @@ The Patient Billing and Receipt panel operates with a highly validation-centric 
 
 ## Chapter 6: Production-Grade Print & Layout Engine
 
-To meet physical receipt printing standards, MedFlow features a comprehensive printing framework that supports single receipts as well as batch-selected receipt packets.
+To meet physical receipt printing standards, Buvora features a comprehensive printing framework that supports single receipts as well as batch-selected receipt packets.
 
 ### 6.1 Multi-Page Break and Print Stylesheet (`index.css`)
-MedFlow handles printing by using a highly customized `@media print` CSS layout that hides structural web layout headers, sidebars, and control buttons. When a print event is initiated, the application constructs a clean duplicate of the document using print-specific typography, precise spacing, and table boundaries, while enforcing clear page breaks between invoices:
+Buvora handles printing by using a highly customized `@media print` CSS layout that hides structural web layout headers, sidebars, and control buttons. When a print event is initiated, the application constructs a clean duplicate of the document using print-specific typography, precise spacing, and table boundaries, while enforcing clear page breaks between invoices:
 
 ```css
 /* Print Media Stylesheet */
@@ -397,7 +397,7 @@ System testing was carried out to assess performance, data persistence, and cryp
 ## Chapter 8: Conclusion & Future Scope
 
 ### 8.1 Summary of Contributions
-In this thesis, we presented the design, implementation, and performance evaluation of **MedFlow Clinic Management System**, an offline-first desktop environment for medical clinics. We successfully integrated a synchronous, relational SQLite transaction engine with a secondary automated Excel synchronization sheet, providing clinics with both high-performance local queries and easy administrative spreadsheet backups. The cryptographic licensing system provides robust, date-bound hardware locking and system clock tamper checks locally without relying on remote network connections. 
+In this thesis, we presented the design, implementation, and performance evaluation of **Buvora Clinic Management System**, an offline-first desktop environment for medical clinics. We successfully integrated a synchronous, relational SQLite transaction engine with a secondary automated Excel synchronization sheet, providing clinics with both high-performance local queries and easy administrative spreadsheet backups. The cryptographic licensing system provides robust, date-bound hardware locking and system clock tamper checks locally without relying on remote network connections. 
 
 ### 8.2 Future Scope
 Potential future directions for development include:

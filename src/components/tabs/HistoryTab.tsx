@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Filter, Search, Calendar, Users, FileText,
-  Printer, Edit2, Trash2, CheckCircle
+  Printer, Edit2, Trash2, CheckCircle, MessageSquare, Send, X, Phone
 } from 'lucide-react';
 import { type Receipt, storage } from '../../lib/storage';
+import { useToast } from '../ui/Toast';
+import { sendReceiptViaWhatsApp, formatReceiptWhatsAppMessage } from '../../lib/whatsappReceipt';
 
 interface HistoryTabProps {
   onPrint: (receipts: Receipt[]) => void;
@@ -20,12 +22,41 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
   onDelete,
   onExportCsv,
 }) => {
+  const toast = useToast();
   const [localReceipts, setLocalReceipts] = useState<Receipt[]>([]);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [displayLimit, setDisplayLimit] = useState(INITIAL_LIMIT);
+
+  // WhatsApp Send Modal State
+  const [whatsAppModalReceipt, setWhatsAppModalReceipt] = useState<Receipt | null>(null);
+  const [targetPhone, setTargetPhone] = useState('');
+  const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
+
+  const handleOpenWhatsAppModal = (receipt: Receipt) => {
+    setWhatsAppModalReceipt(receipt);
+    setTargetPhone(receipt.patientPhone || '');
+  };
+
+  const handleSendWhatsApp = async () => {
+    if (!whatsAppModalReceipt) return;
+    if (!targetPhone.trim()) {
+      toast('Please enter a valid patient phone number.', { type: 'error' });
+      return;
+    }
+    setIsSendingWhatsApp(true);
+    try {
+      const res = await sendReceiptViaWhatsApp(whatsAppModalReceipt, targetPhone.trim());
+      toast(res.message || 'Receipt sent via WhatsApp successfully!', { type: 'success' });
+      setWhatsAppModalReceipt(null);
+    } catch (err: any) {
+      toast(err.message || 'Failed to send receipt via WhatsApp.', { type: 'error' });
+    } finally {
+      setIsSendingWhatsApp(false);
+    }
+  };
 
   // Fetch receipts from backend with filters and pagination
   useEffect(() => {
@@ -336,6 +367,13 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
                               <td className="text-right">
                                 <div className="action-buttons">
                                   <button
+                                    className="btn-icon-xs whatsapp-btn"
+                                    onClick={() => handleOpenWhatsAppModal(r)}
+                                    title="Send Receipt via WhatsApp"
+                                  >
+                                    <MessageSquare size={14} />
+                                  </button>
+                                  <button
                                     className="btn-icon-xs print-btn"
                                     onClick={() => onPrint([r])}
                                     title="Print Receipt"
@@ -392,6 +430,107 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
         )}
       </div>
       </div>
+
+      {/* WhatsApp Send & Preview Modal */}
+      {whatsAppModalReceipt && (
+        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.65)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+          <div className="modal-content card" style={{ maxWidth: '520px', width: '100%', borderRadius: '16px', background: 'white', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.25rem 1.5rem', background: '#f0fdf4', borderBottom: '1px solid #dcfce7' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <div style={{ background: '#dcfce7', color: '#16a34a', padding: '0.5rem', borderRadius: '10px', display: 'flex', alignItems: 'center' }}>
+                  <MessageSquare size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.15rem', color: '#14532d', fontFamily: 'Outfit, sans-serif' }}>Send Receipt via WhatsApp</h3>
+                  <span style={{ fontSize: '0.75rem', color: '#16a34a', fontWeight: 600 }}>Receipt #{whatsAppModalReceipt.receiptNumber}</span>
+                </div>
+              </div>
+              <button onClick={() => setWhatsAppModalReceipt(null)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748b', padding: '4px' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
+              <div style={{ background: '#f8fafc', padding: '0.85rem 1rem', borderRadius: '10px', border: '1px solid var(--border)', fontSize: '0.875rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Patient Name:</span>
+                  <strong style={{ color: 'var(--text-main)' }}>{whatsAppModalReceipt.patientName}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Doctor:</span>
+                  <span style={{ color: 'var(--text-main)', fontWeight: 500 }}>Dr. {whatsAppModalReceipt.doctorName}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Date:</span>
+                  <span style={{ color: 'var(--text-main)' }}>{whatsAppModalReceipt.date}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '4px', borderTop: '1px dashed var(--border)' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Total Amount:</span>
+                  <strong style={{ color: '#16a34a', fontSize: '1rem' }}>₹{Number(whatsAppModalReceipt.total || 0).toFixed(2)} ({whatsAppModalReceipt.paymentMethod})</strong>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                  <Phone size={14} style={{ color: '#16a34a' }} /> RECIPIENT PHONE NUMBER *
+                </label>
+                <input
+                  type="tel"
+                  placeholder="Enter 10-digit mobile or international phone..."
+                  value={targetPhone}
+                  onChange={(e) => setTargetPhone(e.target.value)}
+                  style={{ width: '100%', padding: '0.65rem 0.85rem', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '0.9rem' }}
+                />
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '3px', display: 'block' }}>
+                  Enter 10-digit number (e.g. 9876543210). Indian country code (+91) is added automatically.
+                </span>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                  MESSAGE PREVIEW
+                </label>
+                <div style={{ background: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid var(--border)', maxHeight: '140px', overflowY: 'auto', fontSize: '0.78rem', whiteSpace: 'pre-line', color: '#334155', fontFamily: 'monospace' }}>
+                  {formatReceiptWhatsAppMessage(whatsAppModalReceipt)}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', padding: '1rem 1.5rem', borderTop: '1px solid var(--border)', background: '#f8fafc' }}>
+              <button
+                type="button"
+                className="btn-secondary-sm"
+                onClick={() => setWhatsAppModalReceipt(null)}
+                style={{ padding: '0.6rem 1.25rem' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={handleSendWhatsApp}
+                disabled={isSendingWhatsApp || !targetPhone.trim()}
+                style={{
+                  background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
+                  border: 'none',
+                  color: 'white',
+                  padding: '0.6rem 1.4rem',
+                  borderRadius: '8px',
+                  fontWeight: 700,
+                  fontSize: '0.875rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 10px rgba(22, 163, 74, 0.3)'
+                }}
+              >
+                <Send size={15} /> {isSendingWhatsApp ? 'Sending...' : 'Send WhatsApp Receipt'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

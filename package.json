@@ -49,7 +49,7 @@
     "vite-plugin-electron-renderer": "^0.14.6"
   },
   "build": {
-    "appId": "com.medflow.clinic",
+    "appId": "com.buvora.clinic",
     "productName": "Buvora",
     "executableName": "Buvora",
     "asar": true,

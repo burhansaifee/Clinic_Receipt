@@ -22,6 +22,7 @@ if (typeof window !== 'undefined' && !(window as any).ipcRenderer) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-Buvora-Auth': secret,
           'X-MedFlow-Auth': secret
         },
         body: JSON.stringify({ method, args })
@@ -111,7 +112,8 @@ if (typeof window !== 'undefined' && !(window as any).ipcRenderer) {
   (window as any).whatsappBot = {
     getStatus: () => rpcCall('ping').then(() => ({ status: 'CONNECTED' })).catch(() => ({ status: 'DISCONNECTED' })),
     onStatusChange: () => () => {},
-    getSchedule: () => rpcCall('whatsapp-get-schedule')
+    getSchedule: () => rpcCall('whatsapp-get-schedule'),
+    sendMessage: (phone: string, message: string) => rpcCall('whatsapp-send-message', phone, message)
   };
 
   const dbMethods = [

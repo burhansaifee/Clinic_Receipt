@@ -309,6 +309,7 @@ async function getDoctorsFromDb() {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
+          'X-Buvora-Auth': store.get('network_secret') as string,
           'X-MedFlow-Auth': store.get('network_secret') as string
         },
         body: JSON.stringify({ method: 'db-get-doctors', args: [] }),
@@ -344,6 +345,7 @@ async function saveAppointmentToDb(appointment: any) {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
+          'X-Buvora-Auth': store.get('network_secret') as string,
           'X-MedFlow-Auth': store.get('network_secret') as string
         },
         body: JSON.stringify({ method: 'db-save-appointment', args: [appointment] }),

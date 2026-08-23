@@ -485,6 +485,20 @@
   border-radius: 6px; border: 1px solid #e2e8f0; color: #64748b; background: white; transition: all 0.2s;
 }
 
+.btn-icon-xs.whatsapp-btn {
+  color: #16a34a;
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.btn-icon-xs.whatsapp-btn:hover {
+  background: #16a34a;
+  color: white;
+  border-color: #16a34a;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(22, 163, 74, 0.25);
+}
+
 .history-table .action-buttons {
   display: flex;
   flex-direction: row;

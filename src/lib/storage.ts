@@ -237,7 +237,7 @@ export const storage = {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `medflow_backup_${format(new Date(), 'yyyyMMdd_HHmm')}.json`;
+    a.download = `buvora_backup_${format(new Date(), 'yyyyMMdd_HHmm')}.json`;
     a.click();
     URL.revokeObjectURL(url);
   },

@@ -7,11 +7,23 @@ let db: any;
 export const database = {
   init: (Database: any, userId?: string) => {
     const DATA_DIR = path.join(app.getPath('userData'), 'ClinicData');
-    const DB_PATH = path.join(DATA_DIR, 'medflow.db');
-
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
+
+    const legacyDbPath = path.join(DATA_DIR, 'medflow.db');
+    const buvoraDbPath = path.join(DATA_DIR, 'buvora.db');
+
+    if (fs.existsSync(legacyDbPath) && !fs.existsSync(buvoraDbPath)) {
+      try {
+        fs.renameSync(legacyDbPath, buvoraDbPath);
+        console.log('[DB] Renamed legacy medflow.db to buvora.db');
+      } catch (e) {
+        console.warn('[DB] Could not rename legacy medflow.db:', e);
+      }
+    }
+
+    const DB_PATH = fs.existsSync(buvoraDbPath) ? buvoraDbPath : (fs.existsSync(legacyDbPath) ? legacyDbPath : buvoraDbPath);
 
     if (db) {
       try {
@@ -45,7 +57,7 @@ export const database = {
       CREATE TABLE IF NOT EXISTS services (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
-        amount REAL
+        amount REAL NOT NULL
       );
 
       CREATE TABLE IF NOT EXISTS receipts (
@@ -56,13 +68,26 @@ export const database = {
         patientAge TEXT,
         patientGender TEXT,
         patientPhone TEXT,
-        doctorId TEXT,
-        doctorName TEXT,
-        items TEXT, -- JSON string
-        total REAL,
-        paymentMethod TEXT,
+        doctorId TEXT NOT NULL,
+        doctorName TEXT NOT NULL,
+        total REAL NOT NULL,
+        paymentMethod TEXT DEFAULT 'CASH',
+        appointmentId TEXT,
         showQrCode INTEGER DEFAULT 0,
         qrCodeText TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS receipt_items (
+        id TEXT PRIMARY KEY,
+        receiptId TEXT NOT NULL,
+        description TEXT NOT NULL,
+        amount REAL NOT NULL,
+        FOREIGN KEY (receiptId) REFERENCES receipts(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
       );
 
       CREATE TABLE IF NOT EXISTS prescriptions (
@@ -73,11 +98,9 @@ export const database = {
         patientAge TEXT,
         patientGender TEXT,
         patientPhone TEXT,
-        doctorId TEXT,
-        doctorName TEXT,
-        symptoms TEXT,
+        doctorId TEXT NOT NULL,
+        doctorName TEXT NOT NULL,
         diagnosis TEXT,
-        medicines TEXT, -- JSON string
         notes TEXT
       );
 
@@ -170,7 +193,9 @@ export const database = {
 
   getDbPath: () => {
     const DATA_DIR = path.join(app.getPath('userData'), 'ClinicData');
-    return path.join(DATA_DIR, 'medflow.db');
+    const buvoraDb = path.join(DATA_DIR, 'buvora.db');
+    const legacyDb = path.join(DATA_DIR, 'medflow.db');
+    return fs.existsSync(buvoraDb) ? buvoraDb : (fs.existsSync(legacyDb) ? legacyDb : buvoraDb);
   },
 
   // Doctors

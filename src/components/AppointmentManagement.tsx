@@ -157,7 +157,7 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
       console.log(`Sending WhatsApp message to ${phone}...`);
       try {
         if (status === 'CONFIRMED') {
-          const msg = `✅ *Appointment Confirmed!*\n\nYour appointment with ${doctorName || 'your doctor'} on *${date || 'your requested slot'}* has been confirmed by MedFlow Clinic. We look forward to seeing you!`;
+          const msg = `✅ *Appointment Confirmed!*\n\nYour appointment with ${doctorName || 'your doctor'} on *${date || 'your requested slot'}* has been confirmed by Buvora Clinic. We look forward to seeing you!`;
           await (window as any).whatsappBot.sendMessage(phone, msg);
           console.log('Confirmation message sent successfully via UI.');
         }
@@ -196,7 +196,7 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
           `Dear *${rejectingApt.patientName}*,\n\n` +
           `Unfortunately, your appointment request with *${rejectingApt.doctorName}* on *${rejectingApt.appointmentDate} (${rejectingApt.appointmentTime})* could not be approved.\n\n` +
           `📌 *Reason for Rejection:*\n_${finalReason}_\n\n` +
-          `Please contact MedFlow Clinic reception if you wish to reschedule or request another time slot. Thank you!`;
+          `Please contact Buvora Clinic reception if you wish to reschedule or request another time slot. Thank you!`;
 
         try {
           await (window as any).whatsappBot.sendMessage(rejectingApt.patientPhone, msg);

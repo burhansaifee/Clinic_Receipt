@@ -139,7 +139,7 @@ function startHostServer() {
       res.setHeader('Access-Control-Allow-Origin', origin);
     }
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-MedFlow-Auth');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Buvora-Auth, X-MedFlow-Auth');
 
     if (req.method === 'OPTIONS') {
       res.writeHead(204);
@@ -163,7 +163,7 @@ function startHostServer() {
         rpcRateMap.set(clientIp, { count: 1, resetAt: now + 60000 });
       }
 
-      const authHeader = req.headers['x-medflow-auth'];
+      const authHeader = req.headers['x-buvora-auth'] || req.headers['x-medflow-auth'];
       const expectedSecret = store.get('network_secret') as string;
       if (authHeader !== expectedSecret) {
         res.writeHead(401, { 'Content-Type': 'application/json' });
@@ -253,6 +253,9 @@ function startHostServer() {
             const [schedule] = args;
             store.set('whatsapp_schedule', schedule);
             result = { success: true };
+          } else if (method === 'whatsapp-send-message') {
+            const [phone, message] = args;
+            result = await whatsappBot.sendMessage(phone, message);
           } else if (method === 'validate-client-license') {
             const [machineId, fullKey] = args;
             if (!fullKey) {
@@ -380,6 +383,7 @@ async function clientRequest(method: string, ...args: any[]) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'X-Buvora-Auth': secret,
         'X-MedFlow-Auth': secret
       },
       body: JSON.stringify({ method, args }),
@@ -620,6 +624,7 @@ ipcMain.handle('whatsapp-toggle-autoreply', (_, enabled: boolean) => {
   return whatsappBot.toggleAutoReply(enabled);
 })
 ipcMain.handle('whatsapp-send-message', (_, phone: string, message: string) => {
+  if (workstationMode === 'client') return clientRequest('whatsapp-send-message', phone, message);
   return whatsappBot.sendMessage(phone, message);
 })
 ipcMain.handle('whatsapp-get-schedule', () => {
@@ -899,6 +904,7 @@ ipcMain.handle('test-connection', async (_, ip: string, port: number) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'X-Buvora-Auth': secret,
         'X-MedFlow-Auth': secret,
       },
       body: JSON.stringify({ method: 'ping', args: [] }),
@@ -938,6 +944,15 @@ function createWindow() {
         ],
       },
     });
+  });
+
+  // Open external web links (e.g. WhatsApp Web wa.me) in system default browser
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https://') || url.startsWith('http://') || url.startsWith('mailto:')) {
+      shell.openExternal(url);
+      return { action: 'deny' };
+    }
+    return { action: 'allow' };
   });
 
   // Test active push message to Renderer-process.

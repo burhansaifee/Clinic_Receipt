@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { storage, cleanAgeString, type Doctor, type Receipt, type ReceiptItem, type Service } from '../lib/storage';
-import { Plus, Trash2, Save, User, CreditCard, AlertCircle, QrCode } from 'lucide-react';
+import { Plus, Trash2, Save, User, CreditCard, AlertCircle, QrCode, MessageSquare, Printer, Send } from 'lucide-react';
 import { format } from 'date-fns';
 import QRCodeImage from './ui/QRCodeImage';
+import { useToast } from './ui/Toast';
+import { sendReceiptViaWhatsApp } from '../lib/whatsappReceipt';
 
 interface ReceiptFormProps {
   doctors: Doctor[];
@@ -28,6 +30,7 @@ const parseAge = (ageStr: string) => {
 };
 
 const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, onPrintRequest, initialData }) => {
+  const toast = useToast();
   const [patientName, setPatientName] = useState(initialData?.patientName || '');
   const [ageYears, setAgeYears] = useState(() => {
     if (initialData?.patientAge) {
@@ -204,7 +207,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, onPrintReque
 
   const effectiveQrText = getEffectiveQrText();
 
-  const handleSave = async (e: React.FormEvent, shouldPrint: boolean = true) => {
+  const handleSave = async (e: React.FormEvent, shouldPrint: boolean = false, shouldSendWhatsApp: boolean = false) => {
     e.preventDefault();
     
     if (formRef.current && !formRef.current.reportValidity()) {
@@ -213,6 +216,11 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, onPrintReque
 
     if (!selectedDoctorId) {
       alert('Please select a doctor');
+      return;
+    }
+
+    if (shouldSendWhatsApp && !patientPhone.trim()) {
+      toast('Please enter a patient phone number to send via WhatsApp.', { type: 'error' });
       return;
     }
 
@@ -248,6 +256,16 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, onPrintReque
       }
 
       setSaveError(null);
+
+      if (shouldSendWhatsApp) {
+        try {
+          const res = await sendReceiptViaWhatsApp(receipt);
+          toast(res.message || 'Receipt sent via WhatsApp successfully!', { type: 'success' });
+        } catch (waErr: any) {
+          toast(waErr.message || 'Failed to send WhatsApp message', { type: 'error' });
+        }
+      }
+
       if (shouldPrint) {
         onPrintRequest(receipt);
       }
@@ -565,13 +583,21 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, onPrintReque
         )}
 
         <div className="form-submit-actions no-print">
-          <button type="button" className="btn-secondary-lg" onClick={(e) => handleSave(e, false)}>
-            <Save size={20} />
-            Save Receipt Only
+          <button type="button" className="btn-secondary-lg" onClick={(e) => handleSave(e, false, false)}>
+            <Save size={18} />
+            Save Only
           </button>
-          <button type="button" className="btn-primary-lg" onClick={(e) => handleSave(e, true)}>
-            <Save size={20} />
-            Save & Print Receipt
+          <button type="button" className="btn-whatsapp-lg" onClick={(e) => handleSave(e, false, true)} title="Save receipt and send to patient on WhatsApp">
+            <MessageSquare size={18} />
+            Save &amp; Send WhatsApp
+          </button>
+          <button type="button" className="btn-primary-lg" onClick={(e) => handleSave(e, true, false)} title="Save receipt and print physical copy">
+            <Printer size={18} />
+            Save &amp; Print
+          </button>
+          <button type="button" className="btn-combo-lg" onClick={(e) => handleSave(e, true, true)} title="Save, Print Receipt &amp; Send via WhatsApp">
+            <Send size={18} />
+            Save, Print &amp; WhatsApp
           </button>
         </div>
       </form>
@@ -819,15 +845,18 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, onPrintReque
           box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
 
-        .btn-primary-lg, .btn-secondary-lg {
-          padding: 1rem 2.5rem;
-          font-size: 1.1rem;
-          font-weight: 600;
+        .btn-primary-lg, .btn-secondary-lg, .btn-whatsapp-lg, .btn-combo-lg {
+          padding: 0.85rem 1.6rem;
+          font-size: 0.95rem;
+          font-weight: 700;
           display: flex;
           align-items: center;
-          gap: 0.75rem;
+          gap: 0.65rem;
+          border-radius: 12px;
           box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-          transition: all 0.2s;
+          transition: all 0.2s ease;
+          cursor: pointer;
+          border: none;
         }
 
         .btn-primary-lg {
@@ -836,15 +865,37 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, onPrintReque
           box-shadow: 0 10px 15px -3px rgba(14, 165, 233, 0.4);
         }
 
+        .btn-whatsapp-lg {
+          background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+          color: white;
+          box-shadow: 0 10px 15px -3px rgba(22, 163, 74, 0.35);
+        }
+
+        .btn-combo-lg {
+          background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);
+          color: white;
+          box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.35);
+        }
+
         .btn-secondary-lg {
           background: white;
           color: var(--text-main);
           border: 1px solid var(--border);
         }
 
-        .btn-primary-lg:hover, .btn-secondary-lg:hover {
+        .btn-primary-lg:hover, .btn-secondary-lg:hover, .btn-whatsapp-lg:hover, .btn-combo-lg:hover {
           transform: translateY(-2px);
-          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+          box-shadow: 0 15px 20px -4px rgba(0, 0, 0, 0.15);
+        }
+
+        .btn-whatsapp-lg:hover {
+          background: linear-gradient(135deg, #15803d 0%, #166534 100%);
+          box-shadow: 0 15px 20px -4px rgba(22, 163, 74, 0.45);
+        }
+
+        .btn-combo-lg:hover {
+          background: linear-gradient(135deg, #4338ca 0%, #312e81 100%);
+          box-shadow: 0 15px 20px -4px rgba(79, 70, 229, 0.45);
         }
 
         .btn-secondary-lg:hover {

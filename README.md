@@ -1,13 +1,13 @@
-# MedFlow Clinic Management System
+# Buvora Clinic Management System
 
 <div align="center">
-  <img src="public/icon.png" alt="MedFlow Clinic Logo" width="120" height="120" />
+  <img src="public/icon.png" alt="Buvora Clinic Logo" width="120" height="120" />
   <h3>Modern Offline Clinic Management & Receipt System</h3>
 </div>
 
 ## 📌 Overview
 
-**MedFlow Clinic** is a desktop application built to streamline clinic operations, seamlessly managing patient receipts, financial tracking, and medical history in a completely offline environment. Designed for speed and reliability, it ensures data privacy by keeping all information stored securely on the local machine.
+**Buvora Clinic** is a desktop application built to streamline clinic operations, seamlessly managing patient receipts, financial tracking, and medical history in a completely offline environment. Designed for speed and reliability, it ensures data privacy by keeping all information stored securely on the local machine.
 
 ## ✨ Features
 

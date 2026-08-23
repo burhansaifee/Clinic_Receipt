@@ -20,7 +20,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('[MedFlow Error Boundary] Uncaught error:', error, errorInfo);
+    console.error('[Buvora Error Boundary] Uncaught error:', error, errorInfo);
   }
 
   handleRecover = () => {

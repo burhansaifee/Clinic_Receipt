@@ -19,6 +19,8 @@ import {
 } from 'lucide-react';
 import { storage, type Doctor, type Receipt as ReceiptType, type Prescription, type ReceiptPaperType, type PrescriptionPaperType } from '../lib/storage';
 import type { Tab } from './layout/Sidebar';
+import { useToast } from './ui/Toast';
+import { sendReceiptViaWhatsApp } from '../lib/whatsappReceipt';
 
 interface DashboardProps {
   doctors: Doctor[];
@@ -48,6 +50,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   onNavigate,
   onNewReceipt,
 }) => {
+  const toast = useToast();
   const [recentReceipts, setRecentReceipts] = useState<ReceiptType[]>([]);
   const [recentAppointments, setRecentAppointments] = useState<any[]>([]);
   const [paymentBreakdown, setPaymentBreakdown] = useState({
@@ -418,7 +421,24 @@ const Dashboard: React.FC<DashboardProps> = ({
                   </div>
 
                   <div className="activity-right">
-                    <span className="activity-amount">₹{Number(rec.total || 0).toLocaleString()}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span className="activity-amount">₹{Number(rec.total || 0).toLocaleString()}</span>
+                      <button
+                        className="btn-quick-wa"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            const res = await sendReceiptViaWhatsApp(rec);
+                            toast(res.message || 'Receipt sent via WhatsApp!', { type: 'success' });
+                          } catch (err: any) {
+                            toast(err.message || 'Failed to send WhatsApp message', { type: 'error' });
+                          }
+                        }}
+                        title="Send Receipt via WhatsApp"
+                      >
+                        <MessageSquare size={12} />
+                      </button>
+                    </div>
                     <span
                       className={`payment-badge-pill ${
                         rec.paymentMethod === 'ONLINE'
@@ -1217,6 +1237,28 @@ const Dashboard: React.FC<DashboardProps> = ({
         .badge-cash { background: #dcfce7; color: #15803d; }
         .badge-online { background: #e0f2fe; color: #0284c7; }
         .badge-free { background: #f1f5f9; color: #64748b; }
+
+        .btn-quick-wa {
+          width: 22px;
+          height: 22px;
+          border-radius: 6px;
+          border: 1px solid #bbf7d0;
+          background: #f0fdf4;
+          color: #16a34a;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          padding: 0;
+        }
+
+        .btn-quick-wa:hover {
+          background: #16a34a;
+          color: white;
+          border-color: #16a34a;
+          transform: scale(1.1);
+        }
 
         .apt-badge-pill {
           font-size: 0.68rem;

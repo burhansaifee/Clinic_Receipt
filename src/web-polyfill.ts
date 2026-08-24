@@ -90,10 +90,15 @@ if (typeof window !== 'undefined' && !(window as any).ipcRenderer) {
     getKnownUsers: () => rpcCall('get-known-users'),
     addKnownUser: (userId: string, role: string, doctorId?: string) => rpcCall('add-known-user', userId, role, doctorId),
     deleteKnownUser: (userId: string) => rpcCall('delete-known-user', userId),
-    connectUser: async (userId: string) => {
-      localStorage.setItem('buvora_user', userId);
-      return true;
+    connectUser: async (userId: string, password?: string) => {
+      const res = await rpcCall('connect-user', userId, password);
+      if (res && res.success && !res.requirePasswordSetup) {
+        localStorage.setItem('buvora_user', userId.trim().toLowerCase());
+      }
+      return res;
     },
+    setUserPassword: (userId: string, password?: string) => rpcCall('set-user-password', userId, password),
+    resetAdminPassword: () => rpcCall('reset-admin-password'),
     getCurrentUser: async () => localStorage.getItem('buvora_user'),
     getCurrentUserRole: async () => {
       const users = await rpcCall('get-known-users');

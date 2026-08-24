@@ -200,7 +200,18 @@ function startHostServer() {
               throw new Error(`Database method ${camelMethod} not found`);
             }
           } else if (method === 'get-known-users') {
-            result = store.get('known_users') || [];
+            const knownUsers = store.get('known_users') as any[] || [];
+            try {
+              const allDocs = database.getDoctors();
+              for (const doc of allDocs) {
+                const docIdClean = (doc.id || '').toLowerCase();
+                const docNameClean = (doc.name || '').toLowerCase();
+                if (docIdClean && !knownUsers.some((u: any) => u.id === docIdClean || u.id === docNameClean)) {
+                  knownUsers.push({ id: docNameClean || docIdClean, role: 'doctor', doctorId: doc.id });
+                }
+              }
+            } catch (e) {}
+            result = knownUsers;
           } else if (method === 'add-known-user') {
             const [userId, role, doctorId] = args;
             const cleanId = userId.trim().toLowerCase();
@@ -227,7 +238,21 @@ function startHostServer() {
             const [userId, password] = args;
             const cleanId = userId.trim().toLowerCase();
             const knownUsers = store.get('known_users') as any[] || [];
-            const idx = knownUsers.findIndex(u => u.id === cleanId);
+            let idx = knownUsers.findIndex(u => u.id === cleanId);
+            if (idx === -1) {
+              try {
+                const allDocs = database.getDoctors();
+                const matchedDoc = allDocs.find((d: any) => 
+                  (d.id && d.id.toLowerCase() === cleanId) || 
+                  (d.name && d.name.toLowerCase() === cleanId) ||
+                  (d.name && d.name.toLowerCase().replace(/^dr\.?\s*/i, '') === cleanId.replace(/^dr\.?\s*/i, ''))
+                );
+                if (matchedDoc) {
+                  knownUsers.push({ id: cleanId, role: 'doctor', doctorId: matchedDoc.id });
+                  idx = knownUsers.length - 1;
+                }
+              } catch (e) {}
+            }
             if (idx !== -1) {
               const hashPassword = (pwd: string) => crypto.createHash('sha256').update(pwd + PASSWORD_SALT).digest('hex');
               knownUsers[idx].password = password ? hashPassword(password) : '';
@@ -251,12 +276,27 @@ function startHostServer() {
             const cleanId = userId.trim().toLowerCase();
             const knownUsers = store.get('known_users') as any[] || [];
             const hashPassword = (pwd: string) => crypto.createHash('sha256').update(pwd + PASSWORD_SALT).digest('hex');
-            const user = knownUsers.find(u => u.id === cleanId);
+            let user = knownUsers.find(u => u.id === cleanId);
+            if (!user) {
+              try {
+                const allDocs = database.getDoctors();
+                const matchedDoc = allDocs.find((d: any) => 
+                  (d.id && d.id.toLowerCase() === cleanId) || 
+                  (d.name && d.name.toLowerCase() === cleanId) ||
+                  (d.name && d.name.toLowerCase().replace(/^dr\.?\s*/i, '') === cleanId.replace(/^dr\.?\s*/i, ''))
+                );
+                if (matchedDoc) {
+                  user = { id: cleanId, role: 'doctor', doctorId: matchedDoc.id, password: '' };
+                  knownUsers.push(user);
+                  store.set('known_users', knownUsers);
+                }
+              } catch (e) {}
+            }
             if (!user) {
               result = { success: false, error: 'Access Denied: User ID is not recognized.' };
             } else if (!user.password) {
               result = { success: true, requirePasswordSetup: true, role: user.role, doctorId: user.doctorId };
-            } else if (password === undefined) {
+            } else if (password === undefined || password === null || password === '') {
               result = { success: false, requirePasswordInput: true };
             } else {
               const isHashedMatch = user.password === hashPassword(password);
@@ -695,10 +735,21 @@ ipcMain.handle('get-known-users', async () => {
       return store.get('known_users') || [];
     }
   }
-  return store.get('known_users') || [
+  const knownUsers = store.get('known_users') as any[] || [
     { id: 'default', role: 'reception' },
     { id: 'admin', role: 'reception' }
   ];
+  try {
+    const allDocs = database.getDoctors();
+    for (const doc of allDocs) {
+      const docIdClean = (doc.id || '').toLowerCase();
+      const docNameClean = (doc.name || '').toLowerCase();
+      if (docIdClean && !knownUsers.some((u: any) => u.id === docIdClean || u.id === docNameClean)) {
+        knownUsers.push({ id: docNameClean || docIdClean, role: 'doctor', doctorId: doc.id });
+      }
+    }
+  } catch (e) {}
+  return knownUsers;
 });
 
 ipcMain.handle('add-known-user', (_, userId: string, role: string, doctorId?: string) => {
@@ -769,7 +820,23 @@ ipcMain.handle('connect-user', async (_, userId: string, password?: string) => {
     return crypto.createHash('sha256').update(pwd + PASSWORD_SALT).digest('hex');
   };
 
-  const user = knownUsers.find(u => u.id === cleanId);
+  let user = knownUsers.find(u => u.id === cleanId);
+  if (!user) {
+    try {
+      const allDocs = database.getDoctors();
+      const matchedDoc = allDocs.find((d: any) => 
+        (d.id && d.id.toLowerCase() === cleanId) || 
+        (d.name && d.name.toLowerCase() === cleanId) ||
+        (d.name && d.name.toLowerCase().replace(/^dr\.?\s*/i, '') === cleanId.replace(/^dr\.?\s*/i, ''))
+      );
+      if (matchedDoc) {
+        user = { id: cleanId, role: 'doctor', doctorId: matchedDoc.id, password: '' };
+        knownUsers.push(user);
+        store.set('known_users', knownUsers);
+      }
+    } catch (e) {}
+  }
+
   if (!user) {
     return { success: false, error: 'Access Denied: User ID is not recognized.' };
   }
@@ -778,7 +845,7 @@ ipcMain.handle('connect-user', async (_, userId: string, password?: string) => {
   if (!user.password) {
     return { success: true, requirePasswordSetup: true, role: user.role, doctorId: user.doctorId };
   }
-  if (password === undefined) {
+  if (password === undefined || password === null || password === '') {
     return { success: false, requirePasswordInput: true };
   }
   
@@ -802,7 +869,21 @@ ipcMain.handle('set-user-password', (_, userId: string, password?: string) => {
 
   const cleanId = userId.trim().toLowerCase();
   const knownUsers = store.get('known_users') as { id: string, role: string, doctorId?: string, password?: string }[] || [];
-  const idx = knownUsers.findIndex(u => u.id === cleanId);
+  let idx = knownUsers.findIndex(u => u.id === cleanId);
+  if (idx === -1) {
+    try {
+      const allDocs = database.getDoctors();
+      const matchedDoc = allDocs.find((d: any) => 
+        (d.id && d.id.toLowerCase() === cleanId) || 
+        (d.name && d.name.toLowerCase() === cleanId) ||
+        (d.name && d.name.toLowerCase().replace(/^dr\.?\s*/i, '') === cleanId.replace(/^dr\.?\s*/i, ''))
+      );
+      if (matchedDoc) {
+        knownUsers.push({ id: cleanId, role: 'doctor', doctorId: matchedDoc.id });
+        idx = knownUsers.length - 1;
+      }
+    } catch (e) {}
+  }
   if (idx !== -1) {
     const hashPassword = (pwd: string) => crypto.createHash('sha256').update(pwd + PASSWORD_SALT).digest('hex');
     knownUsers[idx].password = password ? hashPassword(password) : '';

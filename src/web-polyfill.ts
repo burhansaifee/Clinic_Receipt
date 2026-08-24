@@ -131,8 +131,8 @@ if (typeof window !== 'undefined' && !(window as any).ipcRenderer) {
     dbPolyfill[method] = (...args: any[]) => rpcCall(rpcMethodName, ...args);
   }
   
-  // Custom mapping for options which sometimes requires wrapping in main.ts
-  dbPolyfill.getReceipts = (options?: any) => rpcCall('db-get-receipts', options ? [options] : []);
+  // Custom mapping for options
+  dbPolyfill.getReceipts = (options?: any) => rpcCall('db-get-receipts', options);
 
   (window as any).database = dbPolyfill;
 }

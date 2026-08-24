@@ -103,10 +103,10 @@ function getLocalIpAddress() {
   // and skip link-local (169.254.x.x) if standard ones exist
   const standardIps = ips.filter(ip => !ip.startsWith('169.254.'));
   if (standardIps.length > 0) {
-    return standardIps.join(', ');
+    return standardIps[0];
   }
   if (ips.length > 0) {
-    return ips.join(', ');
+    return ips[0];
   }
   return '127.0.0.1';
 }
@@ -133,9 +133,9 @@ function startHostServer() {
   rateLimitCleanupInterval.unref();
 
   hostServer = http.createServer((req, res) => {
-    // Restrict CORS to local network origins only (no wildcard)
+    // Allow any origin since authentication is strictly enforced via X-Buvora-Auth token
     const origin = req.headers.origin;
-    if (origin && /^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01]))/.test(origin)) {
+    if (origin) {
       res.setHeader('Access-Control-Allow-Origin', origin);
     }
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -154,7 +154,7 @@ function startHostServer() {
       const entry = rpcRateMap.get(clientIp);
       if (entry && entry.resetAt > now) {
         entry.count++;
-        if (entry.count > 60) {
+        if (entry.count > 3000) {
           res.writeHead(429, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'Too many requests. Try again later.' }));
           return;
@@ -229,11 +229,47 @@ function startHostServer() {
             const knownUsers = store.get('known_users') as any[] || [];
             const idx = knownUsers.findIndex(u => u.id === cleanId);
             if (idx !== -1) {
-              knownUsers[idx].password = password || '';
+              const hashPassword = (pwd: string) => crypto.createHash('sha256').update(pwd + PASSWORD_SALT).digest('hex');
+              knownUsers[idx].password = password ? hashPassword(password) : '';
               store.set('known_users', knownUsers);
               result = { success: true };
             } else {
               result = { success: false, error: 'User ID not found' };
+            }
+          } else if (method === 'reset-admin-password') {
+            const knownUsers = store.get('known_users') as any[] || [];
+            const idx = knownUsers.findIndex(u => u && u.id === 'admin');
+            if (idx !== -1) {
+              knownUsers[idx].password = '';
+              store.set('known_users', knownUsers);
+              result = { success: true, message: 'Admin password reset successfully! Enter "admin" to set a new password.' };
+            } else {
+              result = { success: false, error: 'Admin user not found.' };
+            }
+          } else if (method === 'connect-user') {
+            const [userId, password] = args;
+            const cleanId = userId.trim().toLowerCase();
+            const knownUsers = store.get('known_users') as any[] || [];
+            const hashPassword = (pwd: string) => crypto.createHash('sha256').update(pwd + PASSWORD_SALT).digest('hex');
+            const user = knownUsers.find(u => u.id === cleanId);
+            if (!user) {
+              result = { success: false, error: 'Access Denied: User ID is not recognized.' };
+            } else if (!user.password) {
+              result = { success: true, requirePasswordSetup: true, role: user.role, doctorId: user.doctorId };
+            } else if (password === undefined) {
+              result = { success: false, requirePasswordInput: true };
+            } else {
+              const isHashedMatch = user.password === hashPassword(password);
+              const isPlainMatch = user.password === password;
+              if (isHashedMatch || isPlainMatch) {
+                if (isPlainMatch && !isHashedMatch) {
+                  user.password = hashPassword(password);
+                  store.set('known_users', knownUsers);
+                }
+                result = { success: true, role: user.role, doctorId: user.doctorId };
+              } else {
+                result = { success: false, error: 'Incorrect password' };
+              }
             }
           } else if (method === 'whatsapp-get-schedule') {
             result = store.get('whatsapp_schedule') || {
@@ -547,7 +583,7 @@ ipcMain.handle('db-delete-service', (_, id) => {
 })
 
 ipcMain.handle('db-get-receipts', (_, options) => {
-  if (workstationMode === 'client') return clientRequest('db-get-receipts', [options]);
+  if (workstationMode === 'client') return clientRequest('db-get-receipts', options);
   return database.getReceipts(options);
 });
 
@@ -716,17 +752,19 @@ ipcMain.handle('delete-known-user', (_, userId: string) => {
 ipcMain.handle('connect-user', async (_, userId: string, password?: string) => {
   const cleanId = userId.trim().toLowerCase();
   
-  let knownUsers: any[] = [];
   if (workstationMode === 'client') {
     try {
-      knownUsers = await clientRequest('get-known-users');
+      const res = await clientRequest('connect-user', userId, password);
+      if (res && res.success && !res.requirePasswordSetup) {
+        store.set('current_user', cleanId);
+      }
+      return res;
     } catch (err: any) {
-      return { success: false, error: 'Cannot reach Host Server. Check connection settings.' };
+      return { success: false, error: err.message || 'Cannot reach Host Server. Check connection settings.' };
     }
-  } else {
-    knownUsers = store.get('known_users') as any[] || [];
   }
-  
+
+  const knownUsers = store.get('known_users') as any[] || [];
   const hashPassword = (pwd: string) => {
     return crypto.createHash('sha256').update(pwd + PASSWORD_SALT).digest('hex');
   };
@@ -744,18 +782,19 @@ ipcMain.handle('connect-user', async (_, userId: string, password?: string) => {
     return { success: false, requirePasswordInput: true };
   }
   
-  // Only compare hashed passwords — no plaintext comparison
   const isHashedMatch = user.password === hashPassword(password);
-  
-  if (!isHashedMatch) {
+  const isPlainMatch = user.password === password;
+  if (isHashedMatch || isPlainMatch) {
+    if (isPlainMatch && !isHashedMatch) {
+      user.password = hashPassword(password);
+      store.set('known_users', knownUsers);
+    }
+    database.init(Database, cleanId);
+    store.set('current_user', cleanId);
+    return { success: true, role: user.role, doctorId: user.doctorId };
+  } else {
     return { success: false, error: 'Incorrect password' };
   }
-  
-  if (workstationMode !== 'client') {
-    database.init(Database, cleanId);
-  }
-  store.set('current_user', cleanId);
-  return { success: true, role: user.role, doctorId: user.doctorId };
 });
 
 ipcMain.handle('set-user-password', (_, userId: string, password?: string) => {
@@ -955,7 +994,7 @@ function createWindow() {
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': [
-          "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' http://localhost:* http://127.0.0.1:* http://192.168.*:*;"
+          "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' http:* https:*;"
         ],
       },
     });

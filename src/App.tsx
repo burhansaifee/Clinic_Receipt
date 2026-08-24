@@ -229,10 +229,11 @@ const MainApp: React.FC = () => {
   const handleSaveConnectionSettings = async (
     mode: 'standalone' | 'host' | 'client',
     ip: string,
-    port: number
+    port: number,
+    secret?: string
   ) => {
     if (await confirm('Buvora needs to relaunch to apply these network connection settings. Proceed?')) {
-        window.connection.saveSettings({ mode, hostIp: ip, hostPort: port }).catch((err: any) => {
+      window.connection.saveSettings({ mode, hostIp: ip, hostPort: port, networkSecret: secret }).catch((err: any) => {
         toast(`Failed to save settings: ${err.message}`, { type: 'error' });
       });
     }

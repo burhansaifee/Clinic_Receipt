@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, AlertCircle, RefreshCw, KeyRound, Server, Settings } from 'lucide-react';
+import { User, AlertCircle, RefreshCw, KeyRound, Server, Settings, Copy, CheckCircle, Wifi } from 'lucide-react';
 
 interface UserConnectionScreenProps {
   onConnected: (userId: string, role: string, doctorId?: string) => void;
@@ -13,42 +13,62 @@ const UserConnectionScreen: React.FC<UserConnectionScreenProps> = ({ onConnected
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-
   // Network Connection Settings
   const [showNetworkSettings, setShowNetworkSettings] = useState(false);
   const [workstationMode, setWorkstationMode] = useState<'standalone' | 'host' | 'client'>('standalone');
   const [hostIp, setHostIp] = useState('127.0.0.1');
   const [hostPort, setHostPort] = useState(49152);
   const [localIp, setLocalIp] = useState('');
+  const [networkSecret, setNetworkSecret] = useState('');
+  const [clientSecretInput, setClientSecretInput] = useState('');
+  const [tokenCopied, setTokenCopied] = useState(false);
   const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
   useEffect(() => {
-
     // Load connection settings
     if (window.connection) {
-        window.connection.getSettings().then(settings => {
+      window.connection.getSettings().then(settings => {
         setWorkstationMode(settings.mode);
         setHostIp(settings.hostIp);
         setHostPort(settings.hostPort);
         setLocalIp(settings.localIp);
+        setNetworkSecret(settings.networkSecret || '');
+        if (settings.mode === 'client') {
+          setClientSecretInput(settings.networkSecret || '');
+        }
       });
     }
   }, []);
 
+  const handleCopySecret = async () => {
+    if (!networkSecret) return;
+    try {
+      await navigator.clipboard.writeText(networkSecret);
+      setTokenCopied(true);
+      setTimeout(() => setTokenCopied(false), 2000);
+    } catch {
+      // Fallback
+    }
+  };
+
   const handleTestConnection = async () => {
     if (!hostIp.trim()) {
-      alert('Please enter a Host IP Address');
+      setTestResult({ success: false, message: 'Please enter the Host IP Address.' });
+      return;
+    }
+    if (!clientSecretInput.trim()) {
+      setTestResult({ success: false, message: 'Please paste the Network Token from the Host machine.' });
       return;
     }
     setIsTestingConnection(true);
     setTestResult(null);
     try {
-        const result = await window.connection.testConnection(hostIp.trim(), hostPort);
+      const result = await window.connection.testConnection(hostIp.trim(), hostPort, clientSecretInput.trim());
       if (result.success) {
         setTestResult({ success: true, message: 'Connection Successful! Host is reachable.' });
       } else {
-        setTestResult({ success: false, message: `Connection Failed: ${result.error || 'Server unreachable.'}` });
+        setTestResult({ success: false, message: result.error || 'Connection Failed: Server unreachable.' });
       }
     } catch (e: any) {
       setTestResult({ success: false, message: `Error: ${e.message}` });
@@ -58,16 +78,23 @@ const UserConnectionScreen: React.FC<UserConnectionScreenProps> = ({ onConnected
   };
 
   const handleSaveConnectionSettings = async () => {
-    if (workstationMode === 'client' && !hostIp.trim()) {
-      alert('Please enter a Host IP Address');
-      return;
+    if (workstationMode === 'client') {
+      if (!hostIp.trim()) {
+        alert('Please enter a Host IP Address.');
+        return;
+      }
+      if (!clientSecretInput.trim()) {
+        alert('Please enter the Network Token from the Host machine.');
+        return;
+      }
     }
     if (confirm('Buvora needs to relaunch to apply these connection settings. Proceed?')) {
       try {
-            await window.connection.saveSettings({
+        await window.connection.saveSettings({
           mode: workstationMode,
           hostIp: hostIp.trim(),
-          hostPort: hostPort
+          hostPort: hostPort,
+          networkSecret: workstationMode === 'client' ? clientSecretInput.trim() : undefined
         });
       } catch (err: any) {
         alert(`Failed to save settings: ${err.message}`);
@@ -84,7 +111,7 @@ const UserConnectionScreen: React.FC<UserConnectionScreenProps> = ({ onConnected
 
     try {
       if (passwordMode === 'none') {
-            const result = await window.users.connectUser(userIdInput.trim());
+        const result = await window.users.connectUser(userIdInput.trim());
         if (result.success) {
           if (result.requirePasswordSetup) {
             setPasswordMode('setup');
@@ -99,7 +126,7 @@ const UserConnectionScreen: React.FC<UserConnectionScreenProps> = ({ onConnected
           }
         }
       } else if (passwordMode === 'input') {
-            const result = await window.users.connectUser(userIdInput.trim(), password);
+        const result = await window.users.connectUser(userIdInput.trim(), password);
         if (result.success) {
           onConnected(userIdInput.trim().toLowerCase(), result.role || 'reception', result.doctorId);
         } else {
@@ -117,9 +144,9 @@ const UserConnectionScreen: React.FC<UserConnectionScreenProps> = ({ onConnected
           return;
         }
 
-            const setupResult = await window.users.setUserPassword(userIdInput.trim(), password);
+        const setupResult = await window.users.setUserPassword(userIdInput.trim(), password);
         if (setupResult.success) {
-                const connectResult = await window.users.connectUser(userIdInput.trim(), password);
+          const connectResult = await window.users.connectUser(userIdInput.trim(), password);
           if (connectResult.success) {
             onConnected(userIdInput.trim().toLowerCase(), connectResult.role || 'reception', connectResult.doctorId);
           } else {
@@ -129,9 +156,9 @@ const UserConnectionScreen: React.FC<UserConnectionScreenProps> = ({ onConnected
           setError(setupResult.error || 'Failed to set password.');
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError('Connection failed. Please check backend connection.');
+      setError('Connection failed. Please check host connection and network token.');
     } finally {
       setIsConnecting(false);
     }
@@ -161,7 +188,7 @@ const UserConnectionScreen: React.FC<UserConnectionScreenProps> = ({ onConnected
         <div className="glow-sphere sphere-2"></div>
       </div>
 
-      <div className="connection-card">
+      <div className="connection-card" style={{ maxWidth: showNetworkSettings ? '480px' : '420px', transition: 'max-width 0.2s ease' }}>
         {!showNetworkSettings && (
           <button 
             type="button" 
@@ -219,15 +246,15 @@ const UserConnectionScreen: React.FC<UserConnectionScreenProps> = ({ onConnected
                     boxSizing: 'border-box'
                   }}
                 >
-                  <option value="standalone" style={{ background: '#1e293b' }}>Standalone (Local DB)</option>
-                  <option value="host" style={{ background: '#1e293b' }}>Host / Server (Expose DB)</option>
-                  <option value="client" style={{ background: '#1e293b' }}>Client (Connect to Host)</option>
+                  <option value="standalone" style={{ background: '#1e293b' }}>Standalone (Single PC / Local DB)</option>
+                  <option value="host" style={{ background: '#1e293b' }}>Host / Main Server (Expose Clinic DB)</option>
+                  <option value="client" style={{ background: '#1e293b' }}>Client (Connect to Host PC)</option>
                 </select>
               </div>
 
               {workstationMode === 'client' && (
                 <>
-                  <div style={{ display: 'flex', gap: '10px', marginBottom: '1.25rem' }}>
+                  <div style={{ display: 'flex', gap: '10px', marginBottom: '1rem' }}>
                     <div style={{ flex: 2, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                       <label style={{ fontSize: '0.825rem', fontWeight: 600, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Host IP Address</label>
                       <input 
@@ -270,21 +297,47 @@ const UserConnectionScreen: React.FC<UserConnectionScreenProps> = ({ onConnected
                     </div>
                   </div>
 
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.25rem' }}>
+                    <label style={{ fontSize: '0.825rem', fontWeight: 600, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Network Token (From Host Machine)</label>
+                    <input 
+                      type="text"
+                      value={clientSecretInput}
+                      onChange={(e) => setClientSecretInput(e.target.value)}
+                      placeholder="Paste 64-character token from Host PC"
+                      style={{
+                        padding: '0.875rem 1rem',
+                        background: 'rgba(15, 23, 42, 0.6)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        borderRadius: '12px',
+                        color: 'white',
+                        fontSize: '0.85rem',
+                        fontFamily: 'monospace',
+                        width: '100%',
+                        outline: 'none',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                    <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                      Open Network Settings on the Host PC to view and copy its Network Token.
+                    </div>
+                  </div>
+
                   {testResult && (
                     <div style={{ 
-                      background: testResult.success ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', 
-                      border: `1px solid ${testResult.success ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`, 
+                      background: testResult.success ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)', 
+                      border: `1px solid ${testResult.success ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`, 
                       borderRadius: '8px', 
-                      padding: '0.625rem 0.875rem', 
+                      padding: '0.75rem 0.875rem', 
                       marginBottom: '1.25rem',
                       fontSize: '0.825rem', 
-                      color: testResult.success ? '#a7f3d0' : '#fca5a5'
+                      color: testResult.success ? '#a7f3d0' : '#fca5a5',
+                      lineHeight: '1.4'
                     }}>
                       {testResult.message}
                     </div>
                   )}
 
-                  <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
+                  <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
                     <button 
                       type="button" 
                       onClick={handleTestConnection}
@@ -301,7 +354,7 @@ const UserConnectionScreen: React.FC<UserConnectionScreenProps> = ({ onConnected
                       }}
                       className="network-sub-btn"
                     >
-                      {isTestingConnection ? 'Testing...' : 'Test'}
+                      {isTestingConnection ? 'Testing...' : 'Test Connection'}
                     </button>
                     <button 
                       type="button" 
@@ -317,8 +370,8 @@ const UserConnectionScreen: React.FC<UserConnectionScreenProps> = ({ onConnected
 
               {workstationMode === 'host' && (
                 <>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.25rem' }}>
-                    <label style={{ fontSize: '0.825rem', fontWeight: 600, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Port</label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
+                    <label style={{ fontSize: '0.825rem', fontWeight: 600, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Server Port</label>
                     <input 
                       type="number"
                       value={hostPort}
@@ -339,10 +392,59 @@ const UserConnectionScreen: React.FC<UserConnectionScreenProps> = ({ onConnected
                   </div>
 
                   {localIp && (
-                    <div style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: '8px', padding: '0.75rem', fontSize: '0.8rem', color: '#a7f3d0', lineHeight: '1.4', marginBottom: '1.25rem' }}>
-                      <div style={{ fontWeight: 600, marginBottom: '2px' }}>Server running locally!</div>
-                      <div>IP Address: <strong style={{ fontFamily: 'monospace' }}>{localIp}</strong></div>
-                      <div>Port: <strong style={{ fontFamily: 'monospace' }}>{hostPort}</strong></div>
+                    <div style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.25)', borderRadius: '8px', padding: '0.75rem', fontSize: '0.8rem', color: '#a7f3d0', lineHeight: '1.5', marginBottom: '1rem' }}>
+                      <div style={{ fontWeight: 600, marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <Wifi size={14} /> Server Host Details
+                      </div>
+                      <div>Host IP: <strong style={{ fontFamily: 'monospace', color: '#6ee7b7' }}>{localIp}</strong></div>
+                      <div>Port: <strong style={{ fontFamily: 'monospace', color: '#6ee7b7' }}>{hostPort}</strong></div>
+                    </div>
+                  )}
+
+                  {networkSecret && (
+                    <div style={{ background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.25)', borderRadius: '8px', padding: '0.75rem', marginBottom: '1.25rem' }}>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#93c5fd', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
+                        Network Token (Share with Client PCs)
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <input
+                          readOnly
+                          value={networkSecret}
+                          style={{
+                            flex: 1,
+                            background: 'rgba(15, 23, 42, 0.7)',
+                            border: '1px solid rgba(59, 130, 246, 0.3)',
+                            borderRadius: '6px',
+                            padding: '0.5rem 0.65rem',
+                            fontSize: '0.75rem',
+                            fontFamily: 'monospace',
+                            color: '#93c5fd',
+                            outline: 'none'
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={handleCopySecret}
+                          style={{
+                            background: tokenCopied ? '#059669' : '#2563eb',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            padding: '0.55rem 0.75rem',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                        >
+                          {tokenCopied ? <><CheckCircle size={13} /> Copied</> : <><Copy size={13} /> Copy</>}
+                        </button>
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '6px' }}>
+                        Ensure both computers are on the same Wi-Fi / Local Network.
+                      </div>
                     </div>
                   )}
 
@@ -350,7 +452,7 @@ const UserConnectionScreen: React.FC<UserConnectionScreenProps> = ({ onConnected
                     type="button" 
                     className="btn-connect" 
                     onClick={handleSaveConnectionSettings}
-                    style={{ width: '100%', marginTop: '1.5rem' }}
+                    style={{ width: '100%', marginTop: '0.5rem' }}
                   >
                     Save & Relaunch
                   </button>
@@ -358,14 +460,19 @@ const UserConnectionScreen: React.FC<UserConnectionScreenProps> = ({ onConnected
               )}
 
               {workstationMode === 'standalone' && (
-                <button 
-                  type="button" 
-                  className="btn-connect" 
-                  onClick={handleSaveConnectionSettings}
-                  style={{ width: '100%', marginTop: '1.5rem' }}
-                >
-                  Save & Relaunch
-                </button>
+                <div style={{ marginTop: '1rem' }}>
+                  <div style={{ background: 'rgba(255, 255, 255, 0.05)', borderRadius: '8px', padding: '0.75rem', fontSize: '0.8rem', color: '#94a3b8', marginBottom: '1.25rem' }}>
+                    Standalone mode runs independently on this machine using its local database.
+                  </div>
+                  <button 
+                    type="button" 
+                    className="btn-connect" 
+                    onClick={handleSaveConnectionSettings}
+                    style={{ width: '100%' }}
+                  >
+                    Save & Relaunch
+                  </button>
+                </div>
               )}
 
               <button

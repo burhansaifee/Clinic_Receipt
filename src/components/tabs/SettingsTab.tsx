@@ -38,7 +38,7 @@ interface SettingsTabProps {
   onExportData: () => void;
   onImportData: (file: File) => void;
   onExportCsv: () => void;
-  onSaveConnectionSettings: (mode: 'standalone' | 'host' | 'client', ip: string, port: number) => void;
+  onSaveConnectionSettings: (mode: 'standalone' | 'host' | 'client', ip: string, port: number, secret?: string) => void;
   onDeactivateLicense: () => void;
 }
 
@@ -86,7 +86,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
     }
     setIsTestingConnection(true);
     try {
-        const result = await window.connection.testConnection(hostIp.trim(), hostPort);
+      const result = await window.connection.testConnection(hostIp.trim(), hostPort, clientSecretInput.trim());
       if (result.success) {
         toast('Connection Successful! The Host server is reachable.', { type: 'success' });
       } else {
@@ -104,7 +104,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
       toast('Please enter a Host IP Address', { type: 'error' });
       return;
     }
-    onSaveConnectionSettings(workstationMode, hostIp, hostPort);
+    onSaveConnectionSettings(workstationMode, hostIp, hostPort, workstationMode === 'client' ? clientSecretInput.trim() : undefined);
   };
 
   const handleAddUser = async () => {

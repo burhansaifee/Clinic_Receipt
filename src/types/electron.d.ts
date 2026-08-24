@@ -100,6 +100,7 @@ interface ConnectionBridge {
     mode: 'standalone' | 'host' | 'client';
     hostIp: string;
     hostPort: number;
+    networkSecret?: string;
   }): Promise<{ success: boolean }>;
   getServerStatus(): Promise<{
     status: string;
@@ -109,7 +110,8 @@ interface ConnectionBridge {
   }>;
   testConnection(
     hostIp: string,
-    hostPort: number
+    hostPort: number,
+    secret?: string
   ): Promise<{ success: boolean; error?: string }>;
   saveClientSecret(
     secret: string

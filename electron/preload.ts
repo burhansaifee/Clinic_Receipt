@@ -92,7 +92,7 @@ contextBridge.exposeInMainWorld('connection', {
   getSettings: () => ipcRenderer.invoke('get-connection-settings'),
   saveSettings: (settings: any) => ipcRenderer.invoke('save-connection-settings', settings),
   getServerStatus: () => ipcRenderer.invoke('get-server-status'),
-  testConnection: (hostIp: string, hostPort: number) => ipcRenderer.invoke('test-connection', hostIp, hostPort),
+  testConnection: (hostIp: string, hostPort: number, secret?: string) => ipcRenderer.invoke('test-connection', hostIp, hostPort, secret),
   saveClientSecret: (secret: string) => ipcRenderer.invoke('save-client-secret', secret),
 })
 

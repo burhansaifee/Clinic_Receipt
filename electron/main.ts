@@ -863,11 +863,14 @@ ipcMain.handle('get-connection-settings', () => {
 });
 
 ipcMain.handle('save-connection-settings', (_, settings) => {
-  const { mode, hostIp, hostPort } = settings;
+  const { mode, hostIp, hostPort, networkSecret } = settings;
   const cleanIp = (hostIp || '').trim().replace(/^https?:\/\//i, '').replace(/\/$/, '');
   store.set('workstation_mode', mode);
   store.set('host_ip', cleanIp || '127.0.0.1');
   store.set('host_port', hostPort || 49152);
+  if (networkSecret !== undefined && mode === 'client') {
+    store.set('client_network_secret', (networkSecret || '').trim());
+  }
 
   app.relaunch();
   app.exit();
@@ -894,11 +897,11 @@ ipcMain.handle('get-server-status', () => {
   return { status: 'STANDALONE' };
 });
 
-// test-connection: send the stored client secret (or nothing for a quick ping test)
-ipcMain.handle('test-connection', async (_, ip: string, port: number) => {
+// test-connection: send the provided client secret or the stored client secret
+ipcMain.handle('test-connection', async (_, ip: string, port: number, secretOverride?: string) => {
   const cleanIp = (ip || '').trim().replace(/^https?:\/\//i, '').replace(/\/$/, '');
   const url = `http://${cleanIp}:${port}/api/rpc`;
-  const secret = (store.get('client_network_secret') as string) || '';
+  const secret = (secretOverride !== undefined ? secretOverride : store.get('client_network_secret') as string) || '';
   try {
     const res = await fetch(url, {
       method: 'POST',
@@ -908,7 +911,7 @@ ipcMain.handle('test-connection', async (_, ip: string, port: number) => {
         'X-MedFlow-Auth': secret,
       },
       body: JSON.stringify({ method: 'ping', args: [] }),
-      signal: AbortSignal.timeout(3000)
+      signal: AbortSignal.timeout(4000)
     });
     if (res.ok) {
       const data = (await res.json()) as any;
@@ -916,8 +919,20 @@ ipcMain.handle('test-connection', async (_, ip: string, port: number) => {
         return { success: true };
       }
     }
-    return { success: false, error: `Server responded but ping failed — check the network token.` };
+    if (res.status === 401) {
+      return { success: false, error: 'Unauthorized: Network Token is invalid or missing. Please copy the Network Token from the Host PC.' };
+    }
+    return { success: false, error: `Server responded with status ${res.status}. Check network token.` };
   } catch (err: any) {
+    if (err.name === 'TimeoutError' || err.message?.includes('aborted') || err.message?.includes('timeout')) {
+      return { success: false, error: `Connection timed out. Check Host IP (${cleanIp}), port (${port}), and Firewall settings on the Host PC.` };
+    }
+    if (err.message?.includes('ECONNREFUSED')) {
+      return { success: false, error: `Connection refused. Make sure Host PC is running Buvora in 'Host' mode on port ${port}.` };
+    }
+    if (err.message?.includes('ENETUNREACH') || err.message?.includes('EHOSTUNREACH')) {
+      return { success: false, error: `Host unreachable. Make sure both PCs are connected to the same Wi-Fi / LAN network.` };
+    }
     return { success: false, error: err.message };
   }
 });

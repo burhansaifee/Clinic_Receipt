@@ -79,10 +79,11 @@ if (typeof window !== 'undefined' && !(window as any).ipcRenderer) {
   };
 
   (window as any).connection = {
-    getSettings: async () => ({ mode: 'client', hostIp: window.location.hostname, hostPort: window.location.port }),
+    getSettings: async () => ({ mode: 'client', hostIp: window.location.hostname, hostPort: window.location.port, localIp: '127.0.0.1', networkSecret: 'demo-secret-token' }),
     saveSettings: async () => {},
     getServerStatus: async () => 'running',
-    testConnection: async () => ({ success: true })
+    testConnection: async () => ({ success: true }),
+    saveClientSecret: async () => ({ success: true })
   };
 
   (window as any).users = {

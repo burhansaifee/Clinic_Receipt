@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { format } from 'date-fns';
-import { ClipboardList, FileText, Search, Plus, Trash2, Printer, PlusCircle, AlertCircle, LogOut, CheckCircle, Save, History, KeyRound } from 'lucide-react';
+import { format, addDays } from 'date-fns';
+import { ClipboardList, FileText, Search, Plus, Trash2, Printer, PlusCircle, AlertCircle, LogOut, CheckCircle, Save, History, KeyRound, Calendar } from 'lucide-react';
 import { storage, formatAgeGender, type Doctor, type Receipt, type Prescription, type PrescribedMedicine, type PrescriptionPaperType } from '../lib/storage';
 
 interface DoctorWorkstationProps {
@@ -24,6 +24,8 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
   const [symptoms, setSymptoms] = useState('');
   const [diagnosis, setDiagnosis] = useState('');
   const [notes, setNotes] = useState('');
+  const [followUpDate, setFollowUpDate] = useState('');
+  const [followUpNotes, setFollowUpNotes] = useState('');
   const [medicines, setMedicines] = useState<PrescribedMedicine[]>([
     { name: '', dosage: '', duration: '', instructions: '' }
   ]);
@@ -144,6 +146,8 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
       setSymptoms(existing.symptoms);
       setDiagnosis(existing.diagnosis);
       setNotes(existing.notes);
+      setFollowUpDate(existing.followUpDate || '');
+      setFollowUpNotes(existing.followUpNotes || '');
       setMedicines(existing.medicines.length > 0 ? existing.medicines : [
         { name: '', dosage: '', duration: '', instructions: '' }
       ]);
@@ -151,6 +155,8 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
       setSymptoms('');
       setDiagnosis('');
       setNotes('');
+      setFollowUpDate('');
+      setFollowUpNotes('');
       setMedicines([{ name: '', dosage: '', duration: '', instructions: '' }]);
     }
   };
@@ -176,6 +182,8 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
     setSymptoms(pastRx.symptoms || '');
     setDiagnosis(pastRx.diagnosis || '');
     setNotes(pastRx.notes || '');
+    setFollowUpDate(pastRx.followUpDate || '');
+    setFollowUpNotes(pastRx.followUpNotes || '');
     if (pastRx.medicines && pastRx.medicines.length > 0) {
       setMedicines(pastRx.medicines.map(m => ({ ...m })));
     } else {
@@ -205,10 +213,32 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
       symptoms,
       diagnosis,
       medicines: filteredMedicines,
-      notes
+      notes,
+      followUpDate: followUpDate || undefined,
+      followUpNotes: followUpNotes || undefined
     };
 
     await storage.savePrescription(prescription);
+
+    // Save corresponding follow-up tracking record if scheduled
+    if (followUpDate) {
+      await storage.saveFollowUp({
+        id: `fu_${rxId}`,
+        prescriptionId: rxId,
+        receiptId: selectedReceipt.id,
+        patientName: selectedReceipt.patientName,
+        patientPhone: selectedReceipt.patientPhone,
+        patientAge: selectedReceipt.patientAge,
+        patientGender: selectedReceipt.patientGender,
+        doctorId: selectedReceipt.doctorId,
+        doctorName: selectedReceipt.doctorName,
+        scheduledDate: followUpDate,
+        notes: followUpNotes || (diagnosis ? `Follow-up for ${diagnosis}` : 'Doctor Consultation Follow-Up'),
+        status: 'PENDING',
+        createdAt: new Date().toISOString()
+      });
+    }
+
     await refreshData();
     setSelectedReceipt(null);
 
@@ -585,6 +615,81 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
                     />
                   </div>
 
+                  {/* Follow-Up / Revisit Schedule Section */}
+                  <div className="followup-form-section" style={{ background: '#f8fafc', padding: '1rem', borderRadius: '10px', border: '1px solid var(--border)', marginTop: '1rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+                      <label style={{ margin: 0, fontWeight: 700, fontSize: '0.875rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <Calendar size={16} style={{ color: '#0284c7' }} /> Next Visit / Patient Follow-Up
+                      </label>
+                      {followUpDate && (
+                        <button
+                          type="button"
+                          onClick={() => { setFollowUpDate(''); setFollowUpNotes(''); }}
+                          style={{ background: 'transparent', border: 'none', color: '#ef4444', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 600 }}
+                        >
+                          Clear Follow-Up
+                        </button>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                      {[
+                        { label: '+3 Days', days: 3 },
+                        { label: '+5 Days', days: 5 },
+                        { label: '+1 Week', days: 7 },
+                        { label: '+10 Days', days: 10 },
+                        { label: '+2 Weeks', days: 14 },
+                        { label: '+1 Month', days: 30 },
+                      ].map(preset => {
+                        const targetDate = format(addDays(new Date(), preset.days), 'yyyy-MM-dd');
+                        const isSelected = followUpDate === targetDate;
+                        return (
+                          <button
+                            key={preset.days}
+                            type="button"
+                            onClick={() => setFollowUpDate(targetDate)}
+                            style={{
+                              padding: '0.35rem 0.75rem',
+                              borderRadius: '20px',
+                              border: isSelected ? '1.5px solid #0284c7' : '1px solid var(--border)',
+                              background: isSelected ? '#e0f2fe' : 'white',
+                              color: isSelected ? '#0369a1' : 'var(--text-main)',
+                              fontWeight: isSelected ? 700 : 500,
+                              fontSize: '0.8rem',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            {preset.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '0.75rem' }}>
+                      <div>
+                        <input
+                          type="date"
+                          value={followUpDate}
+                          min={format(new Date(), 'yyyy-MM-dd')}
+                          onChange={e => setFollowUpDate(e.target.value)}
+                          className="sync-input-line"
+                          style={{ width: '100%', padding: '0.45rem 0.6rem', fontSize: '0.85rem' }}
+                        />
+                      </div>
+                      <div>
+                        <input
+                          type="text"
+                          placeholder="Follow-up advice / reason (e.g. Check BP & Fever, Suture removal, Review reports)"
+                          value={followUpNotes}
+                          onChange={e => setFollowUpNotes(e.target.value)}
+                          className="sync-input-line"
+                          style={{ width: '100%', padding: '0.45rem 0.6rem', fontSize: '0.85rem' }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Autocomplete Recommendation Datalists */}
                   <datalist id="medicine-names">
                     {uniqueMedicineSuggestions.map((med, idx) => (
@@ -843,6 +948,31 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
               <div className="print-notes-section">
                 <span className="notes-label">Advice / Notes</span>
                 <p className="notes-text" style={{ whiteSpace: 'pre-wrap' }}>{activePrintPrescription.notes}</p>
+              </div>
+            )}
+
+            {activePrintPrescription.followUpDate && (
+              <div className="print-followup-box" style={{ marginTop: '0.9rem', padding: '0.6rem 0.9rem', border: '1.5px dashed #0284c7', borderRadius: '6px', background: '#f0f9ff' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#0369a1', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block' }}>NEXT VISIT / PATIENT FOLLOW-UP</span>
+                    <strong style={{ fontSize: '0.95rem', color: '#0f172a' }}>
+                      {(() => {
+                        try {
+                          return format(new Date(activePrintPrescription.followUpDate + 'T00:00:00'), 'EEEE, dd MMMM yyyy');
+                        } catch {
+                          return activePrintPrescription.followUpDate;
+                        }
+                      })()}
+                    </strong>
+                  </div>
+                  {activePrintPrescription.followUpNotes && (
+                    <div style={{ textAlign: 'right', fontSize: '0.85rem', color: '#334155' }}>
+                      <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600, display: 'block' }}>REASON / ADVICE</span>
+                      <strong>{activePrintPrescription.followUpNotes}</strong>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

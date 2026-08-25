@@ -54,7 +54,7 @@ export default defineConfig({
       },
       preload: {
         // Shortcut of `build.rollupOptions.input`.
-        input: path.join(__dirname, 'electron/preload.ts'),
+        input: path.join(import.meta.dirname, 'electron/preload.ts'),
       },
     }),
   ],

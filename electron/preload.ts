@@ -56,6 +56,10 @@ contextBridge.exposeInMainWorld('database', {
   saveAppointment: (appointment: any) => ipcRenderer.invoke('db-save-appointment', appointment),
   updateAppointmentStatus: (id: string, status: string, rejectionReason?: string) => ipcRenderer.invoke('db-update-appointment-status', id, status, rejectionReason),
   deleteAppointment: (id: string) => ipcRenderer.invoke('db-delete-appointment', id),
+  getFollowUps: (options?: any) => ipcRenderer.invoke('db-get-follow-ups', options),
+  saveFollowUp: (followUp: any) => ipcRenderer.invoke('db-save-follow-up', followUp),
+  updateFollowUpStatus: (id: string, status: string) => ipcRenderer.invoke('db-update-follow-up-status', id, status),
+  deleteFollowUp: (id: string) => ipcRenderer.invoke('db-delete-follow-up', id),
 })
 
 contextBridge.exposeInMainWorld('whatsappBot', {
@@ -94,5 +98,9 @@ contextBridge.exposeInMainWorld('connection', {
   getServerStatus: () => ipcRenderer.invoke('get-server-status'),
   testConnection: (hostIp: string, hostPort: number, secret?: string) => ipcRenderer.invoke('test-connection', hostIp, hostPort, secret),
   saveClientSecret: (secret: string) => ipcRenderer.invoke('save-client-secret', secret),
+})
+
+contextBridge.exposeInMainWorld('system', {
+  openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
 })
 

@@ -470,19 +470,49 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '0.6rem 0.85rem', borderRadius: '10px', border: '1px solid var(--border)' }}>
               <span className="label-caps" style={{ color: '#64748b' }}>STATUS</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '0.825rem' }}>
-                <div className={`dot ${botStatus?.status === 'CONNECTED' ? 'green' : botStatus?.status === 'QR_READY' ? 'amber' : ''}`} />
-                <span style={{ color: botStatus?.status === 'CONNECTED' ? '#047857' : botStatus?.status === 'QR_READY' ? '#b45309' : '#64748b' }}>
+                <div className={`dot ${botStatus?.status === 'CONNECTED' ? 'green' : botStatus?.status === 'QR_READY' || botStatus?.status === 'CONNECTING' ? 'amber' : ''}`} />
+                <span style={{ color: botStatus?.status === 'CONNECTED' ? '#047857' : botStatus?.status === 'QR_READY' || botStatus?.status === 'CONNECTING' ? '#b45309' : '#64748b' }}>
                   {botStatus?.status || 'DISCONNECTED'}
                 </span>
               </div>
             </div>
 
+            {botStatus?.status === 'CONNECTING' && (
+              <div style={{ textAlign: 'center', background: '#fffbeb', padding: '0.75rem', borderRadius: '10px', border: '1px solid #fef3c7' }}>
+                <p style={{ fontSize: '0.78rem', color: '#92400e', fontWeight: 600, margin: 0 }}>
+                  ⏳ Connecting to WhatsApp servers &amp; preparing QR code...
+                </p>
+              </div>
+            )}
+
             {botStatus?.status === 'QR_READY' && botStatus?.qrCodeDataUrl && (
               <div style={{ textAlign: 'center', background: '#f0f9ff', padding: '0.85rem', borderRadius: '12px', border: '1px solid #bae6fd' }}>
-                <p style={{ fontSize: '0.78rem', color: '#0369a1', fontWeight: 600, marginBottom: '0.4rem' }}>
+                <p style={{ fontSize: '0.78rem', color: '#0369a1', fontWeight: 700, marginBottom: '0.4rem' }}>
                   📱 Scan with WhatsApp (Settings → Linked Devices)
                 </p>
-                <img src={botStatus.qrCodeDataUrl} alt="WhatsApp QR Code" style={{ width: '150px', height: '150px', margin: '0 auto', display: 'block', borderRadius: '8px', border: '2px solid white' }} />
+                <img src={botStatus.qrCodeDataUrl} alt="WhatsApp QR Code" style={{ width: '160px', height: '160px', margin: '0 auto', display: 'block', borderRadius: '8px', border: '2px solid white', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }} />
+                <p style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '0.4rem', margin: 0 }}>
+                  Point your phone's WhatsApp camera at this code
+                </p>
+              </div>
+            )}
+
+            {botStatus?.status === 'CONNECTED' && (
+              <div style={{ background: '#f0fdf4', padding: '0.75rem 0.85rem', borderRadius: '10px', border: '1px solid #bbf7d0' }}>
+                <p style={{ fontSize: '0.8rem', color: '#166534', fontWeight: 700, margin: '0 0 2px 0' }}>
+                  ✓ WhatsApp is Active &amp; Ready
+                </p>
+                <p style={{ fontSize: '0.72rem', color: '#15803d', margin: 0 }}>
+                  Automated appointment booking &amp; 1-click patient reminders active
+                </p>
+              </div>
+            )}
+
+            {botStatus?.status === 'ERROR' && (
+              <div style={{ background: '#fef2f2', padding: '0.6rem 0.85rem', borderRadius: '10px', border: '1px solid #fecaca' }}>
+                <span style={{ fontSize: '0.75rem', color: '#991b1b', fontWeight: 600 }}>
+                  ⚠️ {botStatus?.errorMessage || 'Connection failed. Click below to retry.'}
+                </span>
               </div>
             )}
 
@@ -490,24 +520,46 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
               {botStatus?.status !== 'CONNECTED' ? (
                 <button
                   className="btn-primary-sm"
-                  style={{ flex: 1, background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', padding: '0.65rem 0.75rem', borderRadius: '8px', fontWeight: 700 }}
+                  style={{
+                    flex: 1,
+                    background: 'linear-gradient(135deg, #10b981, #059669)',
+                    color: 'white',
+                    padding: '0.65rem 0.75rem',
+                    borderRadius: '8px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.4rem'
+                  }}
                   onClick={async () => {
                     if ((window as any).whatsappBot) {
-                      const res = await (window as any).whatsappBot.start();
-                      setBotStatus(res);
+                      try {
+                        toast('Starting WhatsApp engine...', { type: 'info' });
+                        const res = await (window as any).whatsappBot.start();
+                        setBotStatus(res);
+                      } catch (err: any) {
+                        toast(err?.message || 'Failed to start WhatsApp', { type: 'error' });
+                      }
                     }
                   }}
                 >
-                  <Bot size={16} /> Connect WhatsApp
+                  <Bot size={16} /> {botStatus?.status === 'QR_READY' ? 'Refresh QR Code' : 'Connect WhatsApp'}
                 </button>
               ) : (
                 <button
                   className="btn-secondary-sm"
-                  style={{ flex: 1, color: '#ef4444', borderColor: '#fee2e2', background: '#fef2f2', padding: '0.65rem 0.75rem', fontWeight: 700 }}
+                  style={{ flex: 1, color: '#ef4444', borderColor: '#fee2e2', background: '#fef2f2', padding: '0.65rem 0.75rem', fontWeight: 700, cursor: 'pointer' }}
                   onClick={async () => {
                     if ((window as any).whatsappBot) {
-                      const res = await (window as any).whatsappBot.stop();
-                      setBotStatus(res);
+                      try {
+                        const res = await (window as any).whatsappBot.stop();
+                        setBotStatus(res);
+                        toast('WhatsApp disconnected', { type: 'info' });
+                      } catch (err: any) {
+                        toast(err?.message || 'Failed to disconnect', { type: 'error' });
+                      }
                     }
                   }}
                 >

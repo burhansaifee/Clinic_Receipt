@@ -28,8 +28,10 @@ import { ToastProvider, useToast } from './components/ui/Toast';
 import HistoryTab from './components/tabs/HistoryTab';
 import PrescriptionsTab from './components/tabs/PrescriptionsTab';
 import SettingsTab from './components/tabs/SettingsTab';
+import { FollowUpsTab } from './components/tabs/FollowUpsTab';
 
 import type { Tab } from './components/layout/Sidebar';
+import type { FollowUp } from './lib/storage';
 
 const MainApp: React.FC = () => {
   const confirm = useConfirm();
@@ -42,6 +44,7 @@ const MainApp: React.FC = () => {
   const [dashboardMetrics, setDashboardMetrics] = useState({ totalReceipts: 0, totalRevenue: 0, avgPerReceipt: 0 });
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [pendingAppointmentsCount, setPendingAppointmentsCount] = useState(0);
+  const [followUps, setFollowUps] = useState<FollowUp[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -78,12 +81,13 @@ const MainApp: React.FC = () => {
   const refreshData = React.useCallback(async () => {
     setIsLoadingData(true);
     try {
-      const [d, s, metrics, p, apts, paperSettings] = await Promise.all([
+      const [d, s, metrics, p, apts, fus, paperSettings] = await Promise.all([
         storage.getDoctors(),
         storage.getServices(),
         storage.getDashboardMetrics(),
         storage.getPrescriptions(),
         storage.getAppointments(),
+        storage.getFollowUps(),
         storage.getPrintPaperSettings()
       ]);
       setDoctors(d);
@@ -91,12 +95,18 @@ const MainApp: React.FC = () => {
       setDashboardMetrics(metrics);
       setPrescriptions(p);
       setPendingAppointmentsCount(apts.filter((a: any) => a.status === 'PENDING').length);
+      setFollowUps(fus);
       setReceiptPaperType(paperSettings.receiptPaper);
       setPrescriptionPaperType(paperSettings.prescriptionPaper);
     } finally {
       setIsLoadingData(false);
     }
   }, []);
+
+  const todayDateStr = format(new Date(), 'yyyy-MM-dd');
+  const dueFollowUpsCount = React.useMemo(() => {
+    return followUps.filter(f => f.status === 'PENDING' && f.scheduledDate === todayDateStr).length;
+  }, [followUps, todayDateStr]);
 
   // ── Bootstrap effects ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -323,6 +333,7 @@ const MainApp: React.FC = () => {
         currentUser={currentUser}
         isOnline={isOnline}
         pendingAppointmentsCount={pendingAppointmentsCount}
+        dueFollowUpsCount={dueFollowUpsCount}
         onLogout={handleLogout}
         onNewReceipt={() => { setEditingReceipt(null); setActiveTab('new-receipt'); setIsMobileMenuOpen(false); }}
         isMobileMenuOpen={isMobileMenuOpen}
@@ -338,6 +349,7 @@ const MainApp: React.FC = () => {
               {activeTab === 'history' && 'Invoices & Billing History'}
               {activeTab === 'prescriptions' && 'Prescriptions (Rx) Registry'}
               {activeTab === 'appointments' && 'Appointment Booking Desk'}
+              {activeTab === 'follow-ups' && 'Patient Follow-Up Tracker'}
               {activeTab === 'doctors' && 'Doctors Registry'}
               {activeTab === 'services' && 'Clinic Services Catalog'}
               {activeTab === 'settings' && 'System Control Center'}
@@ -348,6 +360,7 @@ const MainApp: React.FC = () => {
               {activeTab === 'history' && 'Search, filter, reprint, and export financial records'}
               {activeTab === 'prescriptions' && 'Patient consultation records, diagnoses & medication charts'}
               {activeTab === 'appointments' && 'Manage WhatsApp & reception patient appointment requests'}
+              {activeTab === 'follow-ups' && 'Track patient revisit schedules, overdue reviews & WhatsApp reminders'}
               {activeTab === 'doctors' && 'Manage consulting physicians, qualifications & UPI QR setups'}
               {activeTab === 'services' && 'Standard consultation and treatment fee pricing'}
               {activeTab === 'settings' && 'Backups, printer paper presets, network sync & licensing'}
@@ -412,6 +425,8 @@ const MainApp: React.FC = () => {
               dashboardMetrics={dashboardMetrics}
               prescriptions={prescriptions}
               pendingAppointmentsCount={pendingAppointmentsCount}
+              followUps={followUps}
+              dueFollowUpsCount={dueFollowUpsCount}
               receiptPaperType={receiptPaperType}
               prescriptionPaperType={prescriptionPaperType}
               botStatus={botStatus}
@@ -470,6 +485,30 @@ const MainApp: React.FC = () => {
                   total: 0,
                   paymentMethod: 'CASH',
                   appointmentId: apt.id,
+                });
+                setActiveTab('new-receipt');
+              }}
+            />
+          )}
+          {activeTab === 'follow-ups' && (
+            <FollowUpsTab
+              doctors={doctors}
+              followUps={followUps}
+              onRefresh={refreshData}
+              onConvertToReceipt={(fu) => {
+                setEditingReceipt({
+                  id: '',
+                  receiptNumber: '',
+                  date: format(new Date(), 'yyyy-MM-dd'),
+                  patientName: fu.patientName,
+                  patientAge: fu.patientAge || '30',
+                  patientGender: fu.patientGender || 'Male',
+                  patientPhone: fu.patientPhone || '',
+                  doctorId: fu.doctorId,
+                  doctorName: fu.doctorName,
+                  items: [],
+                  total: 0,
+                  paymentMethod: 'CASH',
                 });
                 setActiveTab('new-receipt');
               }}

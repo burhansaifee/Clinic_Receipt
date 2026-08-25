@@ -15,9 +15,10 @@ import {
   Banknote,
   Gift,
   Activity,
-  ChevronRight
+  ChevronRight,
+  CalendarClock
 } from 'lucide-react';
-import { storage, type Doctor, type Receipt as ReceiptType, type Prescription, type ReceiptPaperType, type PrescriptionPaperType } from '../lib/storage';
+import { storage, type Doctor, type Receipt as ReceiptType, type Prescription, type ReceiptPaperType, type PrescriptionPaperType, type FollowUp } from '../lib/storage';
 import type { Tab } from './layout/Sidebar';
 import { useToast } from './ui/Toast';
 import { sendReceiptViaWhatsApp } from '../lib/whatsappReceipt';
@@ -27,6 +28,8 @@ interface DashboardProps {
   dashboardMetrics: { totalReceipts: number; totalRevenue: number; avgPerReceipt: number };
   prescriptions?: Prescription[];
   pendingAppointmentsCount?: number;
+  followUps?: FollowUp[];
+  dueFollowUpsCount?: number;
   receiptPaperType?: ReceiptPaperType;
   prescriptionPaperType?: PrescriptionPaperType;
   botStatus?: any;
@@ -42,6 +45,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   dashboardMetrics,
   prescriptions = [],
   pendingAppointmentsCount = 0,
+  dueFollowUpsCount = 0,
   receiptPaperType = 'A5',
   prescriptionPaperType = 'A4',
   botStatus = { status: 'DISCONNECTED' },
@@ -266,7 +270,31 @@ const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
 
-        {/* Card 6: Doctors Registered */}
+        {/* Card 6: Follow-Ups Due Today */}
+        <div className="stat-box stat-cyan" onClick={() => onNavigate('follow-ups')} style={{ cursor: 'pointer' }}>
+          <div className="stat-box-top">
+            <div className="stat-icon-wrapper cyan-icon" style={{ background: '#e0f2fe', color: '#0284c7' }}>
+              <CalendarClock size={22} />
+            </div>
+            {dueFollowUpsCount > 0 ? (
+              <span className="stat-pill-trend alert-pulse" style={{ background: '#e0f2fe', color: '#0369a1', borderColor: '#bae6fd' }}>{dueFollowUpsCount} Due Today</span>
+            ) : (
+              <span className="stat-pill-trend neutral">All Clear</span>
+            )}
+          </div>
+          <div className="stat-box-body">
+            <span className="stat-label-text">Follow-Ups Today</span>
+            <div className="stat-number-text">{dueFollowUpsCount}</div>
+          </div>
+          <div className="stat-footer-bar">
+            <div className="stat-progress-bg">
+              <div className="stat-progress-fill cyan-fill" style={{ width: `${Math.min(100, (dueFollowUpsCount || 0) * 20)}%` }} />
+            </div>
+            <span className="stat-subtext">Patient revisits scheduled for today</span>
+          </div>
+        </div>
+
+        {/* Card 7: Doctors Registered */}
         <div className="stat-box stat-cyan" onClick={() => onNavigate('doctors')} style={{ cursor: 'pointer' }}>
           <div className="stat-box-top">
             <div className="stat-icon-wrapper cyan-icon">

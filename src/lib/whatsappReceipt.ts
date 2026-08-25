@@ -5,8 +5,12 @@ import type { Receipt } from './storage';
  * Normalizes phone numbers to international format (defaulting to 91 for 10-digit Indian numbers)
  */
 export function cleanPhoneNumber(phone: string): string {
-  const digits = (phone || '').replace(/\D/g, '');
+  if (!phone) return '';
+  let digits = (phone || '').replace(/\D/g, '');
   if (!digits) return '';
+  if (digits.length === 11 && digits.startsWith('0')) {
+    digits = digits.slice(1);
+  }
   if (digits.length === 10) {
     return `91${digits}`;
   }
@@ -109,11 +113,116 @@ export async function sendReceiptViaWhatsApp(
 
   // Fallback to wa.me URL
   const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(messageText)}`;
-  window.open(waUrl, '_blank');
+  if ((window as any).system?.openExternal) {
+    try {
+      await (window as any).system.openExternal(waUrl);
+    } catch {
+      window.open(waUrl, '_blank');
+    }
+  } else {
+    window.open(waUrl, '_blank');
+  }
 
   return {
     success: true,
     method: 'web',
-    message: `WhatsApp Web opened for +${phone}. Click "Send" in WhatsApp to dispatch the receipt.`,
+    message: `WhatsApp opened for +${phone}. Click "Send" in WhatsApp to dispatch the receipt.`,
+  };
+}
+
+/**
+ * Formats a friendly follow-up reminder message for WhatsApp
+ */
+export function formatFollowUpWhatsAppMessage(followUp: {
+  patientName: string;
+  doctorName: string;
+  scheduledDate: string;
+  notes?: string;
+}): string {
+  let formattedDate = followUp.scheduledDate;
+  try {
+    formattedDate = format(new Date(followUp.scheduledDate + 'T00:00:00'), 'EEEE, dd MMMM yyyy');
+  } catch (e) {
+    formattedDate = followUp.scheduledDate;
+  }
+
+  let message = `🏥 *BUVORA CLINIC - DOCTOR FOLLOW-UP REMINDER*\n`;
+  message += `━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+  message += `Dear *${followUp.patientName}*,\n\n`;
+  message += `This is a gentle reminder from *Buvora Clinic* regarding your upcoming follow-up consultation with *Dr. ${followUp.doctorName.replace(/^Dr\.?\s*/i, '')}*.\n\n`;
+  message += `📅 *Scheduled Date:* ${formattedDate}\n`;
+  if (followUp.notes && followUp.notes.trim()) {
+    message += `📋 *Consultation Advice / Reason:* ${followUp.notes.trim()}\n`;
+  }
+  message += `━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+  message += `💡 *Important Notes for your visit:*\n`;
+  message += `• Please bring your previous prescription & any latest lab test reports.\n`;
+  message += `• Please arrive 10-15 minutes prior to your preferred time slot.\n\n`;
+  message += `✨ _We look forward to seeing you and ensuring your continued recovery!_\n`;
+  message += `📞 _To reschedule or for queries, feel free to reply to this message or contact clinic reception._`;
+
+  return message;
+}
+
+/**
+ * Sends a follow-up reminder to the patient via WhatsApp Bot if connected or WhatsApp Web.
+ */
+export async function sendFollowUpViaWhatsApp(
+  followUp: {
+    patientName: string;
+    patientPhone?: string;
+    doctorName: string;
+    scheduledDate: string;
+    notes?: string;
+  },
+  targetPhone?: string
+): Promise<SendWhatsAppReceiptResult> {
+  const phone = cleanPhoneNumber(targetPhone || followUp.patientPhone || '');
+  if (!phone) {
+    throw new Error('Patient phone number is missing. Please provide a valid phone number.');
+  }
+
+  const messageText = formatFollowUpWhatsAppMessage(followUp);
+
+  const bot = (window as any).whatsappBot;
+  let isBotConnected = false;
+
+  if (bot && typeof bot.getStatus === 'function') {
+    try {
+      const status = await bot.getStatus();
+      isBotConnected = status && status.status === 'CONNECTED';
+    } catch {
+      isBotConnected = false;
+    }
+  }
+
+  if (isBotConnected && typeof bot.sendMessage === 'function') {
+    try {
+      await bot.sendMessage(phone, messageText);
+      return {
+        success: true,
+        method: 'bot',
+        message: `Follow-up reminder sent successfully via WhatsApp bot to +${phone}.`,
+      };
+    } catch (err: any) {
+      console.warn('Failed to send via WhatsApp bot, falling back to WhatsApp Web:', err);
+    }
+  }
+
+  const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(messageText)}`;
+  if ((window as any).system?.openExternal) {
+    try {
+      await (window as any).system.openExternal(waUrl);
+    } catch {
+      window.open(waUrl, '_blank');
+    }
+  } else {
+    window.open(waUrl, '_blank');
+  }
+
+  return {
+    success: true,
+    method: 'web',
+    message: `WhatsApp opened for +${phone}. Click "Send" in WhatsApp to dispatch the follow-up reminder.`,
   };
 }

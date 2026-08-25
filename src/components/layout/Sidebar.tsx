@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   LayoutDashboard, Users, Receipt, PlusCircle, Settings,
-  Calendar, FileText, Briefcase, LogOut, KeyRound, X
+  Calendar, FileText, Briefcase, LogOut, KeyRound, X, CalendarClock
 } from 'lucide-react';
 
 export type Tab =
@@ -12,6 +12,7 @@ export type Tab =
   | 'history'
   | 'prescriptions'
   | 'appointments'
+  | 'follow-ups'
   | 'settings';
 
 interface SidebarProps {
@@ -20,6 +21,7 @@ interface SidebarProps {
   currentUser: string;
   isOnline: boolean;
   pendingAppointmentsCount: number;
+  dueFollowUpsCount?: number;
   onLogout: () => void;
   onNewReceipt: () => void;
   isMobileMenuOpen?: boolean;
@@ -32,6 +34,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   currentUser,
   isOnline,
   pendingAppointmentsCount,
+  dueFollowUpsCount = 0,
   onLogout,
   onNewReceipt,
   isMobileMenuOpen,
@@ -109,6 +112,19 @@ const Sidebar: React.FC<SidebarProps> = ({
           {pendingAppointmentsCount > 0 && (
             <span className="nav-badge-pill alert">
               {pendingAppointmentsCount}
+            </span>
+          )}
+        </button>
+
+        <button
+          className={`nav-item ${activeTab === 'follow-ups' ? 'active' : ''}`}
+          onClick={() => setActiveTab('follow-ups')}
+        >
+          <CalendarClock size={18} />
+          <span>Follow-Ups</span>
+          {dueFollowUpsCount > 0 && (
+            <span className="nav-badge-pill" style={{ background: '#0284c7', color: 'white' }}>
+              {dueFollowUpsCount}
             </span>
           )}
         </button>

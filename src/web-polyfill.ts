@@ -1,4 +1,18 @@
 // Polyfill for running Buvora in a standard web browser (Tablet/Mobile Client)
+
+if (!window.crypto) {
+  (window as any).crypto = {};
+}
+if (!window.crypto.randomUUID) {
+  window.crypto.randomUUID = (() => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }) as any;
+}
+
 if (typeof window !== 'undefined' && !(window as any).ipcRenderer) {
   console.log('Web Browser Mode Detected - Polyfilling Electron APIs');
 
@@ -116,10 +130,19 @@ if (typeof window !== 'undefined' && !(window as any).ipcRenderer) {
   };
 
   (window as any).whatsappBot = {
-    getStatus: () => rpcCall('ping').then(() => ({ status: 'CONNECTED' })).catch(() => ({ status: 'DISCONNECTED' })),
+    getStatus: () => rpcCall('whatsapp-get-status').catch(() => ({ status: 'DISCONNECTED' })),
+    start: () => rpcCall('whatsapp-start').catch(() => ({ status: 'ERROR' })),
+    stop: () => rpcCall('whatsapp-stop').catch(() => ({ status: 'DISCONNECTED' })),
+    toggleAutoReply: (enabled: boolean) => rpcCall('whatsapp-toggle-autoreply', enabled),
     onStatusChange: () => () => {},
     getSchedule: () => rpcCall('whatsapp-get-schedule'),
     sendMessage: (phone: string, message: string) => rpcCall('whatsapp-send-message', phone, message)
+  };
+
+  (window as any).system = {
+    openExternal: async (url: string) => {
+      window.open(url, '_blank');
+    }
   };
 
   const dbMethods = [
@@ -127,7 +150,8 @@ if (typeof window !== 'undefined' && !(window as any).ipcRenderer) {
     'getReceipts', 'getDashboardMetrics', 'saveReceipt', 'saveReceiptAtomic', 'updateReceipt',
     'deleteReceipt', 'getMetadata', 'setMetadata', 'batchImportDoctors', 'getPrescriptions',
     'savePrescription', 'deletePrescription', 'getAppointments', 'saveAppointment',
-    'updateAppointmentStatus', 'deleteAppointment'
+    'updateAppointmentStatus', 'deleteAppointment', 'getFollowUps', 'saveFollowUp',
+    'updateFollowUpStatus', 'deleteFollowUp'
   ];
 
   const dbPolyfill: any = {};

@@ -107,7 +107,16 @@ const PrescriptionsTab: React.FC<PrescriptionsTabProps> = ({ prescriptions, onPr
                       {formatAgeGender(p.patientAge, p.patientGender)}
                     </td>
                     <td style={{ padding: '1rem', fontSize: '0.875rem', whiteSpace: 'nowrap' }}>{p.doctorName}</td>
-                    <td style={{ padding: '1rem', fontSize: '0.875rem' }}>{p.diagnosis || 'N/A'}</td>
+                    <td style={{ padding: '1rem', fontSize: '0.875rem' }}>
+                      <div>{p.diagnosis || 'N/A'}</div>
+                      {p.followUpDate && (
+                        <div style={{ marginTop: '4px' }}>
+                          <span style={{ fontSize: '0.72rem', background: '#e0f2fe', color: '#0369a1', padding: '2px 6px', borderRadius: '10px', fontWeight: 600 }}>
+                            Follow-Up: {p.followUpDate}
+                          </span>
+                        </div>
+                      )}
+                    </td>
                     <td style={{ padding: '1rem', fontSize: '0.875rem' }}>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
                         {(p.medicines || []).map((m, idx) => (

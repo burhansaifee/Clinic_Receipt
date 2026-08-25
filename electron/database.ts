@@ -100,8 +100,28 @@ export const database = {
         patientPhone TEXT,
         doctorId TEXT NOT NULL,
         doctorName TEXT NOT NULL,
+        symptoms TEXT,
         diagnosis TEXT,
-        notes TEXT
+        medicines TEXT,
+        notes TEXT,
+        followUpDate TEXT,
+        followUpNotes TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS follow_ups (
+        id TEXT PRIMARY KEY,
+        prescriptionId TEXT,
+        receiptId TEXT,
+        patientName TEXT NOT NULL,
+        patientPhone TEXT,
+        patientAge TEXT,
+        patientGender TEXT,
+        doctorId TEXT NOT NULL,
+        doctorName TEXT NOT NULL,
+        scheduledDate TEXT NOT NULL,
+        notes TEXT,
+        status TEXT DEFAULT 'PENDING',
+        createdAt TEXT NOT NULL
       );
 
       CREATE TABLE IF NOT EXISTS appointments (
@@ -151,6 +171,33 @@ export const database = {
     try {
       db.exec('ALTER TABLE receipts ADD COLUMN qrCodeText TEXT;');
     } catch (e) {}
+    try {
+      db.exec('ALTER TABLE prescriptions ADD COLUMN followUpDate TEXT;');
+    } catch (e) {}
+    try {
+      db.exec('ALTER TABLE prescriptions ADD COLUMN followUpNotes TEXT;');
+    } catch (e) {}
+
+    // Follow-ups Migrations
+    const followUpCols = [
+      'prescriptionId TEXT',
+      'receiptId TEXT',
+      'patientName TEXT NOT NULL DEFAULT ""',
+      'patientPhone TEXT DEFAULT ""',
+      'patientAge TEXT',
+      'patientGender TEXT',
+      'doctorId TEXT NOT NULL DEFAULT ""',
+      'doctorName TEXT NOT NULL DEFAULT ""',
+      'scheduledDate TEXT NOT NULL DEFAULT ""',
+      'notes TEXT',
+      'status TEXT DEFAULT "PENDING"',
+      'createdAt TEXT'
+    ];
+    for (const col of followUpCols) {
+      try {
+        db.exec(`ALTER TABLE follow_ups ADD COLUMN ${col};`);
+      } catch (e) {}
+    }
 
     // Appointments Migrations
     const aptCols = [
@@ -185,6 +232,9 @@ export const database = {
         CREATE INDEX IF NOT EXISTS idx_appointments_status ON appointments(status);
         CREATE INDEX IF NOT EXISTS idx_prescriptions_doctorId ON prescriptions(doctorId);
         CREATE INDEX IF NOT EXISTS idx_prescriptions_date ON prescriptions(date);
+        CREATE INDEX IF NOT EXISTS idx_follow_ups_date ON follow_ups(scheduledDate);
+        CREATE INDEX IF NOT EXISTS idx_follow_ups_status ON follow_ups(status);
+        CREATE INDEX IF NOT EXISTS idx_follow_ups_doctorId ON follow_ups(doctorId);
       `);
     } catch (e) {
       console.error('[DB] Failed to create indexes:', e);
@@ -434,8 +484,8 @@ export const database = {
   },
   savePrescription: (prescription: any) => {
     const stmt = db.prepare(`
-      INSERT OR REPLACE INTO prescriptions (id, receiptId, date, patientName, patientAge, patientGender, patientPhone, doctorId, doctorName, symptoms, diagnosis, medicines, notes)
-      VALUES (@id, @receiptId, @date, @patientName, @patientAge, @patientGender, @patientPhone, @doctorId, @doctorName, @symptoms, @diagnosis, @medicines, @notes)
+      INSERT OR REPLACE INTO prescriptions (id, receiptId, date, patientName, patientAge, patientGender, patientPhone, doctorId, doctorName, symptoms, diagnosis, medicines, notes, followUpDate, followUpNotes)
+      VALUES (@id, @receiptId, @date, @patientName, @patientAge, @patientGender, @patientPhone, @doctorId, @doctorName, @symptoms, @diagnosis, @medicines, @notes, @followUpDate, @followUpNotes)
     `);
     return stmt.run({
       receiptId: '',
@@ -447,11 +497,93 @@ export const database = {
       symptoms: '',
       diagnosis: '',
       notes: '',
+      followUpDate: '',
+      followUpNotes: '',
       ...prescription,
       medicines: JSON.stringify(prescription.medicines || [])
     });
   },
   deletePrescription: (id: string) => db.prepare('DELETE FROM prescriptions WHERE id = ?').run(id),
+
+  // Follow-Ups
+  getFollowUps: (options?: { limit?: number; offset?: number; search?: string; startDate?: string; endDate?: string; doctorId?: string; status?: string }) => {
+    try {
+      let query = `
+        SELECT * FROM follow_ups
+        WHERE 1=1
+      `;
+      const params: any = {};
+      if (options?.doctorId && options.doctorId !== 'ALL') {
+        query += ' AND doctorId = @doctorId';
+        params.doctorId = options.doctorId;
+      }
+      if (options?.status && options.status !== 'ALL') {
+        query += ' AND status = @status';
+        params.status = options.status;
+      }
+      if (options?.startDate) {
+        query += ' AND date(scheduledDate) >= date(@startDate)';
+        params.startDate = options.startDate;
+      }
+      if (options?.endDate) {
+        query += ' AND date(scheduledDate) <= date(@endDate)';
+        params.endDate = options.endDate;
+      }
+      if (options?.search) {
+        query += ' AND (patientName LIKE @search OR patientPhone LIKE @search OR notes LIKE @search)';
+        params.search = `%${options.search}%`;
+      }
+      query += `
+        ORDER BY 
+          CASE WHEN status = 'PENDING' THEN 0 ELSE 1 END,
+          scheduledDate ASC,
+          createdAt DESC
+      `;
+      if (options?.limit) {
+        query += ' LIMIT @limit';
+        params.limit = options.limit;
+        if (options?.offset) {
+          query += ' OFFSET @offset';
+          params.offset = options.offset;
+        }
+      }
+      return db.prepare(query).all(params);
+    } catch (e) {
+      console.error('[Database] Error fetching follow-ups:', e);
+      return [];
+    }
+  },
+  saveFollowUp: (followUp: any) => {
+    const stmt = db.prepare(`
+      INSERT OR REPLACE INTO follow_ups (
+        id, prescriptionId, receiptId, patientName, patientPhone, patientAge, patientGender,
+        doctorId, doctorName, scheduledDate, notes, status, createdAt
+      ) VALUES (
+        @id, @prescriptionId, @receiptId, @patientName, @patientPhone, @patientAge, @patientGender,
+        @doctorId, @doctorName, @scheduledDate, @notes, @status, @createdAt
+      )
+    `);
+    const id = followUp.id || ('FU-' + Date.now() + '-' + Math.floor(100 + Math.random() * 900));
+    return stmt.run({
+      id,
+      prescriptionId: followUp.prescriptionId || '',
+      receiptId: followUp.receiptId || '',
+      patientName: followUp.patientName || 'Unknown Patient',
+      patientPhone: followUp.patientPhone || '',
+      patientAge: followUp.patientAge || '',
+      patientGender: followUp.patientGender || 'Male',
+      doctorId: followUp.doctorId || '',
+      doctorName: followUp.doctorName || '',
+      scheduledDate: followUp.scheduledDate || new Date().toISOString().split('T')[0],
+      notes: followUp.notes || '',
+      status: followUp.status || 'PENDING',
+      createdAt: followUp.createdAt || new Date().toISOString()
+    });
+  },
+  updateFollowUpStatus: (id: string, status: string) => {
+    return db.prepare('UPDATE follow_ups SET status = ? WHERE id = ?').run(status, id);
+  },
+  deleteFollowUp: (id: string) => db.prepare('DELETE FROM follow_ups WHERE id = ?').run(id),
 
   // Appointments
   getAppointments: () => {

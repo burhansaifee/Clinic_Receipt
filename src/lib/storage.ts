@@ -65,6 +65,26 @@ export interface Prescription {
   diagnosis: string;
   medicines: PrescribedMedicine[];
   notes: string;
+  followUpDate?: string;
+  followUpNotes?: string;
+}
+
+export type FollowUpStatus = 'PENDING' | 'ATTENDED' | 'MISSED' | 'CANCELLED';
+
+export interface FollowUp {
+  id: string;
+  prescriptionId?: string;
+  receiptId?: string;
+  patientName: string;
+  patientPhone?: string;
+  patientAge?: string;
+  patientGender?: string;
+  doctorId: string;
+  doctorName: string;
+  scheduledDate: string; // YYYY-MM-DD
+  notes?: string;
+  status: FollowUpStatus;
+  createdAt: string;
 }
 
 export type AppointmentStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED';
@@ -362,6 +382,31 @@ export const storage = {
   deleteAppointment: async (id: string) => {
     if (window.database?.deleteAppointment) {
         await window.database.deleteAppointment(id);
+    }
+  },
+
+  getFollowUps: async (options?: { limit?: number; offset?: number; search?: string; startDate?: string; endDate?: string; doctorId?: string; status?: string }): Promise<FollowUp[]> => {
+    if (window.database?.getFollowUps) {
+      return window.database.getFollowUps(options);
+    }
+    return [];
+  },
+
+  saveFollowUp: async (followUp: FollowUp): Promise<void> => {
+    if (window.database?.saveFollowUp) {
+      await window.database.saveFollowUp(followUp);
+    }
+  },
+
+  updateFollowUpStatus: async (id: string, status: FollowUpStatus): Promise<void> => {
+    if (window.database?.updateFollowUpStatus) {
+      await window.database.updateFollowUpStatus(id, status);
+    }
+  },
+
+  deleteFollowUp: async (id: string): Promise<void> => {
+    if (window.database?.deleteFollowUp) {
+      await window.database.deleteFollowUp(id);
     }
   },
 

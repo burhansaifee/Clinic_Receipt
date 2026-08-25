@@ -109,6 +109,18 @@ function generateAvailableBookingDates(allowedDays: string[]) {
 }
 
 let wasConnected = false;
+let stateChangeListeners: Array<(newState: BotState) => void> = [];
+
+function notifyStateChange(newState: BotState) {
+  state = { ...newState };
+  for (const listener of stateChangeListeners) {
+    try {
+      listener(state);
+    } catch (err) {
+      console.error('[WhatsApp Bot] Error in state listener:', err);
+    }
+  }
+}
 
 export const whatsappBot = {
   getStatus: () => state,
@@ -116,20 +128,54 @@ export const whatsappBot = {
     appointmentSavedCallback = cb;
   },
 
+  addStateListener: (cb: (state: BotState) => void) => {
+    if (!stateChangeListeners.includes(cb)) {
+      stateChangeListeners.push(cb);
+    }
+    return () => {
+      stateChangeListeners = stateChangeListeners.filter(l => l !== cb);
+    };
+  },
+
+  hasSavedSession: () => {
+    try {
+      const authDir = path.join(app.getPath('userData'), 'whatsapp_auth');
+      return fs.existsSync(path.join(authDir, 'creds.json'));
+    } catch {
+      return false;
+    }
+  },
+
   toggleAutoReply: (enabled: boolean) => {
     state.autoReplyEnabled = enabled;
+    notifyStateChange(state);
     return state;
   },
 
   start: async (onStateChange?: (newState: BotState) => void) => {
-    if (state.status === 'CONNECTED' || state.status === 'CONNECTING') {
+    if (onStateChange && !stateChangeListeners.includes(onStateChange)) {
+      stateChangeListeners.push(onStateChange);
+    }
+
+    if (state.status === 'CONNECTED') {
       return state;
+    }
+
+    // Clean up any stale/broken existing socket
+    if (socket) {
+      try {
+        socket.ev.removeAllListeners('connection.update');
+        socket.ev.removeAllListeners('creds.update');
+        socket.ev.removeAllListeners('messages.upsert');
+        socket.end(undefined);
+      } catch (e) {}
+      socket = null;
     }
 
     state.status = 'CONNECTING';
     state.qrCodeDataUrl = null;
     state.errorMessage = null;
-    if (onStateChange) onStateChange({ ...state });
+    notifyStateChange(state);
 
     try {
       const baileys = require('@whiskeysockets/baileys');
@@ -158,8 +204,9 @@ export const whatsappBot = {
           try {
             state.qrCodeDataUrl = await QRCode.toDataURL(qr);
             state.status = 'QR_READY';
+            state.errorMessage = null;
             console.log('[WhatsApp Bot] New QR Code generated on user request');
-            if (onStateChange) onStateChange({ ...state });
+            notifyStateChange(state);
           } catch (err) {
             console.error('[WhatsApp Bot] Failed to render QR code:', err);
           }
@@ -186,26 +233,27 @@ export const whatsappBot = {
             } catch (err) {
               console.error('[WhatsApp Bot] Failed to clear auth directory on logout:', err);
             }
-            if (onStateChange) onStateChange({ ...state });
+            notifyStateChange(state);
           } else if (previouslyConnected) {
             // Only auto-reconnect if we were already authenticated & connected
             console.log('[WhatsApp Bot] Session lost while connected. Reconnecting existing session...');
             state.status = 'CONNECTING';
-            if (onStateChange) onStateChange({ ...state });
-            setTimeout(() => whatsappBot.start(onStateChange), 5000);
+            notifyStateChange(state);
+            setTimeout(() => whatsappBot.start(), 5000);
           } else {
             // Unauthenticated QR pairing phase ended/expired - stop and wait for user to click "Connect WhatsApp" again
             console.log('[WhatsApp Bot] QR pairing stopped/expired. Waiting for user to click Connect WhatsApp.');
             wasConnected = false;
-            if (onStateChange) onStateChange({ ...state });
+            notifyStateChange(state);
           }
         } else if (connection === 'open') {
           state.status = 'CONNECTED';
           state.qrCodeDataUrl = null;
+          state.errorMessage = null;
           state.phoneNumber = socket.user?.id ? socket.user.id.split(':')[0] : 'Active';
           wasConnected = true;
           console.log('[WhatsApp Bot] Successfully connected to WhatsApp!');
-          if (onStateChange) onStateChange({ ...state });
+          notifyStateChange(state);
         }
       });
 
@@ -243,7 +291,7 @@ export const whatsappBot = {
       console.error('[WhatsApp Bot] Start error:', err);
       state.status = 'ERROR';
       state.errorMessage = err.message || 'Failed to initialize WhatsApp bot';
-      if (onStateChange) onStateChange({ ...state });
+      notifyStateChange(state);
     }
 
     return state;
@@ -263,6 +311,7 @@ export const whatsappBot = {
     state.status = 'DISCONNECTED';
     state.qrCodeDataUrl = null;
     state.phoneNumber = null;
+    state.errorMessage = null;
 
     try {
       const authDir = path.join(app.getPath('userData'), 'whatsapp_auth');
@@ -274,6 +323,7 @@ export const whatsappBot = {
       console.error('[WhatsApp Bot] Error clearing credentials folder:', err);
     }
 
+    notifyStateChange(state);
     return state;
   },
 
@@ -283,11 +333,19 @@ export const whatsappBot = {
       console.error('[WhatsApp Bot] Cannot send message, bot is not connected. Current status:', state.status);
       throw new Error('WhatsApp bot is not connected');
     }
-    const jid = phone.includes('@') ? phone : `${phone.replace(/\D/g, '')}@s.whatsapp.net`;
+    let digits = (phone || '').replace(/\D/g, '');
+    if (digits.length === 11 && digits.startsWith('0')) {
+      digits = digits.slice(1);
+    }
+    if (digits.length === 10) {
+      digits = `91${digits}`;
+    }
+    const jid = phone.includes('@') ? phone : `${digits}@s.whatsapp.net`;
     console.log(`[WhatsApp Bot] Formatted JID: ${jid}`);
     try {
       await socket.sendMessage(jid, { text: message });
       console.log(`[WhatsApp Bot] Message sent successfully to ${jid}`);
+      return { success: true, message: 'Sent via WhatsApp bot' };
     } catch (e) {
       console.error(`[WhatsApp Bot] Failed to send message to ${jid}:`, e);
       throw e;

@@ -200,17 +200,10 @@ function startHostServer() {
               throw new Error(`Database method ${camelMethod} not found`);
             }
           } else if (method === 'get-known-users') {
-            const knownUsers = store.get('known_users') as any[] || [];
-            try {
-              const allDocs = database.getDoctors();
-              for (const doc of allDocs) {
-                const docIdClean = (doc.id || '').toLowerCase();
-                const docNameClean = (doc.name || '').toLowerCase();
-                if (docIdClean && !knownUsers.some((u: any) => u.id === docIdClean || u.id === docNameClean)) {
-                  knownUsers.push({ id: docNameClean || docIdClean, role: 'doctor', doctorId: doc.id });
-                }
-              }
-            } catch (e) {}
+            const knownUsers = store.get('known_users') as any[] || [
+              { id: 'default', role: 'reception' },
+              { id: 'admin', role: 'reception' }
+            ];
             result = knownUsers;
           } else if (method === 'add-known-user') {
             const [userId, role, doctorId] = args;
@@ -239,20 +232,6 @@ function startHostServer() {
             const cleanId = userId.trim().toLowerCase();
             const knownUsers = store.get('known_users') as any[] || [];
             let idx = knownUsers.findIndex(u => u.id === cleanId);
-            if (idx === -1) {
-              try {
-                const allDocs = database.getDoctors();
-                const matchedDoc = allDocs.find((d: any) => 
-                  (d.id && d.id.toLowerCase() === cleanId) || 
-                  (d.name && d.name.toLowerCase() === cleanId) ||
-                  (d.name && d.name.toLowerCase().replace(/^dr\.?\s*/i, '') === cleanId.replace(/^dr\.?\s*/i, ''))
-                );
-                if (matchedDoc) {
-                  knownUsers.push({ id: cleanId, role: 'doctor', doctorId: matchedDoc.id });
-                  idx = knownUsers.length - 1;
-                }
-              } catch (e) {}
-            }
             if (idx !== -1) {
               const hashPassword = (pwd: string) => crypto.createHash('sha256').update(pwd + PASSWORD_SALT).digest('hex');
               knownUsers[idx].password = password ? hashPassword(password) : '';
@@ -278,21 +257,6 @@ function startHostServer() {
             const hashPassword = (pwd: string) => crypto.createHash('sha256').update(pwd + PASSWORD_SALT).digest('hex');
             let user = knownUsers.find(u => u.id === cleanId);
             if (!user) {
-              try {
-                const allDocs = database.getDoctors();
-                const matchedDoc = allDocs.find((d: any) => 
-                  (d.id && d.id.toLowerCase() === cleanId) || 
-                  (d.name && d.name.toLowerCase() === cleanId) ||
-                  (d.name && d.name.toLowerCase().replace(/^dr\.?\s*/i, '') === cleanId.replace(/^dr\.?\s*/i, ''))
-                );
-                if (matchedDoc) {
-                  user = { id: cleanId, role: 'doctor', doctorId: matchedDoc.id, password: '' };
-                  knownUsers.push(user);
-                  store.set('known_users', knownUsers);
-                }
-              } catch (e) {}
-            }
-            if (!user) {
               result = { success: false, error: 'Access Denied: User ID is not recognized.' };
             } else if (!user.password) {
               result = { success: true, requirePasswordSetup: true, role: user.role, doctorId: user.doctorId };
@@ -311,6 +275,17 @@ function startHostServer() {
                 result = { success: false, error: 'Incorrect password' };
               }
             }
+          } else if (method === 'whatsapp-get-status') {
+            result = whatsappBot.getStatus();
+          } else if (method === 'whatsapp-toggle-autoreply') {
+            const [enabled] = args;
+            result = whatsappBot.toggleAutoReply(enabled);
+          } else if (method === 'whatsapp-start') {
+            result = await whatsappBot.start((state) => {
+              if (win) win.webContents.send('whatsapp-state-update', state);
+            });
+          } else if (method === 'whatsapp-stop') {
+            result = await whatsappBot.stop();
           } else if (method === 'whatsapp-get-schedule') {
             result = store.get('whatsapp_schedule') || {
               allowedDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
@@ -680,23 +655,45 @@ ipcMain.handle('db-delete-appointment', (_, id) => {
   return database.deleteAppointment(id);
 })
 
+// SQLite Database Follow-Ups IPCs
+ipcMain.handle('db-get-follow-ups', (_, options) => {
+  if (workstationMode === 'client') return clientRequest('db-get-follow-ups', options);
+  return database.getFollowUps(options);
+})
+ipcMain.handle('db-save-follow-up', (_, followUp) => {
+  if (workstationMode === 'client') return clientRequest('db-save-follow-up', followUp);
+  return database.saveFollowUp(followUp);
+})
+ipcMain.handle('db-update-follow-up-status', (_, id, status) => {
+  if (workstationMode === 'client') return clientRequest('db-update-follow-up-status', id, status);
+  return database.updateFollowUpStatus(id, status);
+})
+ipcMain.handle('db-delete-follow-up', (_, id) => {
+  if (workstationMode === 'client') return clientRequest('db-delete-follow-up', id);
+  return database.deleteFollowUp(id);
+})
+
 // WhatsApp Bot IPCs
 whatsappBot.setOnAppointmentSavedCallback(() => {
   if (win) win.webContents.send('appointment-updated');
 });
 
 ipcMain.handle('whatsapp-start', async () => {
+  if (workstationMode === 'client') return clientRequest('whatsapp-start');
   return whatsappBot.start((state) => {
     if (win) win.webContents.send('whatsapp-state-update', state);
   });
 })
 ipcMain.handle('whatsapp-stop', async () => {
+  if (workstationMode === 'client') return clientRequest('whatsapp-stop');
   return whatsappBot.stop();
 })
 ipcMain.handle('whatsapp-get-status', () => {
+  if (workstationMode === 'client') return clientRequest('whatsapp-get-status');
   return whatsappBot.getStatus();
 })
 ipcMain.handle('whatsapp-toggle-autoreply', (_, enabled: boolean) => {
+  if (workstationMode === 'client') return clientRequest('whatsapp-toggle-autoreply', enabled);
   return whatsappBot.toggleAutoReply(enabled);
 })
 ipcMain.handle('whatsapp-send-message', (_, phone: string, message: string) => {
@@ -724,7 +721,7 @@ ipcMain.handle('whatsapp-save-schedule', (_, schedule) => {
   if (workstationMode === 'client') return clientRequest('whatsapp-save-schedule', schedule);
   store.set('whatsapp_schedule', schedule);
   return { success: true };
-})
+});
 
 // User Profile Management IPCs
 ipcMain.handle('get-known-users', async () => {
@@ -739,16 +736,6 @@ ipcMain.handle('get-known-users', async () => {
     { id: 'default', role: 'reception' },
     { id: 'admin', role: 'reception' }
   ];
-  try {
-    const allDocs = database.getDoctors();
-    for (const doc of allDocs) {
-      const docIdClean = (doc.id || '').toLowerCase();
-      const docNameClean = (doc.name || '').toLowerCase();
-      if (docIdClean && !knownUsers.some((u: any) => u.id === docIdClean || u.id === docNameClean)) {
-        knownUsers.push({ id: docNameClean || docIdClean, role: 'doctor', doctorId: doc.id });
-      }
-    }
-  } catch (e) {}
   return knownUsers;
 });
 
@@ -822,22 +809,6 @@ ipcMain.handle('connect-user', async (_, userId: string, password?: string) => {
 
   let user = knownUsers.find(u => u.id === cleanId);
   if (!user) {
-    try {
-      const allDocs = database.getDoctors();
-      const matchedDoc = allDocs.find((d: any) => 
-        (d.id && d.id.toLowerCase() === cleanId) || 
-        (d.name && d.name.toLowerCase() === cleanId) ||
-        (d.name && d.name.toLowerCase().replace(/^dr\.?\s*/i, '') === cleanId.replace(/^dr\.?\s*/i, ''))
-      );
-      if (matchedDoc) {
-        user = { id: cleanId, role: 'doctor', doctorId: matchedDoc.id, password: '' };
-        knownUsers.push(user);
-        store.set('known_users', knownUsers);
-      }
-    } catch (e) {}
-  }
-
-  if (!user) {
     return { success: false, error: 'Access Denied: User ID is not recognized.' };
   }
   
@@ -870,20 +841,6 @@ ipcMain.handle('set-user-password', (_, userId: string, password?: string) => {
   const cleanId = userId.trim().toLowerCase();
   const knownUsers = store.get('known_users') as { id: string, role: string, doctorId?: string, password?: string }[] || [];
   let idx = knownUsers.findIndex(u => u.id === cleanId);
-  if (idx === -1) {
-    try {
-      const allDocs = database.getDoctors();
-      const matchedDoc = allDocs.find((d: any) => 
-        (d.id && d.id.toLowerCase() === cleanId) || 
-        (d.name && d.name.toLowerCase() === cleanId) ||
-        (d.name && d.name.toLowerCase().replace(/^dr\.?\s*/i, '') === cleanId.replace(/^dr\.?\s*/i, ''))
-      );
-      if (matchedDoc) {
-        knownUsers.push({ id: cleanId, role: 'doctor', doctorId: matchedDoc.id });
-        idx = knownUsers.length - 1;
-      }
-    } catch (e) {}
-  }
   if (idx !== -1) {
     const hashPassword = (pwd: string) => crypto.createHash('sha256').update(pwd + PASSWORD_SALT).digest('hex');
     knownUsers[idx].password = password ? hashPassword(password) : '';
@@ -1120,9 +1077,29 @@ app.on('activate', () => {
   }
 })
 
+// Open external URL handler
+ipcMain.handle('open-external', (_, url: string) => {
+  if (url && (url.startsWith('https://') || url.startsWith('http://') || url.startsWith('mailto:'))) {
+    return shell.openExternal(url);
+  }
+});
+
 app.whenReady().then(() => {
   createWindow()
   
+  // Register permanent state broadcast listener for WhatsApp bot updates
+  whatsappBot.addStateListener((state) => {
+    if (win) win.webContents.send('whatsapp-state-update', state);
+  });
+
+  // Auto-connect WhatsApp bot if a previously authenticated session exists
+  if (workstationMode !== 'client' && whatsappBot.hasSavedSession()) {
+    console.log('[Main] Found saved WhatsApp session credentials. Auto-connecting WhatsApp bot...');
+    whatsappBot.start().catch(err => {
+      console.error('[Main] Auto-start WhatsApp bot error:', err);
+    });
+  }
+
   // Check for updates and notify the user using system notifications
   autoUpdater.checkForUpdatesAndNotify()
 })

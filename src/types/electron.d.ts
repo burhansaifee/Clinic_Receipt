@@ -10,6 +10,8 @@ import type {
   Prescription,
   Appointment,
   AppointmentStatus,
+  FollowUp,
+  FollowUpStatus,
 } from '../lib/storage';
 
 interface DatabaseBridge {
@@ -40,6 +42,10 @@ interface DatabaseBridge {
     rejectionReason?: string
   ): Promise<void>;
   deleteAppointment(id: string): Promise<void>;
+  getFollowUps(options?: { limit?: number; offset?: number; search?: string; startDate?: string; endDate?: string; doctorId?: string; status?: string }): Promise<FollowUp[]>;
+  saveFollowUp(followUp: FollowUp): Promise<void>;
+  updateFollowUpStatus(id: string, status: FollowUpStatus): Promise<void>;
+  deleteFollowUp(id: string): Promise<void>;
 }
 
 interface LicensingBridge {
@@ -148,6 +154,10 @@ interface IpcRendererBridge {
   invoke(channel: string, ...args: unknown[]): Promise<unknown>;
 }
 
+interface SystemBridge {
+  openExternal(url: string): Promise<void>;
+}
+
 declare global {
   interface Window {
     database: DatabaseBridge;
@@ -155,6 +165,7 @@ declare global {
     users: UsersBridge;
     connection: ConnectionBridge;
     whatsappBot: WhatsAppBotBridge;
+    system?: SystemBridge;
     excelStorage?: ExcelStorageBridge;
     ipcRenderer: IpcRendererBridge;
   }

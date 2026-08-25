@@ -70,6 +70,7 @@ export const database = {
         patientPhone TEXT,
         doctorId TEXT NOT NULL,
         doctorName TEXT NOT NULL,
+        items TEXT,
         total REAL NOT NULL,
         paymentMethod TEXT DEFAULT 'CASH',
         appointmentId TEXT,
@@ -170,6 +171,9 @@ export const database = {
     } catch (e) {}
     try {
       db.exec('ALTER TABLE receipts ADD COLUMN qrCodeText TEXT;');
+    } catch (e) {}
+    try {
+      db.exec('ALTER TABLE receipts ADD COLUMN items TEXT;');
     } catch (e) {}
     try {
       db.exec('ALTER TABLE prescriptions ADD COLUMN followUpDate TEXT;');

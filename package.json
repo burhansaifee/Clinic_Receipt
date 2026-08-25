@@ -1,13 +1,13 @@
 {
   "name": "clinic",
   "private": true,
-  "version": "3.0.1",
+  "version": "3.0.2",
   "main": "dist-electron/main.js",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build && electron-builder",
-    "build:mac": "xattr -cr public src 2>/dev/null || true && tsc -b && vite build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --dir && hdiutil create -volname \"Buvora\" -srcfolder release/3.0.1/mac-arm64 -ov -format UDZO release/3.0.1/Buvora-3.0.1-mac.dmg",
+    "build:mac": "xattr -cr public src 2>/dev/null || true && tsc -b && vite build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --dir && hdiutil create -volname \"Buvora\" -srcfolder release/3.0.2/mac-arm64 -ov -format UDZO release/3.0.2/Buvora-3.0.2-mac.dmg",
     "build:win": "tsc -b && vite build && electron-builder --windows",
     "postinstall": "npx @electron/rebuild -f -w better-sqlite3",
     "key": "node scripts/generate-key.js",

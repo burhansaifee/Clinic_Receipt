@@ -77,6 +77,14 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
     };
   }, []);
 
+  // Poll for updates every 5 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refreshData();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [refreshData]);
+
   useEffect(() => {
     const handleAfterPrint = () => {
       setActivePrintPrescription(null);

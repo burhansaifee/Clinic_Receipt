@@ -192,12 +192,9 @@ const MainApp: React.FC = () => {
       refreshData();
     })();
 
-    const interval = setInterval(async () => {
-      try {
-        const apts = await storage.getAppointments();
-        setPendingAppointmentsCount(apts.filter((a: any) => a.status === 'PENDING').length);
-      } catch { /* ignored */ }
-    }, 10_000);
+    const interval = setInterval(() => {
+      refreshData();
+    }, 5000);
 
     return () => clearInterval(interval);
   }, [currentUser, refreshData]);

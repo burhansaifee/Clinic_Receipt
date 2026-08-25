@@ -444,11 +444,16 @@ async function handleIncomingBookingFlow(socket: any, jid: string, phone: string
   let userState = conversationState[phone] || { step: 0 };
 
   // Reset trigger
-  if (lowerText.includes('hi') || lowerText.includes('hello') || lowerText.includes('book') || lowerText.includes('appointment') || lowerText.includes('start') || lowerText.includes('reset')) {
+  const triggerRegex = /\b(hi|hii|hey|hello|booking)\b/;
+  if (triggerRegex.test(lowerText)) {
     userState = { step: 1 };
   }
 
   switch (userState.step) {
+    case 0:
+      // Ignore non-trigger messages when not in a flow
+      break;
+
     case 1: {
       // Step 1: Greeting & Doctor List
       let docListStr = doctors

@@ -847,6 +847,7 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
         const doctorObj = doctors.find(d => d.id === activePrintPrescription.doctorId);
         const printHeader = doctorObj ? (doctorObj.printHeader !== false) : true;
         const customTopMargin = doctorObj ? (doctorObj.customTopMargin || 0) : 0;
+        const customBottomMargin = doctorObj ? (doctorObj.customBottomMargin || 0) : 0;
         const pageCss = prescriptionPaperType === 'A5' ? '@page { size: A5 portrait; margin: 0.6cm; }'
           : prescriptionPaperType === 'Letter' ? '@page { size: letter portrait; margin: 0.8cm; }'
           : prescriptionPaperType === 'A6' ? '@page { size: A6 portrait; margin: 0.4cm; }'
@@ -860,7 +861,8 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
                 className="print-container"
                 style={{
                   paddingTop: !printHeader && customTopMargin ? `${customTopMargin}mm` : undefined,
-                  borderTop: !printHeader ? 'none' : undefined
+                  paddingBottom: !printHeader && customBottomMargin ? `${customBottomMargin}mm` : undefined,
+                  borderTop: !printHeader ? 'none' : undefined,
                 }}
               >
               {/* Header / Clinic Doctor Info */}
@@ -985,8 +987,8 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
             )}
 
             {/* Signature Box */}
-            <div className="print-footer">
-              <div className="signature-box" style={{ marginLeft: 'auto', textAlign: 'center' }}>
+            <div className="print-footer" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
+              <div className="signature-box" style={{ textAlign: 'center' }}>
                 <div className="signature-line"></div>
                 <p style={{ margin: '0 0 2px 0', fontWeight: '700' }}>Dr. {activePrintPrescription.doctorName.replace(/^Dr\.?\s+/i, '')}</p>
                 <p className="subtitle">Authorized Signature</p>

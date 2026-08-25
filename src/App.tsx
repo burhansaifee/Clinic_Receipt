@@ -78,8 +78,8 @@ const MainApp: React.FC = () => {
   const [localIp, setLocalIp] = useState('');
 
   // ── Data refresh ──────────────────────────────────────────────────────────
-  const refreshData = React.useCallback(async () => {
-    setIsLoadingData(true);
+  const refreshData = React.useCallback(async (silent = false) => {
+    if (!silent) setIsLoadingData(true);
     try {
       const [d, s, metrics, p, apts, fus, paperSettings] = await Promise.all([
         storage.getDoctors(),
@@ -99,7 +99,7 @@ const MainApp: React.FC = () => {
       setReceiptPaperType(paperSettings.receiptPaper);
       setPrescriptionPaperType(paperSettings.prescriptionPaper);
     } finally {
-      setIsLoadingData(false);
+      if (!silent) setIsLoadingData(false);
     }
   }, []);
 
@@ -193,7 +193,7 @@ const MainApp: React.FC = () => {
     })();
 
     const interval = setInterval(() => {
-      refreshData();
+      refreshData(true);
     }, 5000);
 
     return () => clearInterval(interval);

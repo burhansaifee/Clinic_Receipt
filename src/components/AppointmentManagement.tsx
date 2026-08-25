@@ -89,6 +89,12 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
   useEffect(() => {
     loadAppointments();
     loadSchedule();
+    
+    // Poll for new appointments every 5 seconds so WhatsApp bookings appear instantly
+    const interval = setInterval(() => {
+      loadAppointments();
+    }, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleToggleDay = (dayKey: string) => {

@@ -9,6 +9,7 @@ export interface Doctor {
   address: string;
   printHeader?: boolean;
   customTopMargin?: number;
+  customBottomMargin?: number;
   upiId?: string;
   qrCodeText?: string;
   showQrCodeOnReceipt?: boolean;

@@ -18,6 +18,7 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate }
   const [address, setAddress] = useState('');
   const [printHeader, setPrintHeader] = useState(true);
   const [customTopMargin, setCustomTopMargin] = useState(0);
+  const [customBottomMargin, setCustomBottomMargin] = useState(0);
   const [upiId, setUpiId] = useState('');
   const [qrCodeText, setQrCodeText] = useState('');
   const [showQrCodeOnReceipt, setShowQrCodeOnReceipt] = useState(false);
@@ -30,6 +31,7 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate }
     setAddress('');
     setPrintHeader(true);
     setCustomTopMargin(0);
+    setCustomBottomMargin(0);
     setUpiId('');
     setQrCodeText('');
     setShowQrCodeOnReceipt(false);
@@ -48,6 +50,7 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate }
       address,
       printHeader,
       customTopMargin,
+      customBottomMargin,
       upiId,
       qrCodeText,
       showQrCodeOnReceipt
@@ -65,6 +68,7 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate }
     setAddress(doctor.address || '');
     setPrintHeader(doctor.printHeader !== false);
     setCustomTopMargin(doctor.customTopMargin || 0);
+    setCustomBottomMargin(doctor.customBottomMargin || 0);
     setUpiId(doctor.upiId || '');
     setQrCodeText(doctor.qrCodeText || '');
     setShowQrCodeOnReceipt(doctor.showQrCodeOnReceipt || false);
@@ -183,24 +187,44 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate }
             </div>
 
             {!printHeader && (
-              <div className="form-group" style={{ gridColumn: '1 / -1', background: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontWeight: 600, fontSize: '0.825rem', marginBottom: 0 }}>
-                  Pre-Printed Pad Top Margin (in millimeters)
-                </label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <input 
-                    type="number"
-                    value={customTopMargin}
-                    onChange={e => setCustomTopMargin(Math.max(0, parseInt(e.target.value) || 0))}
-                    placeholder="e.g. 45"
-                    style={{ width: '100px', padding: '0.4rem 0.5rem', fontSize: '0.85rem' }}
-                    min="0"
-                  />
-                  <span style={{ fontSize: '0.775rem', color: '#64748b' }}>
-                    Leave this much blank space at the top of the print page so Buvora text does not overlap your pad's pre-printed letterhead.
-                  </span>
+              <>
+                <div className="form-group" style={{ gridColumn: '1 / -1', background: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <label style={{ fontWeight: 600, fontSize: '0.825rem', marginBottom: 0 }}>
+                    Pre-Printed Pad Top Margin (in millimeters)
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <input 
+                      type="number"
+                      value={customTopMargin}
+                      onChange={e => setCustomTopMargin(Math.max(0, parseInt(e.target.value) || 0))}
+                      placeholder="e.g. 45"
+                      style={{ width: '100px', padding: '0.4rem 0.5rem', fontSize: '0.85rem' }}
+                      min="0"
+                    />
+                    <span style={{ fontSize: '0.775rem', color: '#64748b' }}>
+                      Leave this much blank space at the top of the print page so Buvora text does not overlap your pad's pre-printed letterhead.
+                    </span>
+                  </div>
                 </div>
-              </div>
+                <div className="form-group" style={{ gridColumn: '1 / -1', background: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '-0.5rem' }}>
+                  <label style={{ fontWeight: 600, fontSize: '0.825rem', marginBottom: 0 }}>
+                    Pre-Printed Pad Bottom Margin (in millimeters)
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <input 
+                      type="number"
+                      value={customBottomMargin}
+                      onChange={e => setCustomBottomMargin(Math.max(0, parseInt(e.target.value) || 0))}
+                      placeholder="e.g. 20"
+                      style={{ width: '100px', padding: '0.4rem 0.5rem', fontSize: '0.85rem' }}
+                      min="0"
+                    />
+                    <span style={{ fontSize: '0.775rem', color: '#64748b' }}>
+                      Leave this much blank space at the bottom to avoid printing over the pre-printed footer.
+                    </span>
+                  </div>
+                </div>
+              </>
             )}
 
             <div className="form-actions">
@@ -228,7 +252,7 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate }
                   {doctor.showQrCodeOnReceipt && <span className="badge" style={{ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' }}>QR Enabled</span>}
                   {doctor.printHeader === false && (
                     <span className="badge" style={{ background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0' }}>
-                      Pre-Printed Pad ({doctor.customTopMargin || 0}mm margin)
+                      Pre-Printed Pad ({doctor.customTopMargin || 0}mm top, {doctor.customBottomMargin || 0}mm bottom)
                     </span>
                   )}
                 </div>

@@ -49,6 +49,7 @@ export const database = {
         address TEXT,
         printHeader INTEGER DEFAULT 1,
         customTopMargin INTEGER DEFAULT 0,
+        customBottomMargin INTEGER DEFAULT 0,
         upiId TEXT,
         qrCodeText TEXT,
         showQrCodeOnReceipt INTEGER DEFAULT 0
@@ -158,6 +159,9 @@ export const database = {
       db.exec('ALTER TABLE doctors ADD COLUMN customTopMargin INTEGER DEFAULT 0;');
     } catch (e) {}
     try {
+      db.exec('ALTER TABLE doctors ADD COLUMN customBottomMargin INTEGER DEFAULT 0;');
+    } catch (e) {}
+    try {
       db.exec('ALTER TABLE doctors ADD COLUMN upiId TEXT;');
     } catch (e) {}
     try {
@@ -265,13 +269,14 @@ export const database = {
   },
   saveDoctor: (doctor: any) => {
     const stmt = db.prepare(`
-      INSERT OR REPLACE INTO doctors (id, name, specialization, qualifications, phone, address, printHeader, customTopMargin, upiId, qrCodeText, showQrCodeOnReceipt)
-      VALUES (@id, @name, @specialization, @qualifications, @phone, @address, @printHeader, @customTopMargin, @upiId, @qrCodeText, @showQrCodeOnReceipt)
+      INSERT OR REPLACE INTO doctors (id, name, specialization, qualifications, phone, address, printHeader, customTopMargin, customBottomMargin, upiId, qrCodeText, showQrCodeOnReceipt)
+      VALUES (@id, @name, @specialization, @qualifications, @phone, @address, @printHeader, @customTopMargin, @customBottomMargin, @upiId, @qrCodeText, @showQrCodeOnReceipt)
     `);
     return stmt.run({
       ...doctor,
       printHeader: doctor.printHeader !== false ? 1 : 0,
       customTopMargin: doctor.customTopMargin || 0,
+      customBottomMargin: doctor.customBottomMargin || 0,
       upiId: doctor.upiId || '',
       qrCodeText: doctor.qrCodeText || '',
       showQrCodeOnReceipt: doctor.showQrCodeOnReceipt ? 1 : 0
@@ -453,15 +458,16 @@ export const database = {
   // Batch import for doctors
   batchImportDoctors: (doctors: any[]) => {
     const insert = db.prepare(`
-      INSERT OR IGNORE INTO doctors (id, name, specialization, qualifications, phone, address, printHeader, customTopMargin)
-      VALUES (@id, @name, @specialization, @qualifications, @phone, @address, @printHeader, @customTopMargin)
+      INSERT OR IGNORE INTO doctors (id, name, specialization, qualifications, phone, address, printHeader, customTopMargin, customBottomMargin)
+      VALUES (@id, @name, @specialization, @qualifications, @phone, @address, @printHeader, @customTopMargin, @customBottomMargin)
     `);
     const transaction = db.transaction((docs: any[]) => {
       for (const doc of docs) {
         insert.run({
           ...doc,
           printHeader: doc.printHeader !== false ? 1 : 0,
-          customTopMargin: doc.customTopMargin || 0
+          customTopMargin: doc.customTopMargin || 0,
+          customBottomMargin: doc.customBottomMargin || 0
         });
       }
     });

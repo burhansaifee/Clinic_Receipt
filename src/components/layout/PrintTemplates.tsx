@@ -376,6 +376,7 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
             const doctorObj = doctors.find(d => d.id === r.doctorId);
             const printHeader = doctorObj ? doctorObj.printHeader !== false : true;
             const customTopMargin = doctorObj ? doctorObj.customTopMargin || 0 : 0;
+            const customBottomMargin = doctorObj ? doctorObj.customBottomMargin || 0 : 0;
 
             const qrPayload = r.qrCodeText || (r.showQrCode && doctorObj?.upiId ? `upi://pay?pa=${encodeURIComponent(doctorObj.upiId)}&pn=${encodeURIComponent(doctorObj.name)}&am=${(Number(r.total) || 0).toFixed(2)}&cu=INR` : (r.showQrCode ? doctorObj?.qrCodeText : ''));
 
@@ -398,6 +399,7 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
                 className="print-container page-break"
                 style={{
                   paddingTop: !printHeader && customTopMargin ? `${customTopMargin}mm` : undefined,
+                  paddingBottom: !printHeader && customBottomMargin ? `${customBottomMargin}mm` : undefined,
                   borderTop: !printHeader ? 'none' : undefined,
                 }}
               >
@@ -486,7 +488,7 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
                   </div>
                 )}
 
-                <div className="print-footer">
+                <div className="print-footer" style={{ display: 'flex', justifyContent: 'space-between', marginTop: '20px' }}>
                   <div className="terms">
                     <p>• This is a computer-generated duplicate receipt.</p>
                     <p>• Original date of service: {formatDate(r.date)}</p>
@@ -494,7 +496,7 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
                       <p className="print-page-info">Receipt {idx + 1} of {receiptsToPrint.length}</p>
                     )}
                   </div>
-                  <div className="signature-box">
+                  <div className="signature-box" style={{ textAlign: 'center' }}>
                     <div className="signature-line"></div>
                     <p>Authorized Signatory</p>
                   </div>
@@ -520,6 +522,9 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
               style={{
                 paddingTop: doc?.printHeader === false && doc?.customTopMargin
                   ? `${doc.customTopMargin}mm`
+                  : undefined,
+                paddingBottom: doc?.printHeader === false && doc?.customBottomMargin
+                  ? `${doc.customBottomMargin}mm`
                   : undefined,
                 borderTop: doc?.printHeader === false ? 'none' : undefined,
               }}
@@ -607,8 +612,8 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
                 </div>
               )}
 
-              <div className="print-footer">
-                <div className="signature-box" style={{ marginLeft: 'auto', textAlign: 'center' }}>
+              <div className="print-footer" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
+                <div className="signature-box" style={{ textAlign: 'center' }}>
                   <div className="signature-line"></div>
                   <p style={{ margin: '0 0 2px 0', fontWeight: '700' }}>
                     Dr. {activePrintPrescription.doctorName.replace(/^Dr\.?\s+/i, '')}

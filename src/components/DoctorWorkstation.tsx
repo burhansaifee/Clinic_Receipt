@@ -908,17 +908,17 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
                 </div>
               </div>
 
-            {/* Symptoms & Diagnosis */}
+            {/* Symptoms & Diagnosis (Side by Side) */}
             {(activePrintPrescription.symptoms || activePrintPrescription.diagnosis) && (
-              <div className="print-clinical-grid">
+              <div className="print-clinical-grid" style={{ display: 'flex', flexDirection: 'row', gap: '1rem', marginBottom: '0.6rem', borderBottom: '1px dashed #e2e8f0', paddingBottom: '0.6rem' }}>
                 {activePrintPrescription.symptoms && (
-                  <div className="clinical-card">
+                  <div className="clinical-card" style={{ flex: 1, minWidth: 0 }}>
                     <span className="clinical-label">Chief Complaints / Symptoms</span>
                     <p className="clinical-text">{activePrintPrescription.symptoms}</p>
                   </div>
                 )}
                 {activePrintPrescription.diagnosis && (
-                  <div className="clinical-card">
+                  <div className="clinical-card" style={{ flex: 1, minWidth: 0 }}>
                     <span className="clinical-label">Diagnosis</span>
                     <p className="clinical-text">{activePrintPrescription.diagnosis}</p>
                   </div>
@@ -926,10 +926,8 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
               </div>
             )}
 
-            {/* Rx Symbol & Medicines */}
-            <div className="print-rx-section">
-              <div className="rx-symbol">Rₓ</div>
-              
+            {/* Medicines List (Compact Table without bulky Rx logo) */}
+            <div className="print-rx-section" style={{ marginBottom: '0.6rem' }}>
               <table className="print-meds-table">
                 <thead>
                   <tr>
@@ -955,18 +953,18 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
             </div>
 
             {activePrintPrescription.notes && (
-              <div className="print-notes-section">
+              <div className="print-notes-section" style={{ marginBottom: '0.5rem', padding: '0.5rem 0.75rem' }}>
                 <span className="notes-label">Advice / Notes</span>
                 <p className="notes-text" style={{ whiteSpace: 'pre-wrap' }}>{activePrintPrescription.notes}</p>
               </div>
             )}
 
             {activePrintPrescription.followUpDate && (
-              <div className="print-followup-box" style={{ marginTop: '0.9rem', padding: '0.6rem 0.9rem', border: '1.5px dashed #0284c7', borderRadius: '6px', background: '#f0f9ff' }}>
+              <div className="print-followup-box" style={{ marginTop: '0.5rem', marginBottom: '0.5rem', padding: '0.4rem 0.75rem', border: '1.5px dashed #0284c7', borderRadius: '6px', background: '#f0f9ff' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
                     <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#0369a1', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block' }}>NEXT VISIT / PATIENT FOLLOW-UP</span>
-                    <strong style={{ fontSize: '0.95rem', color: '#0f172a' }}>
+                    <strong style={{ fontSize: '0.92rem', color: '#0f172a' }}>
                       {(() => {
                         try {
                           return format(new Date(activePrintPrescription.followUpDate + 'T00:00:00'), 'EEEE, dd MMMM yyyy');
@@ -987,10 +985,10 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
             )}
 
             {/* Signature Box */}
-            <div className="print-footer" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
+            <div className="print-footer" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.75rem' }}>
               <div className="signature-box" style={{ textAlign: 'center' }}>
-                <div className="signature-line"></div>
-                <p style={{ margin: '0 0 2px 0', fontWeight: '700' }}>Dr. {activePrintPrescription.doctorName.replace(/^Dr\.?\s+/i, '')}</p>
+                <div className="signature-line" style={{ marginTop: '0.75rem', marginBottom: '0.25rem' }}></div>
+                <p style={{ margin: '0 0 2px 0', fontWeight: '700', fontSize: '0.85rem' }}>Dr. {activePrintPrescription.doctorName.replace(/^Dr\.?\s+/i, '')}</p>
                 <p className="subtitle">Authorized Signature</p>
               </div>
             </div>
@@ -1697,17 +1695,17 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
         #prescription-print-template .print-container {
           max-width: 800px;
           margin: 0 auto;
-          padding: 2.5rem;
+          padding: 1.25rem 1.5rem;
           background: white;
-          border-top: 6px solid #0284c7;
+          border-top: 5px solid #0284c7;
         }
 
         #prescription-print-template .print-header {
           display: flex;
           justify-content: space-between;
           align-items: flex-start;
-          margin-bottom: 1.5rem;
-          padding-bottom: 1rem;
+          margin-bottom: 0.75rem;
+          padding-bottom: 0.5rem;
           border-bottom: 1px solid #e2e8f0;
         }
 
@@ -1716,25 +1714,25 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
         }
 
         #prescription-print-template .print-clinic-branding h2 {
-          font-size: 1.6rem;
+          font-size: 1.4rem;
           font-weight: 800;
           color: #0f172a;
-          margin: 0 0 0.35rem 0;
+          margin: 0 0 0.2rem 0;
           font-family: 'Outfit', sans-serif;
           letter-spacing: -0.02em;
         }
 
         #prescription-print-template .qualifications {
-          font-size: 0.8rem;
+          font-size: 0.75rem;
           font-weight: 700;
           color: #475569;
-          margin: 0 0 0.2rem 0;
+          margin: 0 0 0.15rem 0;
           letter-spacing: 0.05em;
           text-transform: uppercase;
         }
 
         #prescription-print-template .specialization {
-          font-size: 0.85rem;
+          font-size: 0.8rem;
           color: #0284c7;
           font-weight: 600;
           margin: 0;
@@ -1745,13 +1743,13 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
         #prescription-print-template .print-clinic-address {
           text-align: right;
           max-width: 38%;
-          font-size: 0.8rem;
+          font-size: 0.75rem;
           color: #475569;
-          line-height: 1.4;
+          line-height: 1.35;
         }
 
         #prescription-print-template .print-clinic-address p {
-          margin: 0 0 0.2rem 0;
+          margin: 0 0 0.15rem 0;
         }
 
         #prescription-print-template .print-clinic-address .address-text {
@@ -1765,17 +1763,49 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
         #prescription-print-template .print-patient-meta-grid {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
-          gap: 1rem;
+          gap: 0.6rem;
           background: #f8fafc;
           border: 1px solid #e2e8f0;
-          padding: 1rem;
-          border-radius: 8px;
-          margin-bottom: 1.5rem;
+          padding: 0.6rem 0.8rem;
+          border-radius: 6px;
+          margin-bottom: 0.6rem;
         }
 
         #prescription-print-template .meta-label {
           display: block;
-          font-size: 0.7rem;
+          font-size: 0.68rem;
+          text-transform: uppercase;
+          color: #64748b;
+          font-weight: 700;
+          margin-bottom: 1px;
+          letter-spacing: 0.05em;
+        }
+
+        #prescription-print-template .meta-value {
+          display: block;
+          font-size: 0.85rem;
+          color: #0f172a;
+          font-weight: 600;
+        }
+
+        #prescription-print-template .print-clinical-grid {
+          display: flex !important;
+          flex-direction: row !important;
+          gap: 1rem !important;
+          margin-bottom: 0.6rem !important;
+          border-bottom: 1px dashed #e2e8f0 !important;
+          padding-bottom: 0.6rem !important;
+        }
+
+        #prescription-print-template .clinical-card {
+          flex: 1 1 0% !important;
+          min-width: 0 !important;
+          background: #ffffff !important;
+        }
+
+        #prescription-print-template .clinical-label {
+          display: block;
+          font-size: 0.72rem;
           text-transform: uppercase;
           color: #64748b;
           font-weight: 700;
@@ -1783,55 +1813,19 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
           letter-spacing: 0.05em;
         }
 
-        #prescription-print-template .meta-value {
-          display: block;
-          font-size: 0.9rem;
-          color: #0f172a;
-          font-weight: 600;
-        }
-
-        #prescription-print-template .print-clinical-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 1.5rem;
-          margin-bottom: 1.5rem;
-          border-bottom: 1px dashed #e2e8f0;
-          padding-bottom: 1.5rem;
-        }
-
-        #prescription-print-template .clinical-card {
-          background: #ffffff;
-        }
-
-        #prescription-print-template .clinical-label {
-          display: block;
-          font-size: 0.75rem;
-          text-transform: uppercase;
-          color: #64748b;
-          font-weight: 700;
-          margin-bottom: 4px;
-          letter-spacing: 0.05em;
-        }
-
         #prescription-print-template .clinical-text {
-          font-size: 0.95rem;
+          font-size: 0.88rem;
           color: #1e293b;
           margin: 0;
-          line-height: 1.4;
+          line-height: 1.35;
         }
 
         #prescription-print-template .print-rx-section {
-          margin-bottom: 2rem;
+          margin-bottom: 0.6rem;
         }
 
         #prescription-print-template .rx-symbol {
-          font-size: 2.5rem;
-          font-family: 'Times New Roman', Georgia, serif;
-          font-style: italic;
-          font-weight: bold;
-          color: #0284c7;
-          margin-bottom: 0.5rem;
-          line-height: 1;
+          display: none !important;
         }
 
         #prescription-print-template .print-meds-table {
@@ -1842,58 +1836,58 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
         #prescription-print-template .print-meds-table th {
           background: #f8fafc;
           color: #475569;
-          font-size: 0.75rem;
+          font-size: 0.72rem;
           text-transform: uppercase;
           font-weight: 700;
           letter-spacing: 0.05em;
-          padding: 0.6rem 0.75rem;
+          padding: 4px 8px;
           border-bottom: 2px solid #e2e8f0;
           text-align: left;
         }
 
         #prescription-print-template .print-meds-table td {
-          padding: 0.75rem;
+          padding: 4px 8px;
           border-bottom: 1px solid #f1f5f9;
-          font-size: 0.9rem;
+          font-size: 0.84rem;
           color: #334155;
           vertical-align: middle;
         }
 
         #prescription-print-template .print-notes-section {
-          font-size: 0.85rem;
-          margin-bottom: 3rem;
+          font-size: 0.82rem;
+          margin-bottom: 0.5rem;
           background: #f0f9ff;
-          padding: 1rem;
-          border-radius: 8px;
-          border-left: 4px solid #0284c7;
+          padding: 0.45rem 0.75rem;
+          border-radius: 6px;
+          border-left: 3px solid #0284c7;
         }
 
         #prescription-print-template .notes-label {
-          font-size: 0.75rem;
+          font-size: 0.7rem;
           text-transform: uppercase;
           color: #0369a1;
           font-weight: 700;
           letter-spacing: 0.05em;
-          margin-bottom: 0.25rem;
+          margin-bottom: 0.15rem;
           display: block;
         }
 
         #prescription-print-template .notes-text {
           color: #0c4a6e;
-          font-size: 0.9rem;
-          line-height: 1.4;
+          font-size: 0.84rem;
+          line-height: 1.35;
         }
 
         #prescription-print-template .signature-line {
-          width: 180px;
+          width: 140px;
           height: 1px;
           background: #cbd5e1;
-          margin-bottom: 0.5rem;
-          margin-top: 2rem;
+          margin-bottom: 0.25rem;
+          margin-top: 0.75rem;
         }
 
         #prescription-print-template .print-footer .subtitle {
-          font-size: 0.75rem;
+          font-size: 0.7rem;
           color: #64748b;
           margin: 0;
         }

@@ -47,10 +47,16 @@ let conversationState: Record<string, UserConversation> = {};
 
 function getWhatsAppScheduleFromStore() {
   const schedule = store.get('whatsapp_schedule') as any;
+  const clinicName = (schedule && schedule.clinicName) || (store.get('clinic_name') as string) || 'Buvora';
   if (schedule && Array.isArray(schedule.allowedDays) && Array.isArray(schedule.timeSlots)) {
-    return schedule;
+    return {
+      clinicName: schedule.clinicName || clinicName,
+      allowedDays: schedule.allowedDays,
+      timeSlots: schedule.timeSlots
+    };
   }
   return {
+    clinicName,
     allowedDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
     timeSlots: [
       '09:00 AM - 10:00 AM',
@@ -433,10 +439,12 @@ async function saveAppointmentToDb(appointment: any) {
 async function handleIncomingBookingFlow(socket: any, jid: string, phone: string, text: string) {
   const doctors = await getDoctorsFromDb();
   const lowerText = text.toLowerCase();
+  const schedule = getWhatsAppScheduleFromStore();
+  const clinicName = schedule.clinicName || (store.get('clinic_name') as string) || 'Buvora';
 
   if (!doctors || doctors.length === 0) {
     await socket.sendMessage(jid, {
-      text: ' *Buvora*\n\nThank you for reaching out! Our clinic directory is currently being updated. Please call our reception directly.',
+      text: ` *${clinicName}*\n\nThank you for reaching out! Our clinic directory is currently being updated. Please call our reception directly.`,
     });
     return;
   }
@@ -461,7 +469,7 @@ async function handleIncomingBookingFlow(socket: any, jid: string, phone: string
         .join('\n');
 
       const greetingMsg =
-        ` *Welcome to Buvora Appointment Booking!*\n\n` +
+        ` *Welcome to ${clinicName} Appointment Booking!*\n\n` +
         `Please select a doctor by replying with their number:\n\n` +
         `${docListStr}\n\n` +
         `_Reply with the number (e.g. 1 or 2)_`;
@@ -632,7 +640,7 @@ async function handleIncomingBookingFlow(socket: any, jid: string, phone: string
         `• *Date:* ${userState.selectedDateFormatted || userState.selectedDate}\n` +
         `• *Time Slot:* ${userState.selectedTimeSlot}\n` +
         `• *Status:* ⏳ Pending Reception Approval\n\n` +
-        `Our clinic reception will review and confirm your slot shortly. Thank you for choosing Buvora!`;
+        `Our clinic reception will review and confirm your slot shortly. Thank you for choosing ${clinicName}!`;
 
       await socket.sendMessage(jid, { text: confirmationMsg });
       break;

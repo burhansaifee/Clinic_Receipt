@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { storage, formatAgeGender, type Doctor, type Appointment, type AppointmentStatus } from '../lib/storage';
-import { Calendar, Search, CheckCircle, XCircle, Clock, Plus, Trash2, MessageSquare, Phone, Tag, Save, Check, CalendarDays, RefreshCw } from 'lucide-react';
+import { Calendar, Search, CheckCircle, XCircle, Clock, Plus, Trash2, MessageSquare, Phone, Tag, Save, Check, CalendarDays, RefreshCw, Building2 } from 'lucide-react';
 import { useConfirm } from './ui/ConfirmDialog';
 import { useToast } from './ui/Toast';
 
@@ -43,6 +43,7 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
 
   // Modal State - WhatsApp Booking Schedule & Time Slots
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+  const [clinicName, setClinicName] = useState('Buvora');
   const [allowedDays, setAllowedDays] = useState<string[]>(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
   const [timeSlots, setTimeSlots] = useState<string[]>([
     '09:00 AM - 10:00 AM',
@@ -77,6 +78,7 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
       try {
         const res = await (window as any).whatsappBot.getSchedule();
         if (res) {
+          if (res.clinicName) setClinicName(res.clinicName);
           if (res.allowedDays) setAllowedDays(res.allowedDays);
           if (res.timeSlots) setTimeSlots(res.timeSlots);
         }
@@ -132,6 +134,10 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
   };
 
   const handleSaveSchedule = async () => {
+    if (!clinicName.trim()) {
+      toast('Please enter a clinic name.', { type: 'error' });
+      return;
+    }
     if (allowedDays.length === 0) {
       toast('Please select at least one active operating day.', { type: 'error' });
       return;
@@ -143,8 +149,12 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
     setIsSavingSchedule(true);
     try {
       if ((window as any).whatsappBot?.saveSchedule) {
-        await (window as any).whatsappBot.saveSchedule({ allowedDays, timeSlots });
-        toast('✅ WhatsApp Booking Schedule & Time Slots saved successfully!', { type: 'success' });
+        await (window as any).whatsappBot.saveSchedule({
+          clinicName: clinicName.trim(),
+          allowedDays,
+          timeSlots
+        });
+        toast('✅ WhatsApp Booking Schedule & Clinic Name saved successfully!', { type: 'success' });
         setIsScheduleModalOpen(false);
       }
     } catch (err: any) {
@@ -163,7 +173,7 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
       console.log(`Sending WhatsApp message to ${phone}...`);
       try {
         if (status === 'CONFIRMED') {
-          const msg = `✅ *Appointment Confirmed!*\n\nYour appointment with ${doctorName || 'your doctor'} on *${date || 'your requested slot'}* has been confirmed by Buvora Clinic. We look forward to seeing you!`;
+          const msg = `✅ *Appointment Confirmed!*\n\nYour appointment with ${doctorName || 'your doctor'} on *${date || 'your requested slot'}* has been confirmed by ${clinicName || 'Clinic'}. We look forward to seeing you!`;
           await (window as any).whatsappBot.sendMessage(phone, msg);
           console.log('Confirmation message sent successfully via UI.');
         }
@@ -202,7 +212,7 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
           `Dear *${rejectingApt.patientName}*,\n\n` +
           `Unfortunately, your appointment request with *${rejectingApt.doctorName}* on *${rejectingApt.appointmentDate} (${rejectingApt.appointmentTime})* could not be approved.\n\n` +
           `📌 *Reason for Rejection:*\n_${finalReason}_\n\n` +
-          `Please contact Buvora Clinic reception if you wish to reschedule or request another time slot. Thank you!`;
+          `Please contact ${clinicName || 'Clinic'} reception if you wish to reschedule or request another time slot. Thank you!`;
 
         try {
           await (window as any).whatsappBot.sendMessage(rejectingApt.patientPhone, msg);
@@ -683,6 +693,36 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
             </div>
 
             <div style={{ padding: '1.5rem', maxHeight: '75vh', overflowY: 'auto' }}>
+              {/* Clinic / Practice Name */}
+              <div style={{ marginBottom: '1.75rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                  <Building2 size={16} style={{ color: '#0284c7' }} />
+                  <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-main)', letterSpacing: '0.02em' }}>
+                    CLINIC / PRACTICE NAME
+                  </label>
+                </div>
+                <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  Patients chatting on WhatsApp will see this name in the welcome message and booking confirmations.
+                </p>
+                <input
+                  type="text"
+                  placeholder="e.g. LifeCare Medical Center"
+                  value={clinicName}
+                  onChange={(e) => setClinicName(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.65rem 0.85rem',
+                    borderRadius: '10px',
+                    border: '1px solid var(--border)',
+                    fontSize: '0.875rem',
+                    fontWeight: 600,
+                    color: 'var(--text-main)',
+                    background: '#f8fafc',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
               {/* Days of Week Selection */}
               <div style={{ marginBottom: '1.75rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>

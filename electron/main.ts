@@ -287,7 +287,10 @@ function startHostServer() {
           } else if (method === 'whatsapp-stop') {
             result = await whatsappBot.stop();
           } else if (method === 'whatsapp-get-schedule') {
-            result = store.get('whatsapp_schedule') || {
+            const saved = store.get('whatsapp_schedule') as any;
+            const clinicName = (saved && saved.clinicName) || store.get('clinic_name') || 'Buvora';
+            result = saved ? { ...saved, clinicName } : {
+              clinicName,
               allowedDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
               timeSlots: [
                 '09:00 AM - 10:00 AM',
@@ -303,6 +306,9 @@ function startHostServer() {
           } else if (method === 'whatsapp-save-schedule') {
             const [schedule] = args;
             store.set('whatsapp_schedule', schedule);
+            if (schedule && schedule.clinicName) {
+              store.set('clinic_name', schedule.clinicName);
+            }
             result = { success: true };
           } else if (method === 'whatsapp-send-message') {
             const [phone, message] = args;
@@ -702,8 +708,10 @@ ipcMain.handle('whatsapp-send-message', (_, phone: string, message: string) => {
 })
 ipcMain.handle('whatsapp-get-schedule', () => {
   if (workstationMode === 'client') return clientRequest('whatsapp-get-schedule');
-  const schedule = store.get('whatsapp_schedule');
-  return schedule || {
+  const schedule = store.get('whatsapp_schedule') as any;
+  const clinicName = (schedule && schedule.clinicName) || store.get('clinic_name') || 'Buvora';
+  return schedule ? { ...schedule, clinicName } : {
+    clinicName,
     allowedDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
     timeSlots: [
       '09:00 AM - 10:00 AM',
@@ -720,6 +728,9 @@ ipcMain.handle('whatsapp-get-schedule', () => {
 ipcMain.handle('whatsapp-save-schedule', (_, schedule) => {
   if (workstationMode === 'client') return clientRequest('whatsapp-save-schedule', schedule);
   store.set('whatsapp_schedule', schedule);
+  if (schedule && schedule.clinicName) {
+    store.set('clinic_name', schedule.clinicName);
+  }
   return { success: true };
 });
 

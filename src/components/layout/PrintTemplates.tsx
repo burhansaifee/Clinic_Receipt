@@ -309,63 +309,69 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
 
         /* Prescription A5 Layout */
         #prescription-print-template.paper-a5 .print-container {
-          padding: 1.25rem 1.5rem !important;
-          font-size: 9.5pt !important;
+          padding: 1rem 1.25rem !important;
+          font-size: 9pt !important;
         }
         #prescription-print-template.paper-a5 .print-header {
-          margin-bottom: 0.75rem !important;
-          padding-bottom: 0.5rem !important;
+          margin-bottom: 0.5rem !important;
+          padding-bottom: 0.4rem !important;
         }
         #prescription-print-template.paper-a5 .print-clinic-branding h2 {
-          font-size: 1.3rem !important;
+          font-size: 1.25rem !important;
         }
         #prescription-print-template.paper-a5 .print-patient-meta-grid {
-          padding: 0.6rem 0.8rem !important;
-          margin-bottom: 0.75rem !important;
-          gap: 0.5rem !important;
+          padding: 0.5rem 0.75rem !important;
+          margin-bottom: 0.5rem !important;
+          gap: 0.4rem !important;
         }
         #prescription-print-template.paper-a5 .print-clinical-grid {
+          display: flex !important;
+          flex-direction: row !important;
           gap: 0.75rem !important;
-          margin-bottom: 0.75rem !important;
-          padding-bottom: 0.75rem !important;
+          margin-bottom: 0.5rem !important;
+          padding-bottom: 0.5rem !important;
         }
         #prescription-print-template.paper-a5 .print-meds-table th,
         #prescription-print-template.paper-a5 .print-meds-table td {
-          padding: 5px 8px !important;
-          font-size: 8.5pt !important;
+          padding: 3px 6px !important;
+          font-size: 8pt !important;
         }
         #prescription-print-template.paper-a5 .print-rx-section {
-          margin-bottom: 1rem !important;
+          margin-bottom: 0.5rem !important;
         }
 
         /* Prescription A6 Layout */
         #prescription-print-template.paper-a6 .print-container {
-          padding: 0.75rem !important;
-          font-size: 8.5pt !important;
+          padding: 0.6rem !important;
+          font-size: 8pt !important;
         }
         #prescription-print-template.paper-a6 .print-header {
-          margin-bottom: 0.5rem !important;
-          padding-bottom: 0.4rem !important;
+          margin-bottom: 0.4rem !important;
+          padding-bottom: 0.3rem !important;
         }
         #prescription-print-template.paper-a6 .print-clinic-branding h2 {
-          font-size: 1.1rem !important;
+          font-size: 1rem !important;
         }
         #prescription-print-template.paper-a6 .print-patient-meta-grid {
           grid-template-columns: 1fr 1fr !important;
-          padding: 0.4rem 0.6rem !important;
-          margin-bottom: 0.5rem !important;
-          gap: 0.4rem !important;
+          padding: 0.35rem 0.5rem !important;
+          margin-bottom: 0.4rem !important;
+          gap: 0.35rem !important;
         }
         #prescription-print-template.paper-a6 .print-clinical-grid {
-          grid-template-columns: 1fr !important;
+          display: flex !important;
+          flex-direction: row !important;
           gap: 0.5rem !important;
-          margin-bottom: 0.5rem !important;
-          padding-bottom: 0.5rem !important;
+          margin-bottom: 0.4rem !important;
+          padding-bottom: 0.4rem !important;
         }
         #prescription-print-template.paper-a6 .print-meds-table th,
         #prescription-print-template.paper-a6 .print-meds-table td {
-          padding: 3px 5px !important;
-          font-size: 7.5pt !important;
+          padding: 2px 4px !important;
+          font-size: 7pt !important;
+        }
+        #prescription-print-template.paper-a6 .print-rx-section {
+          margin-bottom: 0.4rem !important;
         }
       `}</style>
 
@@ -543,7 +549,7 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
                 </div>
               )}
 
-              <div className="print-patient-meta-grid">
+              <div className="print-patient-meta-grid" style={{ marginBottom: '0.6rem', padding: '0.6rem 0.8rem', gap: '0.6rem' }}>
                 <div>
                   <span className="meta-label">Patient Name</span>
                   <strong className="meta-value">{activePrintPrescription.patientName}</strong>
@@ -563,15 +569,15 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
               </div>
 
               {(activePrintPrescription.symptoms || activePrintPrescription.diagnosis) && (
-                <div className="print-clinical-grid">
+                <div className="print-clinical-grid" style={{ display: 'flex', flexDirection: 'row', gap: '1rem', marginBottom: '0.6rem', borderBottom: '1px dashed #e2e8f0', paddingBottom: '0.6rem' }}>
                   {activePrintPrescription.symptoms && (
-                    <div className="clinical-card">
+                    <div className="clinical-card" style={{ flex: 1, minWidth: 0 }}>
                       <span className="clinical-label">Chief Complaints / Symptoms</span>
                       <p className="clinical-text">{activePrintPrescription.symptoms}</p>
                     </div>
                   )}
                   {activePrintPrescription.diagnosis && (
-                    <div className="clinical-card">
+                    <div className="clinical-card" style={{ flex: 1, minWidth: 0 }}>
                       <span className="clinical-label">Diagnosis</span>
                       <p className="clinical-text">{activePrintPrescription.diagnosis}</p>
                     </div>
@@ -579,8 +585,7 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
                 </div>
               )}
 
-              <div className="print-rx-section">
-                <div className="rx-symbol">Rₓ</div>
+              <div className="print-rx-section" style={{ marginBottom: '0.6rem' }}>
                 <table className="print-meds-table">
                   <thead>
                     <tr>
@@ -606,16 +611,41 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
               </div>
 
               {activePrintPrescription.notes && (
-                <div className="print-notes-section">
+                <div className="print-notes-section" style={{ marginBottom: '0.5rem', padding: '0.5rem 0.75rem' }}>
                   <span className="notes-label">Advice / Notes</span>
                   <p className="notes-text" style={{ whiteSpace: 'pre-wrap' }}>{activePrintPrescription.notes}</p>
                 </div>
               )}
 
-              <div className="print-footer" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
+              {activePrintPrescription.followUpDate && (
+                <div className="print-followup-box" style={{ marginTop: '0.5rem', marginBottom: '0.5rem', padding: '0.4rem 0.75rem', border: '1.5px dashed #0284c7', borderRadius: '6px', background: '#f0f9ff' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#0369a1', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block' }}>NEXT VISIT / PATIENT FOLLOW-UP</span>
+                      <strong style={{ fontSize: '0.92rem', color: '#0f172a' }}>
+                        {(() => {
+                          try {
+                            return format(new Date(activePrintPrescription.followUpDate + 'T00:00:00'), 'EEEE, dd MMMM yyyy');
+                          } catch {
+                            return activePrintPrescription.followUpDate;
+                          }
+                        })()}
+                      </strong>
+                    </div>
+                    {activePrintPrescription.followUpNotes && (
+                      <div style={{ textAlign: 'right', fontSize: '0.85rem', color: '#334155' }}>
+                        <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600, display: 'block' }}>REASON / ADVICE</span>
+                        <strong>{activePrintPrescription.followUpNotes}</strong>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="print-footer" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.75rem' }}>
                 <div className="signature-box" style={{ textAlign: 'center' }}>
-                  <div className="signature-line"></div>
-                  <p style={{ margin: '0 0 2px 0', fontWeight: '700' }}>
+                  <div className="signature-line" style={{ marginTop: '0.75rem', marginBottom: '0.25rem' }}></div>
+                  <p style={{ margin: '0 0 2px 0', fontWeight: '700', fontSize: '0.85rem' }}>
                     Dr. {activePrintPrescription.doctorName.replace(/^Dr\.?\s+/i, '')}
                   </p>
                   <p className="subtitle">Authorized Signature</p>

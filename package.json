@@ -84,7 +84,8 @@
           ]
         }
       ],
-      "icon": "public/icon.png"
+      "icon": "public/icon.png",
+      "requestedExecutionLevel": "requireAdministrator"
     },
     "nsis": {
       "oneClick": true,
@@ -92,7 +93,8 @@
       "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Buvora"
+      "shortcutName": "Buvora",
+      "include": "build/installer.nsh"
     }
   }
 }

@@ -60,6 +60,9 @@ contextBridge.exposeInMainWorld('database', {
   saveFollowUp: (followUp: any) => ipcRenderer.invoke('db-save-follow-up', followUp),
   updateFollowUpStatus: (id: string, status: string) => ipcRenderer.invoke('db-update-follow-up-status', id, status),
   deleteFollowUp: (id: string) => ipcRenderer.invoke('db-delete-follow-up', id),
+  getExpenses: (options?: any) => ipcRenderer.invoke('db-get-expenses', options),
+  saveExpense: (expense: any) => ipcRenderer.invoke('db-save-expense', expense),
+  deleteExpense: (id: string) => ipcRenderer.invoke('db-delete-expense', id),
 })
 
 contextBridge.exposeInMainWorld('whatsappBot', {
@@ -68,6 +71,7 @@ contextBridge.exposeInMainWorld('whatsappBot', {
   getStatus: () => ipcRenderer.invoke('whatsapp-get-status'),
   toggleAutoReply: (enabled: boolean) => ipcRenderer.invoke('whatsapp-toggle-autoreply', enabled),
   sendMessage: (phone: string, message: string) => ipcRenderer.invoke('whatsapp-send-message', phone, message),
+  sharePrescriptionPdf: (phone: string, rxData: any) => ipcRenderer.invoke('whatsapp-share-prescription-pdf', phone, rxData),
   getSchedule: () => ipcRenderer.invoke('whatsapp-get-schedule'),
   saveSchedule: (schedule: any) => ipcRenderer.invoke('whatsapp-save-schedule', schedule),
   onStatusChange: (callback: (state: any) => void) => {
@@ -81,13 +85,15 @@ contextBridge.exposeInMainWorld('whatsappBot', {
 
 contextBridge.exposeInMainWorld('users', {
   getKnownUsers: () => ipcRenderer.invoke('get-known-users'),
-  addKnownUser: (userId: string, role: string, doctorId?: string) => ipcRenderer.invoke('add-known-user', userId, role, doctorId),
+  addKnownUser: (userId: string, role: string, doctorId?: string, allowedTabs?: string[]) => ipcRenderer.invoke('add-known-user', userId, role, doctorId, allowedTabs),
   deleteKnownUser: (userId: string) => ipcRenderer.invoke('delete-known-user', userId),
   connectUser: (userId: string, password?: string) => ipcRenderer.invoke('connect-user', userId, password),
   setUserPassword: (userId: string, password?: string) => ipcRenderer.invoke('set-user-password', userId, password),
   getCurrentUser: () => ipcRenderer.invoke('get-current-user'),
   getCurrentUserRole: () => ipcRenderer.invoke('get-current-user-role'),
   getCurrentUserDoctorId: () => ipcRenderer.invoke('get-current-user-doctor-id'),
+  getCurrentUserTabs: () => ipcRenderer.invoke('get-current-user-tabs'),
+  updateUserTabs: (userId: string, tabs: string[]) => ipcRenderer.invoke('update-user-tabs', userId, tabs),
   disconnectUser: () => ipcRenderer.invoke('disconnect-user'),
   resetAdminPassword: () => ipcRenderer.invoke('reset-admin-password'),
 })

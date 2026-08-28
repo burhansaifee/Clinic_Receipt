@@ -400,7 +400,7 @@ export const FollowUpsTab: React.FC<FollowUpsTabProps> = ({
             <table className="history-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
-                  {['Scheduled Date', 'Patient Details', 'Age / Gender', 'Doctor', 'Follow-Up Advice', 'Status', 'Actions'].map(col => (
+                  {['Scheduled Date', 'Patient Details', 'Age / Gender', 'Doctor', 'Status', 'Actions'].map(col => (
                     <th
                       key={col}
                       style={{
@@ -410,7 +410,7 @@ export const FollowUpsTab: React.FC<FollowUpsTabProps> = ({
                         color: '#475569',
                         fontSize: '0.825rem',
                         borderBottom: '1px solid var(--border)',
-                        textAlign: col === 'Actions' ? 'right' : 'left'
+                        textAlign: col === 'Actions' ? 'center' : 'left'
                       }}
                     >
                       {col}
@@ -423,7 +423,9 @@ export const FollowUpsTab: React.FC<FollowUpsTabProps> = ({
                   let formattedDate = fu.scheduledDate;
                   try {
                     formattedDate = format(new Date(fu.scheduledDate + 'T00:00:00'), 'dd MMM yyyy (EEE)');
-                  } catch {}
+                  } catch {
+                    // ignore invalid dates
+                  }
 
                   return (
                     <tr key={fu.id} style={{ borderBottom: '1px solid var(--border)' }}>
@@ -434,7 +436,13 @@ export const FollowUpsTab: React.FC<FollowUpsTabProps> = ({
                       </td>
 
                       {/* Patient Details */}
-                      <td style={{ padding: '0.85rem 1rem', fontSize: '0.85rem' }}>
+                      <td 
+                        style={{ padding: '0.85rem 1rem', fontSize: '0.85rem', cursor: 'pointer', transition: 'background 0.2s' }}
+                        onClick={() => alert(`Follow-Up Advice for ${fu.patientName}:\n\n${fu.notes || 'General consultation revisit'}`)}
+                        title="Click to view follow-up advice"
+                        onMouseEnter={(e) => e.currentTarget.style.background = '#f1f5f9'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                      >
                         <strong style={{ color: 'var(--text-main)', display: 'block', fontSize: '0.9rem' }}>{fu.patientName}</strong>
                         {fu.patientPhone ? (
                           <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '3px' }}>
@@ -443,6 +451,9 @@ export const FollowUpsTab: React.FC<FollowUpsTabProps> = ({
                         ) : (
                           <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>No phone</span>
                         )}
+                        <span style={{ display: 'inline-block', marginTop: '4px', fontSize: '0.7rem', color: '#0ea5e9', fontWeight: 600, background: '#f0f9ff', padding: '2px 6px', borderRadius: '4px' }}>
+                          View Advice
+                        </span>
                       </td>
 
                       {/* Age / Gender */}
@@ -452,12 +463,7 @@ export const FollowUpsTab: React.FC<FollowUpsTabProps> = ({
 
                       {/* Doctor */}
                       <td style={{ padding: '0.85rem 1rem', fontSize: '0.85rem', color: 'var(--text-main)' }}>
-                        Dr. {fu.doctorName.replace(/^Dr\.?\s+/i, '')}
-                      </td>
-
-                      {/* Advice / Reason */}
-                      <td style={{ padding: '0.85rem 1rem', fontSize: '0.825rem', color: '#334155', maxWidth: '240px' }}>
-                        {fu.notes || <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>General consultation revisit</span>}
+                        {fu.doctorName.replace(/^Dr\.?\s+/i, '')}
                       </td>
 
                       {/* Status Dropdown */}
@@ -490,8 +496,8 @@ export const FollowUpsTab: React.FC<FollowUpsTabProps> = ({
                       </td>
 
                       {/* Actions */}
-                      <td style={{ padding: '0.85rem 1rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '0.4rem' }}>
+                      <td style={{ padding: '0.85rem 1rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.4rem' }}>
                           {/* WhatsApp Reminder */}
                           {fu.patientPhone && (
                             <button

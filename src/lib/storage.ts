@@ -107,6 +107,34 @@ export interface Appointment {
   createdAt: string;
 }
 
+export type ExpenseCategory =
+  | 'Utilities & Power'
+  | 'Medical Supplies'
+  | 'Rent & Premises'
+  | 'Equipment'
+  | 'Marketing & Software'
+  | 'Taxes & Licenses'
+  | 'Miscellaneous';
+
+export interface Expense {
+  id: string;
+  title: string;
+  category: ExpenseCategory | string;
+  amount: number;
+  paidAmount?: number;
+  date: string; // YYYY-MM-DD
+  dueDate?: string; // YYYY-MM-DD
+  paymentMode?: 'CASH' | 'UPI' | 'BANK_TRANSFER' | 'CHEQUE' | 'CARD';
+  paidTo?: string;
+  vendorPhone?: string;
+  billNumber?: string;
+  isRecurring?: boolean | number;
+  status?: 'PAID' | 'PARTIAL' | 'PENDING';
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export type ReceiptPaperType = 'A5' | 'A4' | 'A6' | 'Letter' | 'Thermal80' | 'Thermal58';
 export type PrescriptionPaperType = 'A4' | 'A5' | 'Letter' | 'A6';
 
@@ -458,6 +486,89 @@ export const storage = {
         }
       }
     }
+  },
+
+  getExpenses: async (options?: { limit?: number; offset?: number; search?: string; category?: string; startDate?: string; endDate?: string }): Promise<Expense[]> => {
+    if (window.database?.getExpenses) {
+      try {
+        return await window.database.getExpenses(options);
+      } catch (err) {
+        console.warn('Failed to fetch expenses from SQLite, falling back to localStorage:', err);
+      }
+    }
+    const raw = localStorage.getItem('clinic_expenses');
+    let list: Expense[] = raw ? JSON.parse(raw) : [];
+    if (options?.category && options.category !== 'ALL') {
+      list = list.filter(e => e.category === options.category);
+    }
+    if (options?.search) {
+      const q = options.search.toLowerCase();
+      list = list.filter(e => e.title.toLowerCase().includes(q) || (e.paidTo && e.paidTo.toLowerCase().includes(q)));
+    }
+    return list;
+  },
+
+  saveExpense: async (expense: Expense): Promise<Expense> => {
+    if (window.database?.saveExpense) {
+      try {
+        return await window.database.saveExpense(expense);
+      } catch (err) {
+        console.warn('Failed to save expense in SQLite, fallback to localStorage:', err);
+      }
+    }
+    const raw = localStorage.getItem('clinic_expenses');
+    const list: Expense[] = raw ? JSON.parse(raw) : [];
+    const id = expense.id || ('EXP-' + Date.now());
+    const item = { ...expense, id, updatedAt: new Date().toISOString() };
+    const idx = list.findIndex(e => e.id === id);
+    if (idx >= 0) {
+      list[idx] = item;
+    } else {
+      list.unshift(item);
+    }
+    localStorage.setItem('clinic_expenses', JSON.stringify(list));
+    return item;
+  },
+
+  deleteExpense: async (id: string): Promise<void> => {
+    if (window.database?.deleteExpense) {
+      try {
+        await window.database.deleteExpense(id);
+        return;
+      } catch (err) {
+        console.warn('Failed to delete expense in SQLite, fallback to localStorage:', err);
+      }
+    }
+    const raw = localStorage.getItem('clinic_expenses');
+    if (raw) {
+      const list: Expense[] = JSON.parse(raw);
+      localStorage.setItem('clinic_expenses', JSON.stringify(list.filter(e => e.id !== id)));
+    }
+  },
+
+  exportExpensesToCSV: (expenses: Expense[]) => {
+    const headers = ['ID', 'Date', 'Title / Description', 'Category', 'Amount (INR)', 'Payment Mode', 'Paid To / Vendor', 'Bill / Invoice No', 'Status', 'Notes'];
+    const rows = expenses.map(e => [
+      `"${e.id}"`,
+      `"${e.date}"`,
+      `"${(e.title || '').replace(/"/g, '""')}"`,
+      `"${e.category}"`,
+      e.amount,
+      `"${e.paymentMode}"`,
+      `"${(e.paidTo || '').replace(/"/g, '""')}"`,
+      `"${(e.billNumber || '').replace(/"/g, '""')}"`,
+      `"${e.status || 'PAID'}"`,
+      `"${(e.notes || '').replace(/"/g, '""')}"`
+    ]);
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `clinic_expenses_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   }
 };
 

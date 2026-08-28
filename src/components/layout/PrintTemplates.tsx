@@ -538,7 +538,7 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
               {doc?.printHeader !== false && (
                 <div className="print-header">
                   <div className="print-clinic-branding">
-                    <h2>Dr. {activePrintPrescription.doctorName.replace(/^Dr\.?\s+/i, '')}</h2>
+                    <h2> {activePrintPrescription.doctorName.replace(/^Dr\.?\s+/i, '')}</h2>
                     <p className="qualifications">{doc?.qualifications || ''}</p>
                     <p className="specialization">{doc?.specialization || 'Consulting Physician'}</p>
                   </div>
@@ -646,7 +646,7 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
                 <div className="signature-box" style={{ textAlign: 'center' }}>
                   <div className="signature-line" style={{ marginTop: '0.75rem', marginBottom: '0.25rem' }}></div>
                   <p style={{ margin: '0 0 2px 0', fontWeight: '700', fontSize: '0.85rem' }}>
-                    Dr. {activePrintPrescription.doctorName.replace(/^Dr\.?\s+/i, '')}
+                     {activePrintPrescription.doctorName.replace(/^Dr\.?\s+/i, '')}
                   </p>
                   <p className="subtitle">Authorized Signature</p>
                 </div>

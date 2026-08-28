@@ -1,13 +1,15 @@
 import React from 'react';
 import {
   LayoutDashboard, Users, Receipt, PlusCircle, Settings,
-  Calendar, FileText, Briefcase, LogOut, KeyRound, X, CalendarClock
+  Calendar, FileText, Briefcase, LogOut, KeyRound, X, CalendarClock, ReceiptText
 } from 'lucide-react';
 
 export type Tab =
   | 'dashboard'
   | 'doctors'
   | 'services'
+  | 'expenses'
+  | 'users'
   | 'new-receipt'
   | 'history'
   | 'prescriptions'
@@ -19,6 +21,7 @@ interface SidebarProps {
   activeTab: Tab;
   setActiveTab: (tab: Tab) => void;
   currentUser: string;
+  currentUserRole: string;
   isOnline: boolean;
   pendingAppointmentsCount: number;
   dueFollowUpsCount?: number;
@@ -32,6 +35,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   activeTab,
   setActiveTab,
   currentUser,
+  currentUserRole,
   isOnline,
   pendingAppointmentsCount,
   dueFollowUpsCount = 0,
@@ -69,91 +73,115 @@ const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       <nav className="nav-menu">
-        <div className="nav-section-label">CLINICAL DESK</div>
+        {(currentUser.toLowerCase() === 'admin' || currentUserRole === 'reception') && (
+          <>
+            <div className="nav-section-label">CLINICAL DESK</div>
 
-        <button
-          className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
-          onClick={() => setActiveTab('dashboard')}
-        >
-          <LayoutDashboard size={18} />
-          <span>Dashboard</span>
-        </button>
+            <button
+              className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
+              onClick={() => setActiveTab('dashboard')}
+            >
+              <LayoutDashboard size={18} />
+              <span>Dashboard</span>
+            </button>
 
-        <button
-          className={`nav-item ${activeTab === 'new-receipt' ? 'active' : ''}`}
-          onClick={onNewReceipt}
-        >
-          <PlusCircle size={18} />
-          <span>New Receipt</span>
-        </button>
+            <button
+              className={`nav-item ${activeTab === 'new-receipt' ? 'active' : ''}`}
+              onClick={onNewReceipt}
+            >
+              <PlusCircle size={18} />
+              <span>New Receipt</span>
+            </button>
 
-        <button
-          className={`nav-item ${activeTab === 'history' ? 'active' : ''}`}
-          onClick={() => setActiveTab('history')}
-        >
-          <Receipt size={18} />
-          <span> Receipt History</span>
-        </button>
+            <button
+              className={`nav-item ${activeTab === 'history' ? 'active' : ''}`}
+              onClick={() => setActiveTab('history')}
+            >
+              <Receipt size={18} />
+              <span> Receipt History</span>
+            </button>
 
-        <button
-          className={`nav-item ${activeTab === 'prescriptions' ? 'active' : ''}`}
-          onClick={() => setActiveTab('prescriptions')}
-        >
-          <FileText size={18} />
-          <span>Prescriptions (Rx)</span>
-        </button>
+            <button
+              className={`nav-item ${activeTab === 'prescriptions' ? 'active' : ''}`}
+              onClick={() => setActiveTab('prescriptions')}
+            >
+              <FileText size={18} />
+              <span>Prescriptions (Rx)</span>
+            </button>
 
-        <button
-          className={`nav-item ${activeTab === 'appointments' ? 'active' : ''}`}
-          onClick={() => setActiveTab('appointments')}
-        >
-          <Calendar size={18} />
-          <span>Appointments</span>
-          {pendingAppointmentsCount > 0 && (
-            <span className="nav-badge-pill alert">
-              {pendingAppointmentsCount}
-            </span>
-          )}
-        </button>
+            <button
+              className={`nav-item ${activeTab === 'appointments' ? 'active' : ''}`}
+              onClick={() => setActiveTab('appointments')}
+            >
+              <Calendar size={18} />
+              <span>Appointments</span>
+              {pendingAppointmentsCount > 0 && (
+                <span className="nav-badge-pill alert">
+                  {pendingAppointmentsCount}
+                </span>
+              )}
+            </button>
 
-        <button
-          className={`nav-item ${activeTab === 'follow-ups' ? 'active' : ''}`}
-          onClick={() => setActiveTab('follow-ups')}
-        >
-          <CalendarClock size={18} />
-          <span>Follow-Ups</span>
-          {dueFollowUpsCount > 0 && (
-            <span className="nav-badge-pill" style={{ background: '#0284c7', color: 'white' }}>
-              {dueFollowUpsCount}
-            </span>
-          )}
-        </button>
+            <button
+              className={`nav-item ${activeTab === 'follow-ups' ? 'active' : ''}`}
+              onClick={() => setActiveTab('follow-ups')}
+            >
+              <CalendarClock size={18} />
+              <span>Follow-Ups</span>
+              {dueFollowUpsCount > 0 && (
+                <span className="nav-badge-pill" style={{ background: '#0284c7', color: 'white' }}>
+                  {dueFollowUpsCount}
+                </span>
+              )}
+            </button>
+          </>
+        )}
 
-        <div className="nav-section-label" style={{ marginTop: '0.75rem' }}>MANAGEMENT</div>
+        {(currentUser.toLowerCase() === 'admin' || currentUserRole === 'management') && (
+          <>
+            <div className="nav-section-label" style={{ marginTop: '0.75rem' }}>MANAGEMENT</div>
 
-        <button
-          className={`nav-item ${activeTab === 'doctors' ? 'active' : ''}`}
-          onClick={() => setActiveTab('doctors')}
-        >
-          <Users size={18} />
-          <span>Doctors Registry</span>
-        </button>
+            <button
+              className={`nav-item ${activeTab === 'doctors' ? 'active' : ''}`}
+              onClick={() => setActiveTab('doctors')}
+            >
+              <Users size={18} />
+              <span>Doctors Registry</span>
+            </button>
 
-        <button
-          className={`nav-item ${activeTab === 'services' ? 'active' : ''}`}
-          onClick={() => setActiveTab('services')}
-        >
-          <Briefcase size={18} />
-          <span>Clinic Services</span>
-        </button>
+            <button
+              className={`nav-item ${activeTab === 'services' ? 'active' : ''}`}
+              onClick={() => setActiveTab('services')}
+            >
+              <Briefcase size={18} />
+              <span>Clinic Services</span>
+            </button>
 
-        <button
-          className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}
-          onClick={() => setActiveTab('settings')}
-        >
-          <Settings size={18} />
-          <span>Control Center</span>
-        </button>
+            <button
+              className={`nav-item ${activeTab === 'expenses' ? 'active' : ''}`}
+              onClick={() => setActiveTab('expenses')}
+            >
+              <ReceiptText size={18} />
+              <span>Bills &amp; Expenses</span>
+            </button>
+
+            <button
+              className={`nav-item ${activeTab === 'users' ? 'active' : ''}`}
+              onClick={() => setActiveTab('users')}
+            >
+              <KeyRound size={18} />
+              <span>Profiles &amp; Users</span>
+            </button>
+
+            <button
+              className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}
+              onClick={() => setActiveTab('settings')}
+            >
+              <Settings size={18} />
+              <span>Control Center</span>
+            </button>
+          </>
+        )}
       </nav>
 
       <div className="sidebar-footer">

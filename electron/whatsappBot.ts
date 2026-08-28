@@ -43,14 +43,14 @@ interface UserConversation {
   gender?: string;
 }
 
-let conversationState: Record<string, UserConversation> = {};
+const conversationState: Record<string, UserConversation> = {};
 
 function getWhatsAppScheduleFromStore() {
   const schedule = store.get('whatsapp_schedule') as any;
-  const clinicName = (schedule && schedule.clinicName) || (store.get('clinic_name') as string) || 'Buvora';
+  const clinicName = (database.getMetadata('clinic_name') as any)?.value || 'Buvora Clinic';
   if (schedule && Array.isArray(schedule.allowedDays) && Array.isArray(schedule.timeSlots)) {
     return {
-      clinicName: schedule.clinicName || clinicName,
+      clinicName: (database.getMetadata('clinic_name') as any)?.value || 'Buvora Clinic',
       allowedDays: schedule.allowedDays,
       timeSlots: schedule.timeSlots
     };
@@ -357,6 +357,33 @@ export const whatsappBot = {
       throw e;
     }
   },
+
+  sendDocument: async (phone: string, documentBuffer: Buffer, fileName: string, caption?: string) => {
+    console.log(`[WhatsApp Bot] Attempting to send document ${fileName} to ${phone}`);
+    if (!socket || state.status !== 'CONNECTED') {
+      console.error('[WhatsApp Bot] Cannot send document, bot is not connected. Current status:', state.status);
+      throw new Error('WhatsApp bot is not connected');
+    }
+    let digits = (phone || '').replace(/\D/g, '');
+    if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1);
+    if (digits.length === 10) digits = `91${digits}`;
+    
+    const jid = phone.includes('@') ? phone : `${digits}@s.whatsapp.net`;
+    
+    try {
+      await socket.sendMessage(jid, { 
+        document: documentBuffer, 
+        mimetype: 'application/pdf', 
+        fileName, 
+        caption 
+      });
+      console.log(`[WhatsApp Bot] Document sent successfully to ${jid}`);
+      return { success: true, message: 'Document sent via WhatsApp bot' };
+    } catch (e) {
+      console.error(`[WhatsApp Bot] Failed to send document to ${jid}:`, e);
+      throw e;
+    }
+  },
 };
 
 // Network-aware database helper functions
@@ -440,7 +467,7 @@ async function handleIncomingBookingFlow(socket: any, jid: string, phone: string
   const doctors = await getDoctorsFromDb();
   const lowerText = text.toLowerCase();
   const schedule = getWhatsAppScheduleFromStore();
-  const clinicName = schedule.clinicName || (store.get('clinic_name') as string) || 'Buvora';
+  const clinicName = (database.getMetadata('clinic_name') as any)?.value || 'Buvora Clinic';
 
   if (!doctors || doctors.length === 0) {
     await socket.sendMessage(jid, {
@@ -464,7 +491,7 @@ async function handleIncomingBookingFlow(socket: any, jid: string, phone: string
 
     case 1: {
       // Step 1: Greeting & Doctor List
-      let docListStr = doctors
+      const docListStr = doctors
         .map((d: any, idx: number) => `*${idx + 1}.* ${d.name} (${d.specialization || 'Consulting Physician'})`)
         .join('\n');
 
@@ -491,7 +518,7 @@ async function handleIncomingBookingFlow(socket: any, jid: string, phone: string
         const schedule = getWhatsAppScheduleFromStore();
         userState.availableDates = generateAvailableBookingDates(schedule.allowedDays || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
 
-        let dateListStr = userState.availableDates
+        const dateListStr = userState.availableDates
           .map((d, idx) => `*${idx + 1}.* ${d.label}`)
           .join('\n');
 
@@ -539,7 +566,7 @@ async function handleIncomingBookingFlow(socket: any, jid: string, phone: string
         ];
 
         const availableSlots = userState.availableSlots || [];
-        let slotsListStr = availableSlots
+        const slotsListStr = availableSlots
           .map((slot, idx) => `*${idx + 1}.* ${slot}`)
           .join('\n');
 
@@ -597,7 +624,7 @@ async function handleIncomingBookingFlow(socket: any, jid: string, phone: string
     case 5: {
       // Step 5: Patient Details Received -> Finalize Booking Request
       const parts = text.split(',').map((p) => p.trim());
-      let patientName = parts[0] || text;
+      const patientName = parts[0] || text;
       let patientAge = parts[1] || '30';
       let patientGender = parts[2] || 'Male';
 

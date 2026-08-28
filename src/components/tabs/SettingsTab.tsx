@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import {
   DownloadCloud, UploadCloud, FileText, MessageSquare, Bot,
-  Server, KeyRound, ShieldCheck, FolderOpen, AlertCircle, Copy, Trash2, CheckCircle, Printer
+  Server, ShieldCheck, FolderOpen, Copy, CheckCircle, Printer, Building2
 } from 'lucide-react';
-import { storage, type Doctor, type ReceiptPaperType, type PrescriptionPaperType } from '../../lib/storage';
+import { storage, type ReceiptPaperType, type PrescriptionPaperType } from '../../lib/storage';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
 
@@ -27,10 +27,6 @@ interface SettingsTabProps {
   localIp: string;
   botStatus: any;
   setBotStatus: (status: any) => void;
-  currentUser: string | null;
-  knownUsers: { id: string; role: string; doctorId?: string }[];
-  setKnownUsers: (users: { id: string; role: string; doctorId?: string }[]) => void;
-  doctors: Doctor[];
   receiptPaperType: ReceiptPaperType;
   setReceiptPaperType: (type: ReceiptPaperType) => void;
   prescriptionPaperType: PrescriptionPaperType;
@@ -55,10 +51,6 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
   localIp,
   botStatus,
   setBotStatus,
-  currentUser,
-  knownUsers,
-  setKnownUsers,
-  doctors,
   receiptPaperType,
   setReceiptPaperType,
   prescriptionPaperType,
@@ -70,12 +62,23 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
   onDeactivateLicense,
 }) => {
   const [isTestingConnection, setIsTestingConnection] = useState(false);
-  const [newUserIdInput, setNewUserIdInput] = useState('');
-  const [newUserRole, setNewUserRole] = useState<'reception' | 'doctor'>('reception');
-  const [selectedDoctorIdForUser, setSelectedDoctorIdForUser] = useState('');
   // Client-side: the host token the user pastes in
   const [clientSecretInput, setClientSecretInput] = useState(networkSecret || '');
   const [secretSaved, setSecretSaved] = useState(false);
+  const [globalClinicName, setGlobalClinicName] = useState('Buvora Clinic');
+
+  React.useEffect(() => {
+    if (window.database) {
+      window.database.getMetadata('clinic_name').then((res: any) => {
+        if (res && res.value) setGlobalClinicName(res.value);
+      });
+    }
+  }, []);
+
+  const handleSaveClinicName = async () => {
+    await window.database.setMetadata('clinic_name', globalClinicName.trim());
+    toast('Global Clinic Identity saved successfully!', { type: 'success' });
+  };
   const confirm = useConfirm();
   const toast = useToast();
 
@@ -105,37 +108,6 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
       return;
     }
     onSaveConnectionSettings(workstationMode, hostIp, hostPort, workstationMode === 'client' ? clientSecretInput.trim() : undefined);
-  };
-
-  const handleAddUser = async () => {
-    const userId = newUserIdInput.trim().toLowerCase();
-    if (!userId) return;
-    const result = await window.users.addKnownUser(userId, newUserRole, newUserRole === 'doctor' ? selectedDoctorIdForUser : undefined);
-    if (result.success) {
-      setNewUserIdInput('');
-      setNewUserRole('reception');
-      setSelectedDoctorIdForUser('');
-        const users = await window.users.getKnownUsers();
-      setKnownUsers(users);
-      alert(`User ID "${userId}" has been successfully registered!`);
-      toast(`User ID "${userId}" has been successfully registered!`, { type: 'success' });
-    } else {
-      toast(result.error || 'Failed to add user.', { type: 'error' });
-    }
-  };
-
-  const handleDeleteUser = async (userId: string) => {
-    if (userId === 'default') return;
-    if (await confirm(`Are you sure you want to delete the User ID "${userId}"? This will lock access to this profile's database, though the database files will remain on disk.`, { isDanger: true })) {
-      const result = await window.users.deleteKnownUser(userId);
-      if (result.success) {
-        const users = await window.users.getKnownUsers();
-        setKnownUsers(users);
-        toast(`User ID "${userId}" has been removed.`, { type: 'success' });
-      } else {
-        toast(result.error || 'Failed to delete user.', { type: 'error' });
-      }
-    }
   };
 
   const handleDeactivate = async () => {
@@ -188,7 +160,145 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
       </div>
 
       <div className="control-grid">
-        {/* ROW 1 — CARD 1: Printer & Paper Setup */}
+        {/* ROW 1 — CARD 1: WhatsApp Bot */}
+        <div className="card control-card" style={{ padding: '1.6rem', gap: '0.85rem', height: '100%' }}>
+          <div className="card-icon-header inline">
+            <div className="header-icon green" style={{ background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', boxShadow: '0 4px 10px rgba(16,185,129,0.3)' }}>
+              <MessageSquare size={18} />
+            </div>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>WhatsApp Bot Setup</h3>
+          </div>
+          <p className="card-description">Enable automated patient appointment booking and instant WhatsApp notifications for your clinic.</p>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: 'auto', paddingTop: '0.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '0.6rem 0.85rem', borderRadius: '10px', border: '1px solid var(--border)' }}>
+              <span className="label-caps" style={{ color: '#64748b' }}>STATUS</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '0.825rem' }}>
+                <div className={`dot ${botStatus?.status === 'CONNECTED' ? 'green' : botStatus?.status === 'QR_READY' || botStatus?.status === 'CONNECTING' ? 'amber' : ''}`} />
+                <span style={{ color: botStatus?.status === 'CONNECTED' ? '#047857' : botStatus?.status === 'QR_READY' || botStatus?.status === 'CONNECTING' ? '#b45309' : '#64748b' }}>
+                  {botStatus?.status || 'DISCONNECTED'}
+                </span>
+              </div>
+            </div>
+
+            {botStatus?.status === 'CONNECTING' && (
+              <div style={{ textAlign: 'center', background: '#fffbeb', padding: '0.75rem', borderRadius: '10px', border: '1px solid #fef3c7' }}>
+                <p style={{ fontSize: '0.78rem', color: '#92400e', fontWeight: 600, margin: 0 }}>
+                  ⏳ Connecting to WhatsApp servers &amp; preparing QR code...
+                </p>
+              </div>
+            )}
+
+            {botStatus?.status === 'QR_READY' && botStatus?.qrCodeDataUrl && (
+              <div style={{ textAlign: 'center', background: '#f0f9ff', padding: '0.85rem', borderRadius: '12px', border: '1px solid #bae6fd' }}>
+                <p style={{ fontSize: '0.78rem', color: '#0369a1', fontWeight: 700, marginBottom: '0.4rem' }}>
+                  📱 Scan with WhatsApp (Settings → Linked Devices)
+                </p>
+                <img src={botStatus.qrCodeDataUrl} alt="WhatsApp QR Code" style={{ width: '160px', height: '160px', margin: '0 auto', display: 'block', borderRadius: '8px', border: '2px solid white', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }} />
+                <p style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '0.4rem', margin: 0 }}>
+                  Point your phone's WhatsApp camera at this code
+                </p>
+              </div>
+            )}
+
+            {botStatus?.status === 'CONNECTED' && (
+              <div style={{ background: '#f0fdf4', padding: '0.75rem 0.85rem', borderRadius: '10px', border: '1px solid #bbf7d0' }}>
+                <p style={{ fontSize: '0.8rem', color: '#166534', fontWeight: 700, margin: '0 0 2px 0' }}>
+                  ✓ WhatsApp is Active &amp; Ready
+                </p>
+                <p style={{ fontSize: '0.72rem', color: '#15803d', margin: 0 }}>
+                  Automated appointment booking &amp; 1-click patient reminders active
+                </p>
+              </div>
+            )}
+
+            {botStatus?.status === 'ERROR' && (
+              <div style={{ background: '#fef2f2', padding: '0.6rem 0.85rem', borderRadius: '10px', border: '1px solid #fecaca' }}>
+                <span style={{ fontSize: '0.75rem', color: '#991b1b', fontWeight: 600 }}>
+                  ⚠️ {botStatus?.errorMessage || 'Connection failed. Click below to retry.'}
+                </span>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              {botStatus?.status !== 'CONNECTED' ? (
+                <button
+                  className="btn-primary-sm"
+                  style={{
+                    flex: 1,
+                    background: 'linear-gradient(135deg, #10b981, #059669)',
+                    color: 'white',
+                    padding: '0.65rem 0.75rem',
+                    borderRadius: '8px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.4rem'
+                  }}
+                  onClick={async () => {
+                    if ((window as any).whatsappBot) {
+                      try {
+                        toast('Starting WhatsApp engine...', { type: 'info' });
+                        const res = await (window as any).whatsappBot.start();
+                        setBotStatus(res);
+                      } catch (err: any) {
+                        toast(err?.message || 'Failed to start WhatsApp', { type: 'error' });
+                      }
+                    }
+                  }}
+                >
+                  <Bot size={16} /> {botStatus?.status === 'QR_READY' ? 'Refresh QR Code' : 'Connect WhatsApp'}
+                </button>
+              ) : (
+                <button
+                  className="btn-secondary-sm"
+                  style={{ flex: 1, color: '#ef4444', borderColor: '#fee2e2', background: '#fef2f2', padding: '0.65rem 0.75rem', fontWeight: 700, cursor: 'pointer' }}
+                  onClick={async () => {
+                    if ((window as any).whatsappBot) {
+                      try {
+                        const res = await (window as any).whatsappBot.stop();
+                        setBotStatus(res);
+                        toast('WhatsApp disconnected', { type: 'info' });
+                      } catch (err: any) {
+                        toast(err?.message || 'Failed to disconnect', { type: 'error' });
+                      }
+                    }
+                  }}
+                >
+                  Disconnect
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ROW 1 — CARD 2: Global Clinic Identity */}
+        <div className="card control-card" style={{ padding: '1.6rem', gap: '0.85rem', height: '100%' }}>
+          <div className="card-icon-header inline">
+            <div className="header-icon" style={{ background: 'linear-gradient(135deg, #0ea5e9, #0284c7)', color: 'white', boxShadow: '0 4px 10px rgba(14,165,233,0.3)' }}>
+              <Building2 size={18} />
+            </div>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>Global Clinic Identity</h3>
+          </div>
+          <p className="card-description">Set the clinic name used in automated WhatsApp messages and receipts.</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', marginTop: 'auto', paddingTop: '0.5rem' }}>
+            <input
+              type="text"
+              value={globalClinicName}
+              onChange={e => setGlobalClinicName(e.target.value)}
+              placeholder="e.g. LifeCare Medical Center"
+              className="sync-input-line"
+              style={{ margin: 0, padding: '0.6rem 0.85rem', fontSize: '0.9rem', fontWeight: 600, background: '#f8fafc' }}
+            />
+            <button type="button" className="btn-primary-sm" onClick={handleSaveClinicName} style={{ alignSelf: 'flex-start', padding: '0.5rem 1.25rem', fontSize: '0.85rem' }}>
+              Save Clinic Name
+            </button>
+          </div>
+        </div>
+
+        {/* ROW 2 — CARD 3: Printer & Paper Setup */}
         <div className="card control-card" style={{ padding: '1.6rem', gap: '0.85rem', height: '100%' }}>
           <div className="card-icon-header inline">
             <div className="header-icon purple" style={{ background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', color: 'white', boxShadow: '0 4px 10px rgba(139,92,246,0.3)' }}>
@@ -254,7 +364,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
           </div>
         </div>
 
-        {/* ROW 1 — CARD 2: Data Safety & Reports */}
+        {/* ROW 2 — CARD 4: Data Safety & Reports */}
         <div className="card control-card" style={{ padding: '1.6rem', gap: '0.85rem', height: '100%' }}>
           <div className="card-icon-header inline">
             <div className="header-icon blue" style={{ background: 'linear-gradient(135deg, #0ea5e9, #2563eb)', color: 'white', boxShadow: '0 4px 10px rgba(14,165,233,0.3)' }}>
@@ -304,7 +414,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
           />
         </div>
 
-        {/* ROW 2 — CARD 3: Workstation Connection */}
+        {/* ROW 3 — CARD 5: Workstation & Network Sync */}
         <div className="card control-card" style={{ padding: '1.6rem', gap: '0.85rem', height: '100%' }}>
           <div className="card-icon-header inline">
             <div className="header-icon cyan" style={{ background: 'linear-gradient(135deg, #06b6d4, #0d9488)', color: 'white', boxShadow: '0 4px 10px rgba(6,182,212,0.3)' }}>
@@ -456,218 +566,6 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
           </div>
         </div>
 
-        {/* ROW 2 — CARD 4: WhatsApp Bot */}
-        <div className="card control-card" style={{ padding: '1.6rem', gap: '0.85rem', height: '100%' }}>
-          <div className="card-icon-header inline">
-            <div className="header-icon green" style={{ background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', boxShadow: '0 4px 10px rgba(16,185,129,0.3)' }}>
-              <MessageSquare size={18} />
-            </div>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>WhatsApp Bot Setup</h3>
-          </div>
-          <p className="card-description">Enable automated patient appointment booking and instant WhatsApp notifications for your clinic.</p>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: 'auto', paddingTop: '0.5rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '0.6rem 0.85rem', borderRadius: '10px', border: '1px solid var(--border)' }}>
-              <span className="label-caps" style={{ color: '#64748b' }}>STATUS</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '0.825rem' }}>
-                <div className={`dot ${botStatus?.status === 'CONNECTED' ? 'green' : botStatus?.status === 'QR_READY' || botStatus?.status === 'CONNECTING' ? 'amber' : ''}`} />
-                <span style={{ color: botStatus?.status === 'CONNECTED' ? '#047857' : botStatus?.status === 'QR_READY' || botStatus?.status === 'CONNECTING' ? '#b45309' : '#64748b' }}>
-                  {botStatus?.status || 'DISCONNECTED'}
-                </span>
-              </div>
-            </div>
-
-            {botStatus?.status === 'CONNECTING' && (
-              <div style={{ textAlign: 'center', background: '#fffbeb', padding: '0.75rem', borderRadius: '10px', border: '1px solid #fef3c7' }}>
-                <p style={{ fontSize: '0.78rem', color: '#92400e', fontWeight: 600, margin: 0 }}>
-                  ⏳ Connecting to WhatsApp servers &amp; preparing QR code...
-                </p>
-              </div>
-            )}
-
-            {botStatus?.status === 'QR_READY' && botStatus?.qrCodeDataUrl && (
-              <div style={{ textAlign: 'center', background: '#f0f9ff', padding: '0.85rem', borderRadius: '12px', border: '1px solid #bae6fd' }}>
-                <p style={{ fontSize: '0.78rem', color: '#0369a1', fontWeight: 700, marginBottom: '0.4rem' }}>
-                  📱 Scan with WhatsApp (Settings → Linked Devices)
-                </p>
-                <img src={botStatus.qrCodeDataUrl} alt="WhatsApp QR Code" style={{ width: '160px', height: '160px', margin: '0 auto', display: 'block', borderRadius: '8px', border: '2px solid white', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }} />
-                <p style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '0.4rem', margin: 0 }}>
-                  Point your phone's WhatsApp camera at this code
-                </p>
-              </div>
-            )}
-
-            {botStatus?.status === 'CONNECTED' && (
-              <div style={{ background: '#f0fdf4', padding: '0.75rem 0.85rem', borderRadius: '10px', border: '1px solid #bbf7d0' }}>
-                <p style={{ fontSize: '0.8rem', color: '#166534', fontWeight: 700, margin: '0 0 2px 0' }}>
-                  ✓ WhatsApp is Active &amp; Ready
-                </p>
-                <p style={{ fontSize: '0.72rem', color: '#15803d', margin: 0 }}>
-                  Automated appointment booking &amp; 1-click patient reminders active
-                </p>
-              </div>
-            )}
-
-            {botStatus?.status === 'ERROR' && (
-              <div style={{ background: '#fef2f2', padding: '0.6rem 0.85rem', borderRadius: '10px', border: '1px solid #fecaca' }}>
-                <span style={{ fontSize: '0.75rem', color: '#991b1b', fontWeight: 600 }}>
-                  ⚠️ {botStatus?.errorMessage || 'Connection failed. Click below to retry.'}
-                </span>
-              </div>
-            )}
-
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              {botStatus?.status !== 'CONNECTED' ? (
-                <button
-                  className="btn-primary-sm"
-                  style={{
-                    flex: 1,
-                    background: 'linear-gradient(135deg, #10b981, #059669)',
-                    color: 'white',
-                    padding: '0.65rem 0.75rem',
-                    borderRadius: '8px',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.4rem'
-                  }}
-                  onClick={async () => {
-                    if ((window as any).whatsappBot) {
-                      try {
-                        toast('Starting WhatsApp engine...', { type: 'info' });
-                        const res = await (window as any).whatsappBot.start();
-                        setBotStatus(res);
-                      } catch (err: any) {
-                        toast(err?.message || 'Failed to start WhatsApp', { type: 'error' });
-                      }
-                    }
-                  }}
-                >
-                  <Bot size={16} /> {botStatus?.status === 'QR_READY' ? 'Refresh QR Code' : 'Connect WhatsApp'}
-                </button>
-              ) : (
-                <button
-                  className="btn-secondary-sm"
-                  style={{ flex: 1, color: '#ef4444', borderColor: '#fee2e2', background: '#fef2f2', padding: '0.65rem 0.75rem', fontWeight: 700, cursor: 'pointer' }}
-                  onClick={async () => {
-                    if ((window as any).whatsappBot) {
-                      try {
-                        const res = await (window as any).whatsappBot.stop();
-                        setBotStatus(res);
-                        toast('WhatsApp disconnected', { type: 'info' });
-                      } catch (err: any) {
-                        toast(err?.message || 'Failed to disconnect', { type: 'error' });
-                      }
-                    }
-                  }}
-                >
-                  Disconnect
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* ROW 3 — CARD 5: Clinic Profiles & Users */}
-        <div className="card control-card" style={{ padding: '1.6rem', gap: '0.85rem', height: '100%' }}>
-          <div className="card-icon-header inline">
-            <div className="header-icon red" style={{ background: 'linear-gradient(135deg, #f43f5e, #e11d48)', color: 'white', boxShadow: '0 4px 10px rgba(244,63,94,0.3)' }}>
-              <KeyRound size={18} />
-            </div>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>Clinic Profiles &amp; Users</h3>
-          </div>
-          <p className="card-description">Manage User IDs authorized to access workspace profiles on this workstation.</p>
-
-          {currentUser === 'admin' ? (
-            <div className="user-management-section" style={{ marginTop: 'auto', paddingTop: '0.5rem' }}>
-              <div className="add-user-row" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '0.85rem' }}>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <input
-                    type="text"
-                    placeholder="Register User ID..."
-                    value={newUserIdInput}
-                    onChange={e => setNewUserIdInput(e.target.value)}
-                    className="sync-input-line"
-                    style={{ flex: 2, minWidth: 0, margin: 0, padding: '0.55rem 0.75rem', fontSize: '0.85rem' }}
-                  />
-                  <select
-                    value={newUserRole}
-                    onChange={e => {
-                      setNewUserRole(e.target.value as 'reception' | 'doctor');
-                      if (e.target.value === 'doctor' && doctors.length > 0) {
-                        setSelectedDoctorIdForUser(doctors[0].id);
-                      }
-                    }}
-                    className="select-profile-dropdown"
-                    style={{ flex: 1.2, padding: '0.55rem 0.75rem', fontSize: '0.85rem' }}
-                  >
-                    <option value="reception">Reception</option>
-                    <option value="doctor">Doctor</option>
-                  </select>
-                </div>
-
-                {newUserRole === 'doctor' && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Link Doctor Profile:</label>
-                    <select
-                      value={selectedDoctorIdForUser}
-                      onChange={e => setSelectedDoctorIdForUser(e.target.value)}
-                      className="select-profile-dropdown"
-                      style={{ flex: 1, padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
-                    >
-                      <option value="">-- Choose Doctor Registry --</option>
-                      {doctors.map(d => (
-                        <option key={d.id} value={d.id}>{d.name} ({d.specialization})</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                <button
-                  className="btn-primary"
-                  onClick={handleAddUser}
-                  disabled={!newUserIdInput.trim() || (newUserRole === 'doctor' && !selectedDoctorIdForUser)}
-                  style={{ padding: '0.55rem 1rem', width: '100%', fontSize: '0.85rem', fontWeight: 700 }}
-                >
-                  Add Clinic User ID
-                </button>
-              </div>
-
-              <div className="users-list-container">
-                <span className="label-caps" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: '0.4rem' }}>REGISTERED PROFILES</span>
-                <div className="users-list" style={{ maxHeight: '110px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '8px' }}>
-                  {knownUsers.map(user => (
-                    <div key={user.id} className="user-list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.45rem 0.75rem', borderBottom: '1px solid var(--border)' }}>
-                      <span className="user-list-name" style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>
-                        <strong>{user.id}</strong>{' '}
-                        <span style={{ opacity: 0.65, fontSize: '0.75rem', marginLeft: '4px' }}>({user.role})</span>
-                        {user.id === currentUser && <span style={{ color: '#0ea5e9', fontSize: '0.75rem', marginLeft: '6px', fontWeight: 600 }}>(active)</span>}
-                      </span>
-                      {user.id !== 'default' && (
-                        <button
-                          className="btn-delete-user"
-                          onClick={() => handleDeleteUser(user.id)}
-                          title="Remove User ID"
-                          style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div style={{ padding: '0.75rem 1rem', background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: '8px', color: '#b45309', fontSize: '0.825rem', display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: 'auto' }}>
-              <AlertCircle size={16} />
-              <span>Only administrator (<strong>admin</strong>) can manage clinic accounts.</span>
-            </div>
-          )}
-        </div>
-
         {/* ROW 3 — CARD 6: System License & Support */}
         <div className="card control-card" style={{ padding: '1.6rem', gap: '0.85rem', height: '100%' }}>
           <div className="card-icon-header inline">
@@ -720,7 +618,8 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
               <div>Support: <a href="mailto:burhansaifee2003@gmail.com" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 500 }}>burhansaifee2003@gmail.com</a></div>
               <div>Phone / WhatsApp: <span style={{ fontWeight: 600 }}>+91 9981188253, +91 9039010987</span></div>
               <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '0.4rem', textAlign: 'center' }}>
-                © 2026 Buvora • Developed by Badshah Computers
+                © 2026 Buvora • Developed by Badshah Computers<br/>
+                <span style={{ opacity: 0.8 }}>Version 3.0.4</span>
               </div>
             </div>
           </div>

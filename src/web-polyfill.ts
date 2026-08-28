@@ -124,6 +124,12 @@ if (typeof window !== 'undefined' && !(window as any).ipcRenderer) {
       const u = users.find((x: any) => x.id === localStorage.getItem('buvora_user'));
       return u ? u.doctorId : null;
     },
+    getCurrentUserTabs: async () => {
+      const users = await rpcCall('get-known-users');
+      const u = users.find((x: any) => x.id === localStorage.getItem('buvora_user'));
+      return u ? u.allowedTabs : null;
+    },
+    updateUserTabs: (userId: string, tabs: string[]) => rpcCall('update-user-tabs', userId, tabs),
     disconnectUser: async () => {
       localStorage.removeItem('buvora_user');
     }
@@ -136,7 +142,8 @@ if (typeof window !== 'undefined' && !(window as any).ipcRenderer) {
     toggleAutoReply: (enabled: boolean) => rpcCall('whatsapp-toggle-autoreply', enabled),
     onStatusChange: () => () => {},
     getSchedule: () => rpcCall('whatsapp-get-schedule'),
-    sendMessage: (phone: string, message: string) => rpcCall('whatsapp-send-message', phone, message)
+    sendMessage: (phone: string, message: string) => rpcCall('whatsapp-send-message', phone, message),
+    sharePrescriptionPdf: (phone: string, rxData: any) => rpcCall('whatsapp-share-prescription-pdf', phone, rxData)
   };
 
   (window as any).system = {
@@ -151,7 +158,7 @@ if (typeof window !== 'undefined' && !(window as any).ipcRenderer) {
     'deleteReceipt', 'getMetadata', 'setMetadata', 'batchImportDoctors', 'getPrescriptions',
     'savePrescription', 'deletePrescription', 'getAppointments', 'saveAppointment',
     'updateAppointmentStatus', 'deleteAppointment', 'getFollowUps', 'saveFollowUp',
-    'updateFollowUpStatus', 'deleteFollowUp'
+    'updateFollowUpStatus', 'deleteFollowUp', 'getExpenses', 'saveExpense', 'deleteExpense'
   ];
 
   const dbPolyfill: any = {};

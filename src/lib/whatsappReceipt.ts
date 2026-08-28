@@ -43,7 +43,7 @@ export function formatReceiptWhatsAppMessage(receipt: Receipt): string {
   if (receipt.patientPhone) {
     message += `• *Contact:* ${receipt.patientPhone}\n`;
   }
-  message += `• *Consulting Doctor:* Dr. ${receipt.doctorName || 'Consulting Physician'}\n\n`;
+  message += `• *Consulting Doctor:*  ${receipt.doctorName || 'Consulting Physician'}\n\n`;
 
   message += `📋 *SERVICES & CHARGES:*\n`;
   if (itemsText) {
@@ -149,7 +149,7 @@ export function formatFollowUpWhatsAppMessage(followUp: {
   let message = `🏥 *BUVORA CLINIC - DOCTOR FOLLOW-UP REMINDER*\n`;
   message += `━━━━━━━━━━━━━━━━━━━━━━━━\n`;
   message += `Dear *${followUp.patientName}*,\n\n`;
-  message += `This is a gentle reminder from *Buvora Clinic* regarding your upcoming follow-up consultation with *Dr. ${followUp.doctorName.replace(/^Dr\.?\s*/i, '')}*.\n\n`;
+  message += `This is a gentle reminder from *Buvora Clinic* regarding your upcoming follow-up consultation with  ${followUp.doctorName.replace(/^Dr\.?\s*/i, '')}*.\n\n`;
   message += `📅 *Scheduled Date:* ${formattedDate}\n`;
   if (followUp.notes && followUp.notes.trim()) {
     message += `📋 *Consultation Advice / Reason:* ${followUp.notes.trim()}\n`;

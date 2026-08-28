@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { FileText, Search, Printer } from 'lucide-react';
-import { formatAgeGender, type Prescription } from '../../lib/storage';
+import { FileText, Search, Printer, MessageCircle } from 'lucide-react';
+import { useToast } from '../ui/Toast';
+import { storage, formatAgeGender, type Prescription } from '../../lib/storage';
+import { MedicinesDropdown } from '../ui/MedicinesDropdown';
 
 interface PrescriptionsTabProps {
   prescriptions: Prescription[];
@@ -9,6 +11,37 @@ interface PrescriptionsTabProps {
 
 const PrescriptionsTab: React.FC<PrescriptionsTabProps> = ({ prescriptions, onPrintRx }) => {
   const [rxSearchQuery, setRxSearchQuery] = useState('');
+  const toast = useToast();
+
+  const handleShareWhatsapp = async (p: Prescription) => {
+    if (!p.patientPhone) {
+      alert(`No phone number recorded for ${p.patientName}. Please edit the patient record first.`);
+      return;
+    }
+    const confirmed = window.confirm(`Send prescription PDF to ${p.patientName} at ${p.patientPhone} via WhatsApp?`);
+    if (!confirmed) return;
+    
+    try {
+      toast('Generating and sending PDF...', { type: 'info' });
+      
+      const docs = await storage.getDoctors();
+      const docObj = docs.find(d => d.id === p.doctorId);
+      const enrichedPrescription = {
+        ...p,
+        doctorSpecialization: docObj?.specialization || '',
+        doctorQualifications: docObj?.qualifications || ''
+      };
+      
+      const res = await window.whatsappBot.sharePrescriptionPdf(enrichedPrescription.patientPhone, enrichedPrescription);
+      if (res && res.success) {
+        toast('Prescription sent via WhatsApp!', { type: 'success' });
+      } else {
+        toast((res && res.error) || 'Failed to send prescription', { type: 'error' });
+      }
+    } catch (e: any) {
+      toast(e.message || 'Error sending PDF', { type: 'error' });
+    }
+  };
 
   const filtered = prescriptions.filter(p => {
     const query = rxSearchQuery.toLowerCase();
@@ -17,7 +50,8 @@ const PrescriptionsTab: React.FC<PrescriptionsTabProps> = ({ prescriptions, onPr
       p.patientName.toLowerCase().includes(query) ||
       p.patientPhone.includes(query) ||
       p.doctorName.toLowerCase().includes(query) ||
-      (p.diagnosis && p.diagnosis.toLowerCase().includes(query))
+      (p.diagnosis && p.diagnosis.toLowerCase().includes(query)) ||
+      (p.medicines && p.medicines.some(m => m.name.toLowerCase().includes(query)))
     );
   });
 
@@ -71,12 +105,12 @@ const PrescriptionsTab: React.FC<PrescriptionsTabProps> = ({ prescriptions, onPr
         ) : (
           <div
             className="history-table-wrapper"
-            style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden' }}
+            style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', overflowX: 'auto' }}
           >
-            <table className="history-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <table className="history-table" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
               <thead>
                 <tr>
-                  {['Date', 'Patient Details', 'Age / Gender', 'Prescribed By', 'Diagnosis', 'Medicines', 'Action'].map(col => (
+                  {['Date', 'Patient Details', 'Age / Gender', 'Prescribed By', 'Diagnosis', 'Medicines', 'Action'].map((col, idx, arr) => (
                     <th
                       key={col}
                       style={{
@@ -86,6 +120,8 @@ const PrescriptionsTab: React.FC<PrescriptionsTabProps> = ({ prescriptions, onPr
                         color: '#475569',
                         fontSize: '0.875rem',
                         borderBottom: '1px solid var(--border)',
+                        ...(idx === 0 ? { borderTopLeftRadius: '12px' } : {}),
+                        ...(idx === arr.length - 1 ? { borderTopRightRadius: '12px' } : {}),
                         ...(col === 'Action' ? { width: '100px', textAlign: 'center' } : {}),
                       }}
                     >
@@ -118,44 +154,26 @@ const PrescriptionsTab: React.FC<PrescriptionsTabProps> = ({ prescriptions, onPr
                       )}
                     </td>
                     <td style={{ padding: '1rem', fontSize: '0.875rem' }}>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
-                        {(p.medicines || []).map((m, idx) => (
-                          <span
-                            key={idx}
-                            style={{
-                              background: '#f1f5f9',
-                              color: '#475569',
-                              padding: '0.15rem 0.5rem',
-                              borderRadius: '4px',
-                              fontSize: '0.75rem',
-                              fontWeight: 500,
-                            }}
-                          >
-                            {m.name}
-                          </span>
-                        ))}
-                      </div>
+                      <MedicinesDropdown medicines={p.medicines || []} />
                     </td>
                     <td className="text-center" style={{ padding: '1rem' }}>
-                      <button
-                        className="btn-icon-xs print-rx-btn"
-                        onClick={() => onPrintRx(p)}
-                        title="Print Prescription (Rx)"
-                        style={{
-                          color: '#0ea5e9',
-                          background: '#f0f9ff',
-                          borderColor: '#e0f2fe',
-                          padding: '0.4rem',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          border: '1px solid #cbd5e1',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <Printer size={15} />
-                      </button>
+                      <div className="table-actions" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem' }}>
+                        <button
+                          className="btn-icon"
+                          onClick={() => onPrintRx(p)}
+                          title="Print Prescription (Rx)"
+                        >
+                          <Printer size={16} />
+                        </button>
+                        <button
+                          className="btn-icon text-success"
+                          style={{ color: '#10b981' }}
+                          onClick={() => handleShareWhatsapp(p)}
+                          title="Share via WhatsApp (PDF)"
+                        >
+                          <MessageCircle size={16} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

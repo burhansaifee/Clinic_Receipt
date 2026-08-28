@@ -145,10 +145,31 @@ export const database = {
         createdAt TEXT NOT NULL
       );
 
-      CREATE TABLE IF NOT EXISTS metadata (
-        key TEXT PRIMARY KEY,
-        value TEXT
+      CREATE TABLE IF NOT EXISTS expenses (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        category TEXT NOT NULL,
+        amount REAL NOT NULL,
+        paidAmount REAL DEFAULT 0,
+        date TEXT NOT NULL,
+        dueDate TEXT,
+        paymentMode TEXT NOT NULL DEFAULT 'CASH',
+        paidTo TEXT,
+        vendorPhone TEXT,
+        billNumber TEXT,
+        isRecurring INTEGER DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'PAID',
+        notes TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
       );
+
+      CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);
+      CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category);
+      CREATE INDEX IF NOT EXISTS idx_expenses_status ON expenses(status);
+      CREATE INDEX IF NOT EXISTS idx_receipts_patientPhone ON receipts(patientPhone);
+      CREATE INDEX IF NOT EXISTS idx_receipts_receiptNumber ON receipts(receiptNumber);
+      CREATE INDEX IF NOT EXISTS idx_receipt_items_receiptId ON receipt_items(receiptId);
     `);
 
     // Migrations
@@ -228,6 +249,19 @@ export const database = {
     for (const col of aptCols) {
       try {
         db.exec(`ALTER TABLE appointments ADD COLUMN ${col};`);
+      } catch (e) {}
+    }
+
+    // Expenses Migrations
+    const expenseCols = [
+      'paidAmount REAL DEFAULT 0',
+      'dueDate TEXT',
+      'vendorPhone TEXT',
+      'isRecurring INTEGER DEFAULT 0'
+    ];
+    for (const col of expenseCols) {
+      try {
+        db.exec(`ALTER TABLE expenses ADD COLUMN ${col};`);
       } catch (e) {}
     }
 
@@ -650,5 +684,101 @@ export const database = {
     }
     return db.prepare('UPDATE appointments SET status = ? WHERE id = ?').run(status, id);
   },
-  deleteAppointment: (id: string) => db.prepare('DELETE FROM appointments WHERE id = ?').run(id)
+  deleteAppointment: (id: string) => db.prepare('DELETE FROM appointments WHERE id = ?').run(id),
+
+  // Expenses & Clinic Bills
+  getExpenses: (options?: { limit?: number; offset?: number; search?: string; category?: string; startDate?: string; endDate?: string }) => {
+    try {
+      let query = 'SELECT * FROM expenses WHERE 1=1';
+      const params: any[] = [];
+
+      if (options?.search) {
+        query += ' AND (title LIKE ? OR paidTo LIKE ? OR billNumber LIKE ? OR notes LIKE ?)';
+        const term = `%${options.search}%`;
+        params.push(term, term, term, term);
+      }
+
+      if (options?.category && options.category !== 'ALL') {
+        query += ' AND category = ?';
+        params.push(options.category);
+      }
+
+      if (options?.startDate) {
+        query += ' AND date >= ?';
+        params.push(options.startDate);
+      }
+
+      if (options?.endDate) {
+        query += ' AND date <= ?';
+        params.push(options.endDate);
+      }
+
+      query += ' ORDER BY date DESC, createdAt DESC';
+
+      if (options?.limit) {
+        query += ' LIMIT ?';
+        params.push(options.limit);
+        if (options?.offset) {
+          query += ' OFFSET ?';
+          params.push(options.offset);
+        }
+      }
+
+      return db.prepare(query).all(...params);
+    } catch (e) {
+      console.error('[Database] Error fetching expenses:', e);
+      return [];
+    }
+  },
+
+  saveExpense: (expense: any) => {
+    const id = expense.id || ('EXP-' + Math.floor(1000 + Math.random() * 9000));
+    const now = new Date().toISOString();
+    const amount = Number(expense.amount) || 0;
+    const paidAmount = expense.paidAmount !== undefined && expense.paidAmount !== '' ? Number(expense.paidAmount) : amount;
+    const status = expense.status || (paidAmount >= amount ? 'PAID' : (paidAmount > 0 ? 'PARTIAL' : 'PENDING'));
+    const paymentMode = expense.paymentMode || 'CASH';
+    const billNumber = expense.billNumber || id;
+    const isRecurring = expense.isRecurring ? 1 : 0;
+    const date = expense.date || now.split('T')[0];
+    const dueDate = expense.dueDate || date;
+
+    const stmt = db.prepare(`
+      INSERT OR REPLACE INTO expenses (id, title, category, amount, paidAmount, date, dueDate, paymentMode, paidTo, vendorPhone, billNumber, isRecurring, status, notes, createdAt, updatedAt)
+      VALUES (@id, @title, @category, @amount, @paidAmount, @date, @dueDate, @paymentMode, @paidTo, @vendorPhone, @billNumber, @isRecurring, @status, @notes, @createdAt, @updatedAt)
+    `);
+    stmt.run({
+      id,
+      title: expense.title || 'Untitled Expense',
+      category: expense.category || 'Utilities & Power',
+      amount,
+      paidAmount,
+      date,
+      dueDate,
+      paymentMode,
+      paidTo: expense.paidTo || '',
+      vendorPhone: expense.vendorPhone || '',
+      billNumber,
+      isRecurring,
+      status,
+      notes: expense.notes || '',
+      createdAt: expense.createdAt || now,
+      updatedAt: now
+    });
+    return {
+      id,
+      ...expense,
+      amount,
+      paidAmount,
+      date,
+      dueDate,
+      status,
+      paymentMode,
+      billNumber,
+      isRecurring,
+      updatedAt: now
+    };
+  },
+
+  deleteExpense: (id: string) => db.prepare('DELETE FROM expenses WHERE id = ?').run(id)
 };

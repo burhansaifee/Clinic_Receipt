@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { format, addDays } from 'date-fns';
-import { ClipboardList, FileText, Search, Plus, Trash2, Printer, PlusCircle, AlertCircle, LogOut, CheckCircle, Save, History, KeyRound, Calendar } from 'lucide-react';
+import { ClipboardList, FileText, Search, Plus, Trash2, Printer, PlusCircle, AlertCircle, LogOut, CheckCircle, Save, History, KeyRound, Calendar, MessageCircle } from 'lucide-react';
+import { useToast } from './ui/Toast';
 import { storage, formatAgeGender, type Doctor, type Receipt, type Prescription, type PrescribedMedicine, type PrescriptionPaperType } from '../lib/storage';
+import { MedicinesDropdown } from './ui/MedicinesDropdown';
 
 interface DoctorWorkstationProps {
   currentUser: string;
@@ -10,10 +12,12 @@ interface DoctorWorkstationProps {
 }
 
 const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, currentUserDoctorId, onLogout }) => {
-  const [activeTab, setActiveTab] = useState<'queue' | 'history'>('queue');
+  const [activeTab, setActiveTab] = useState<'queue' | 'history' | 'my-prescriptions'>('queue');
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
+  
+  const toast = useToast();
   const [prescriptionPaperType, setPrescriptionPaperType] = useState<PrescriptionPaperType>('A4');
   
   // Search & Filters
@@ -34,7 +38,7 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
   const [activePrintPrescription, setActivePrintPrescription] = useState<Prescription | null>(null);
   const [shouldPrintOnSubmit, setShouldPrintOnSubmit] = useState(false);
 
-  // Load Data
+  // Load Data - Initial Full Load
   const refreshData = React.useCallback(async () => {
     try {
       const [allDoctors, allReceipts, allPrescriptions, paperSettings] = await Promise.all([
@@ -53,37 +57,25 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
   }, []);
 
   useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const [allDoctors, allReceipts, allPrescriptions, paperSettings] = await Promise.all([
-          storage.getDoctors(),
-          storage.getReceipts(),
-          storage.getPrescriptions(),
-          storage.getPrintPaperSettings()
-        ]);
-        if (active) {
-          setDoctors(allDoctors);
-          setReceipts(allReceipts);
-          setPrescriptions(allPrescriptions);
-          setPrescriptionPaperType(paperSettings.prescriptionPaper);
-        }
-      } catch (e) {
-        console.error('Failed to load doctor data:', e);
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, []);
+    refreshData();
+  }, [refreshData]);
 
-  // Poll for updates every 5 seconds
+  // Poll ONLY today's queue every 5 seconds
   useEffect(() => {
-    const interval = setInterval(() => {
-      refreshData();
+    const interval = setInterval(async () => {
+      try {
+        const todayStr = format(new Date(), 'yyyy-MM-dd');
+        const todayReceipts = await storage.getReceipts({ startDate: todayStr, endDate: todayStr });
+        setReceipts(prev => {
+          const prevWithoutToday = prev.filter(r => !r.date.startsWith(todayStr));
+          return [...prevWithoutToday, ...todayReceipts].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        });
+      } catch (e) {
+        console.error('Failed to poll queue:', e);
+      }
     }, 5000);
     return () => clearInterval(interval);
-  }, [refreshData]);
+  }, []);
 
   useEffect(() => {
     const handleAfterPrint = () => {
@@ -263,6 +255,35 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
     }, 150);
   };
 
+  const handleShareWhatsapp = async (prescription: Prescription) => {
+    if (!prescription.patientPhone) {
+      alert(`No phone number recorded for ${prescription.patientName}. Please edit the patient record first.`);
+      return;
+    }
+    const confirmed = window.confirm(`Send prescription PDF to ${prescription.patientName} at ${prescription.patientPhone} via WhatsApp?`);
+    if (!confirmed) return;
+    
+    try {
+      toast('Generating and sending PDF...', { type: 'info' });
+      
+      const docObj = doctors.find(d => d.id === prescription.doctorId);
+      const enrichedPrescription = {
+        ...prescription,
+        doctorSpecialization: docObj?.specialization || '',
+        doctorQualifications: docObj?.qualifications || ''
+      };
+      
+      const res = await window.whatsappBot.sharePrescriptionPdf(enrichedPrescription.patientPhone, enrichedPrescription);
+      if (res && res.success) {
+        toast('Prescription sent via WhatsApp!', { type: 'success' });
+      } else {
+        toast((res && res.error) || 'Failed to send prescription', { type: 'error' });
+      }
+    } catch (e: any) {
+      toast(e.message || 'Error sending PDF', { type: 'error' });
+    }
+  };
+
   const handleDeletePrescription = async (id: string) => {
     if (confirm('Are you sure you want to delete this prescription from database?')) {
       await storage.deletePrescription(id);
@@ -436,7 +457,7 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
                   <p className="text-muted">Try adjusting your search criteria or register a prescription.</p>
                 </div>
               ) : (
-                <div className="history-table-wrapper">
+                <div className="history-table-wrapper" style={{ overflowX: 'auto' }}>
                   <table className="history-table">
                     <thead>
                       <tr>
@@ -458,20 +479,24 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
                           <td>{p.doctorName}</td>
                           <td>{p.diagnosis || 'N/A'}</td>
                           <td>
-                            <div className="meds-tags">
-                              {p.medicines.map((m, idx) => (
-                                <span key={idx} className="med-tag">{m.name}</span>
-                              ))}
-                            </div>
+                            <MedicinesDropdown medicines={p.medicines || []} />
                           </td>
                           <td>
-                            <div className="table-actions">
+                            <div className="table-actions" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem' }}>
                               <button 
                                 className="btn-icon" 
                                 onClick={() => handlePrintRx(p)}
                                 title="Print Prescription"
                               >
                                 <Printer size={16} />
+                              </button>
+                              <button 
+                                className="btn-icon text-success" 
+                                style={{ color: '#10b981' }}
+                                onClick={() => handleShareWhatsapp(p)}
+                                title="Share via WhatsApp"
+                              >
+                                <MessageCircle size={16} />
                               </button>
                               <button 
                                 className="btn-icon text-danger" 
@@ -869,7 +894,7 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
               {printHeader && (
                 <div className="print-header">
                   <div className="print-clinic-branding">
-                    <h2>Dr. {activePrintPrescription.doctorName.replace(/^Dr\.?\s+/i, '')}</h2>
+                    <h2> {activePrintPrescription.doctorName.replace(/^Dr\.?\s+/i, '')}</h2>
                     <p className="qualifications">{doctorObj?.qualifications || ''}</p>
                     <p className="specialization">{doctorObj?.specialization || 'Consulting Physician'}</p>
                   </div>
@@ -988,7 +1013,7 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
             <div className="print-footer" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.75rem' }}>
               <div className="signature-box" style={{ textAlign: 'center' }}>
                 <div className="signature-line" style={{ marginTop: '0.75rem', marginBottom: '0.25rem' }}></div>
-                <p style={{ margin: '0 0 2px 0', fontWeight: '700', fontSize: '0.85rem' }}>Dr. {activePrintPrescription.doctorName.replace(/^Dr\.?\s+/i, '')}</p>
+                <p style={{ margin: '0 0 2px 0', fontWeight: '700', fontSize: '0.85rem' }}>{activePrintPrescription.doctorName.replace(/^Dr\.?\s+/i, '')}</p>
                 <p className="subtitle">Authorized Signature</p>
               </div>
             </div>

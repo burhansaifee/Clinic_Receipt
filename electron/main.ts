@@ -194,10 +194,18 @@ function startHostServer() {
           if (method.startsWith('db-')) {
             const dbMethod = method.substring(3);
             const camelMethod = dbMethod.replace(/-([a-z])/g, (g: string) => g[1].toUpperCase());
-            if (typeof (database as any)[camelMethod] === 'function') {
+            const allowedMethods = [
+              'getDoctors', 'saveDoctor', 'deleteDoctor', 'getServices', 'saveService', 'deleteService',
+              'getReceipts', 'getDashboardMetrics', 'saveReceipt', 'saveReceiptAtomic', 'updateReceipt',
+              'deleteReceipt', 'getMetadata', 'setMetadata', 'batchImportDoctors', 'getPrescriptions',
+              'savePrescription', 'deletePrescription', 'getAppointments', 'saveAppointment',
+              'updateAppointmentStatus', 'deleteAppointment', 'getFollowUps', 'saveFollowUp',
+              'updateFollowUpStatus', 'deleteFollowUp', 'getExpenses', 'saveExpense', 'deleteExpense'
+            ];
+            if (allowedMethods.includes(camelMethod) && typeof (database as any)[camelMethod] === 'function') {
               result = await (database as any)[camelMethod](...args);
             } else {
-              throw new Error(`Database method ${camelMethod} not found`);
+              throw new Error(`Unauthorized or unknown database method: ${camelMethod}`);
             }
           } else if (method === 'get-known-users') {
             const knownUsers = store.get('known_users') as any[] || [
@@ -206,13 +214,13 @@ function startHostServer() {
             ];
             result = knownUsers;
           } else if (method === 'add-known-user') {
-            const [userId, role, doctorId] = args;
+            const [userId, role, doctorId, allowedTabs] = args;
             const cleanId = userId.trim().toLowerCase();
             const knownUsers = store.get('known_users') as any[] || [];
             if (knownUsers.some(u => u.id === cleanId)) {
               result = { success: false, error: 'User ID already exists' };
             } else {
-              knownUsers.push({ id: cleanId, role: role || 'reception', doctorId: doctorId || undefined });
+              knownUsers.push({ id: cleanId, role: role || 'reception', doctorId: doctorId || undefined, allowedTabs: allowedTabs || [] });
               store.set('known_users', knownUsers);
               result = { success: true };
             }
@@ -231,7 +239,7 @@ function startHostServer() {
             const [userId, password] = args;
             const cleanId = userId.trim().toLowerCase();
             const knownUsers = store.get('known_users') as any[] || [];
-            let idx = knownUsers.findIndex(u => u.id === cleanId);
+            const idx = knownUsers.findIndex(u => u.id === cleanId);
             if (idx !== -1) {
               const hashPassword = (pwd: string) => crypto.createHash('sha256').update(pwd + PASSWORD_SALT).digest('hex');
               knownUsers[idx].password = password ? hashPassword(password) : '';
@@ -255,7 +263,7 @@ function startHostServer() {
             const cleanId = userId.trim().toLowerCase();
             const knownUsers = store.get('known_users') as any[] || [];
             const hashPassword = (pwd: string) => crypto.createHash('sha256').update(pwd + PASSWORD_SALT).digest('hex');
-            let user = knownUsers.find(u => u.id === cleanId);
+            const user = knownUsers.find(u => u.id === cleanId);
             if (!user) {
               result = { success: false, error: 'Access Denied: User ID is not recognized.' };
             } else if (!user.password) {
@@ -274,6 +282,18 @@ function startHostServer() {
               } else {
                 result = { success: false, error: 'Incorrect password' };
               }
+            }
+          } else if (method === 'update-user-tabs') {
+            const [userId, tabs] = args;
+            const cleanId = userId.trim().toLowerCase();
+            const knownUsers = store.get('known_users') as any[] || [];
+            const userIndex = knownUsers.findIndex(u => u.id === cleanId);
+            if (userIndex !== -1) {
+              knownUsers[userIndex].allowedTabs = tabs;
+              store.set('known_users', knownUsers);
+              result = { success: true };
+            } else {
+              result = { success: false, error: 'User not found' };
             }
           } else if (method === 'whatsapp-get-status') {
             result = whatsappBot.getStatus();
@@ -313,6 +333,9 @@ function startHostServer() {
           } else if (method === 'whatsapp-send-message') {
             const [phone, message] = args;
             result = await whatsappBot.sendMessage(phone, message);
+          } else if (method === 'whatsapp-share-prescription-pdf') {
+            const [phone, rxData] = args;
+            result = await generateAndSendPrescriptionPdf(phone, rxData);
           } else if (method === 'validate-client-license') {
             const [machineId, fullKey] = args;
             if (!fullKey) {
@@ -444,7 +467,7 @@ async function clientRequest(method: string, ...args: any[]) {
         'X-MedFlow-Auth': secret
       },
       body: JSON.stringify({ method, args }),
-      signal: AbortSignal.timeout(5000)
+      signal: AbortSignal.timeout(method.includes('whatsapp') || method.includes('export') || method.includes('batch') ? 30000 : 8000)
     });
     if (!res.ok) {
       const errText = await res.text();
@@ -569,6 +592,32 @@ ipcMain.handle('deactivate-license', () => {
   return { success: true }
 })
 
+
+ipcMain.handle('update-user-tabs', (_, userId: string, tabs: string[]) => {
+  const activeUser = store.get('current_user') as string || '';
+  if (activeUser.toLowerCase() !== 'admin') {
+    return { success: false, error: 'Unauthorized: Only the "admin" profile can edit user tabs.' };
+  }
+  if (workstationMode === 'client') return clientRequest('update-user-tabs', userId, tabs);
+
+  const cleanId = userId.trim().toLowerCase();
+  const knownUsers = store.get('known_users') as any[] || [];
+  const userIndex = knownUsers.findIndex(u => u.id === cleanId);
+  if (userIndex === -1) return { success: false, error: 'User not found' };
+
+  knownUsers[userIndex].allowedTabs = tabs;
+  store.set('known_users', knownUsers);
+  return { success: true };
+});
+
+ipcMain.handle('get-current-user-tabs', () => {
+  const currentUser = store.get('current_user') as string || null;
+  if (!currentUser) return null;
+  const knownUsers = store.get('known_users') as any[] || [];
+  const user = knownUsers.find(u => u.id === currentUser);
+  return user ? user.allowedTabs : null;
+});
+
 // Database folder IPC
 ipcMain.handle('open-db-folder', () => {
   if (workstationMode === 'client') return;
@@ -679,6 +728,20 @@ ipcMain.handle('db-delete-follow-up', (_, id) => {
   return database.deleteFollowUp(id);
 })
 
+// SQLite Database Expenses & Bills IPCs
+ipcMain.handle('db-get-expenses', (_, options) => {
+  if (workstationMode === 'client') return clientRequest('db-get-expenses', options);
+  return database.getExpenses(options);
+})
+ipcMain.handle('db-save-expense', (_, expense) => {
+  if (workstationMode === 'client') return clientRequest('db-save-expense', expense);
+  return database.saveExpense(expense);
+})
+ipcMain.handle('db-delete-expense', (_, id) => {
+  if (workstationMode === 'client') return clientRequest('db-delete-expense', id);
+  return database.deleteExpense(id);
+})
+
 // WhatsApp Bot IPCs
 whatsappBot.setOnAppointmentSavedCallback(() => {
   if (win) win.webContents.send('appointment-updated');
@@ -706,6 +769,142 @@ ipcMain.handle('whatsapp-send-message', (_, phone: string, message: string) => {
   if (workstationMode === 'client') return clientRequest('whatsapp-send-message', phone, message);
   return whatsappBot.sendMessage(phone, message);
 })
+
+async function generateAndSendPrescriptionPdf(phone: string, rxData: any) {
+  const cleanDoctorName = 'Dr. ' + (rxData.doctorName || '').replace(/^(Dr\.?\s*)+/gi, '').trim();
+  const html = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <style>
+        body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; margin: 0; padding: 40px; color: #1e293b; }
+        .header { display: flex; justify-content: space-between; border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 20px; }
+        .clinic-name { font-size: 24px; font-weight: bold; color: #0284c7; margin: 0 0 5px 0; }
+        .clinic-details { font-size: 12px; color: #64748b; line-height: 1.5; }
+        .doctor-name { font-size: 18px; font-weight: 600; margin: 0 0 5px 0; color: #0f172a; }
+        .doctor-details { font-size: 12px; color: #64748b; line-height: 1.5; text-align: right; }
+        .patient-info { display: flex; justify-content: space-between; background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-size: 13px; }
+        .section-title { font-size: 14px; font-weight: 600; color: #0284c7; text-transform: uppercase; margin: 20px 0 10px 0; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px; }
+        .text-block { font-size: 13px; line-height: 1.6; margin-bottom: 20px; white-space: pre-wrap; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; }
+        th { text-align: left; padding: 10px; background: #f1f5f9; color: #475569; font-weight: 600; border-bottom: 1px solid #cbd5e1; }
+        td { padding: 10px; border-bottom: 1px solid #e2e8f0; }
+        .footer { margin-top: 40px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 20px; }
+        .signature { margin-top: 50px; text-align: right; font-size: 13px; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <div>
+          <h1 class="clinic-name">${rxData.clinicName || 'Clinic'}</h1>
+          <div class="clinic-details">${(rxData.clinicAddress || '').replace(/\n/g, '<br/>')}</div>
+          <div class="clinic-details">${rxData.clinicPhone ? 'Phone: ' + rxData.clinicPhone : ''}</div>
+        </div>
+        <div>
+          <h2 class="doctor-name">${cleanDoctorName}</h2>
+          <div class="doctor-details">${rxData.doctorSpecialization || ''}</div>
+          <div class="doctor-details">${rxData.doctorQualifications || ''}</div>
+          <div class="doctor-details">${rxData.doctorRegNo ? 'Reg: ' + rxData.doctorRegNo : ''}</div>
+        </div>
+      </div>
+      
+      <div class="patient-info">
+        <div>
+          <strong>Patient:</strong> ${rxData.patientName} 
+          (${rxData.patientAge ? (String(rxData.patientAge).match(/[a-zA-Z]/) ? String(rxData.patientAge) + ' ' : String(rxData.patientAge) + ' Y ') : ''}${rxData.patientGender ? '/ ' + rxData.patientGender : ''})<br/>
+          <strong style="margin-top: 4px; display: inline-block;">Phone:</strong> ${rxData.patientPhone || 'N/A'}
+        </div>
+        <div style="text-align: right;">
+          <strong>Date:</strong> ${new Date(rxData.date).toLocaleDateString()}<br/>
+          <strong style="margin-top: 4px; display: inline-block;">Rx ID:</strong> #${(rxData.id || '').slice(-6).toUpperCase()}
+        </div>
+      </div>
+
+      ${rxData.chiefComplaints ? `
+      <div class="section-title">Chief Complaints & Symptoms</div>
+      <div class="text-block">${rxData.chiefComplaints}</div>
+      ` : ''}
+
+      ${rxData.diagnosis ? `
+      <div class="section-title">Clinical Diagnosis</div>
+      <div class="text-block">${rxData.diagnosis}</div>
+      ` : ''}
+
+      ${rxData.medicines && rxData.medicines.length > 0 ? `
+      <div class="section-title">Prescribed Medicines</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Medicine</th>
+            <th>Dosage</th>
+            <th>Timing</th>
+            <th>Duration</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rxData.medicines.map((m: any) => `
+            <tr>
+              <td>
+                <strong>${m.name}</strong> ${m.composition ? `<br/><span style="color: #64748b; font-size: 11px;">${m.composition}</span>` : ''}
+              </td>
+              <td>${m.dosage}</td>
+              <td>${m.timing}</td>
+              <td>${m.duration}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      ` : ''}
+
+      ${rxData.labTests ? `
+      <div class="section-title">Lab Tests & Investigations</div>
+      <div class="text-block">${rxData.labTests}</div>
+      ` : ''}
+
+      ${rxData.advice ? `
+      <div class="section-title">Diet & Lifestyle Advice</div>
+      <div class="text-block">${rxData.advice}</div>
+      ` : ''}
+
+      ${rxData.followUpDate ? `
+      <div class="section-title">Follow-up</div>
+      <div class="text-block">Please revisit on <strong>${new Date(rxData.followUpDate).toLocaleDateString()}</strong></div>
+      ` : ''}
+
+      <div class="signature">
+        <div>_________________________</div>
+        <div style="margin-top: 5px;">${cleanDoctorName}</div>
+      </div>
+
+      <div class="footer">
+        This is a digitally generated medical prescription.<br/>
+        Generated on ${new Date().toLocaleString()}
+      </div>
+    </body>
+    </html>
+  `;
+
+  const win = new BrowserWindow({ show: false, webPreferences: { nodeIntegration: false } });
+  await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+  const pdfBuffer = await win.webContents.printToPDF({
+    printBackground: true,
+    pageSize: 'A4',
+    margins: { marginType: 'default' }
+  });
+  win.close();
+
+  const fileName = `Prescription_${rxData.patientName.replace(/\s+/g, '_')}_${rxData.date}.pdf`;
+  const caption = `Hello ${rxData.patientName},\n\nPlease find your digital prescription attached from ${cleanDoctorName}.\n\nGet well soon!`;
+  
+  return whatsappBot.sendDocument(phone, pdfBuffer, fileName, caption);
+}
+
+ipcMain.handle('whatsapp-share-prescription-pdf', async (_, phone: string, rxData: any) => {
+  if (workstationMode === 'client') return clientRequest('whatsapp-share-prescription-pdf', phone, rxData);
+  return generateAndSendPrescriptionPdf(phone, rxData);
+})
+
 ipcMain.handle('whatsapp-get-schedule', () => {
   if (workstationMode === 'client') return clientRequest('whatsapp-get-schedule');
   const schedule = store.get('whatsapp_schedule') as any;
@@ -750,23 +949,23 @@ ipcMain.handle('get-known-users', async () => {
   return knownUsers;
 });
 
-ipcMain.handle('add-known-user', (_, userId: string, role: string, doctorId?: string) => {
+ipcMain.handle('add-known-user', (_, userId: string, role: string, doctorId?: string, allowedTabs?: string[]) => {
   const activeUser = store.get('current_user') as string || '';
   if (activeUser.toLowerCase() !== 'admin') {
     return { success: false, error: 'Unauthorized: Only the "admin" profile can add users.' };
   }
 
-  if (workstationMode === 'client') return clientRequest('add-known-user', userId, role, doctorId);
+  if (workstationMode === 'client') return clientRequest('add-known-user', userId, role, doctorId, allowedTabs);
 
   const cleanId = userId.trim().toLowerCase();
   if (!cleanId) return { success: false, error: 'User ID cannot be empty' };
   
-  const knownUsers = store.get('known_users') as { id: string, role: string, doctorId?: string }[] || [];
+  const knownUsers = store.get('known_users') as { id: string, role: string, doctorId?: string, allowedTabs?: string[] }[] || [];
   if (knownUsers.some(u => u.id === cleanId)) {
     return { success: false, error: 'User ID already exists' };
   }
   
-  knownUsers.push({ id: cleanId, role: role || 'reception', doctorId: doctorId || undefined });
+  knownUsers.push({ id: cleanId, role: role || 'reception', doctorId: doctorId || undefined, allowedTabs });
   store.set('known_users', knownUsers);
   return { success: true };
 });
@@ -818,7 +1017,7 @@ ipcMain.handle('connect-user', async (_, userId: string, password?: string) => {
     return crypto.createHash('sha256').update(pwd + PASSWORD_SALT).digest('hex');
   };
 
-  let user = knownUsers.find(u => u.id === cleanId);
+  const user = knownUsers.find(u => u.id === cleanId);
   if (!user) {
     return { success: false, error: 'Access Denied: User ID is not recognized.' };
   }
@@ -851,7 +1050,7 @@ ipcMain.handle('set-user-password', (_, userId: string, password?: string) => {
 
   const cleanId = userId.trim().toLowerCase();
   const knownUsers = store.get('known_users') as { id: string, role: string, doctorId?: string, password?: string }[] || [];
-  let idx = knownUsers.findIndex(u => u.id === cleanId);
+  const idx = knownUsers.findIndex(u => u.id === cleanId);
   if (idx !== -1) {
     const hashPassword = (pwd: string) => crypto.createHash('sha256').update(pwd + PASSWORD_SALT).digest('hex');
     knownUsers[idx].password = password ? hashPassword(password) : '';

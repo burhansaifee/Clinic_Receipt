@@ -29,6 +29,8 @@ import HistoryTab from './components/tabs/HistoryTab';
 import PrescriptionsTab from './components/tabs/PrescriptionsTab';
 import SettingsTab from './components/tabs/SettingsTab';
 import { FollowUpsTab } from './components/tabs/FollowUpsTab';
+import ExpensesTab from './components/tabs/ExpensesTab';
+import { UsersTab } from './components/tabs/UsersTab';
 
 import type { Tab } from './components/layout/Sidebar';
 import type { FollowUp } from './lib/storage';
@@ -58,7 +60,8 @@ const MainApp: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<string | null>(null);
   const [currentUserRole, setCurrentUserRole] = useState('reception');
   const [currentUserDoctorId, setCurrentUserDoctorId] = useState<string | null>(null);
-  const [knownUsers, setKnownUsers] = useState<{ id: string; role: string; doctorId?: string }[]>([]);
+  const [currentUserTabs, setCurrentUserTabs] = useState<string[] | null>(null);
+  const [knownUsers, setKnownUsers] = useState<{ id: string; role: string; doctorId?: string; allowedTabs?: string[] }[]>([]);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   // ── Edit / Print state ────────────────────────────────────────────────────
@@ -108,6 +111,30 @@ const MainApp: React.FC = () => {
     return followUps.filter(f => f.status === 'PENDING' && f.scheduledDate === todayDateStr).length;
   }, [followUps, todayDateStr]);
 
+  const allowedTabs = React.useMemo(() => {
+    if (!currentUser) return [];
+    const isUserAdmin = currentUser.toLowerCase() === 'admin';
+    if (isUserAdmin) {
+      return ['dashboard', 'doctors', 'services', 'expenses', 'users', 'new-receipt', 'history', 'prescriptions', 'appointments', 'follow-ups', 'settings'];
+    }
+    if (currentUserTabs && currentUserTabs.length > 0) {
+      return currentUserTabs;
+    }
+    if (currentUserRole === 'management') {
+      return ['doctors', 'services', 'expenses', 'users', 'settings'];
+    }
+    if (currentUserRole === 'reception') {
+      return ['dashboard', 'new-receipt', 'history', 'prescriptions', 'appointments', 'follow-ups'];
+    }
+    return [];
+  }, [currentUser, currentUserRole, currentUserTabs]);
+
+  useEffect(() => {
+    if (currentUser && allowedTabs.length > 0 && !allowedTabs.includes(activeTab)) {
+      setActiveTab(allowedTabs[0] as Tab);
+    }
+  }, [activeTab, allowedTabs, currentUser]);
+
   // ── Bootstrap effects ─────────────────────────────────────────────────────
   useEffect(() => {
     window.licensing.checkActivation().then(setActivationStatus);
@@ -117,10 +144,20 @@ const MainApp: React.FC = () => {
             const user = await window.users.getCurrentUser();
         if (user) {
           setCurrentUser(user);
-                const role = await window.users.getCurrentUserRole();
+                 const role = await window.users.getCurrentUserRole();
           setCurrentUserRole(role);
-                const doctorId = await window.users.getCurrentUserDoctorId();
+                 const doctorId = await window.users.getCurrentUserDoctorId();
           setCurrentUserDoctorId(doctorId || null);
+          const tabs = await window.users.getCurrentUserTabs();
+          setCurrentUserTabs(tabs || null);
+          
+          if (user.toLowerCase() === 'admin') {
+            setActiveTab('dashboard');
+          } else if (role === 'management') {
+            setActiveTab('doctors');
+          } else {
+            setActiveTab('dashboard');
+          }
         }
       } catch (err) {
         console.error('Failed to get active user:', err);
@@ -213,6 +250,7 @@ const MainApp: React.FC = () => {
       setCurrentUser(null);
       setCurrentUserRole('reception');
       setCurrentUserDoctorId(null);
+      setCurrentUserTabs(null);
       setDoctors([]); setServices([]); setDashboardMetrics({ totalReceipts: 0, totalRevenue: 0, avgPerReceipt: 0 });
       setActiveTab('dashboard');
     }
@@ -284,11 +322,20 @@ const MainApp: React.FC = () => {
   if (currentUser === null) {
     return (
       <UserConnectionScreen
-        onConnected={(userId, role, doctorId) => {
+        onConnected={async (userId, role, doctorId) => {
           setCurrentUser(userId);
           setCurrentUserRole(role);
           setCurrentUserDoctorId(doctorId || null);
-                window.users.getKnownUsers().then(setKnownUsers);
+          const tabs = await window.users.getCurrentUserTabs();
+          setCurrentUserTabs(tabs || null);
+          window.users.getKnownUsers().then(setKnownUsers);
+          if (userId.toLowerCase() === 'admin') {
+            setActiveTab('dashboard');
+          } else if (role === 'management') {
+            setActiveTab('doctors');
+          } else {
+            setActiveTab('dashboard');
+          }
         }}
       />
     );
@@ -328,6 +375,7 @@ const MainApp: React.FC = () => {
         activeTab={activeTab}
         setActiveTab={(tab) => { setActiveTab(tab); setIsMobileMenuOpen(false); }}
         currentUser={currentUser}
+        currentUserRole={currentUserRole}
         isOnline={isOnline}
         pendingAppointmentsCount={pendingAppointmentsCount}
         dueFollowUpsCount={dueFollowUpsCount}
@@ -349,6 +397,8 @@ const MainApp: React.FC = () => {
               {activeTab === 'follow-ups' && 'Patient Follow-Up Tracker'}
               {activeTab === 'doctors' && 'Doctors Registry'}
               {activeTab === 'services' && 'Clinic Services Catalog'}
+              {activeTab === 'expenses' && 'Clinic Bills & Expenses'}
+              {activeTab === 'users' && 'Clinic Profiles & Users'}
               {activeTab === 'settings' && 'System Control Center'}
             </h1>
             <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
@@ -360,6 +410,8 @@ const MainApp: React.FC = () => {
               {activeTab === 'follow-ups' && 'Track patient revisit schedules, overdue reviews & WhatsApp reminders'}
               {activeTab === 'doctors' && 'Manage consulting physicians, qualifications & UPI QR setups'}
               {activeTab === 'services' && 'Standard consultation and treatment fee pricing'}
+              {activeTab === 'expenses' && 'Track operational expenses, utility bills, clinic supplies & cashflow'}
+              {activeTab === 'users' && 'Manage authorized staff accounts, doctor linking & modular screen permissions'}
               {activeTab === 'settings' && 'Backups, printer paper presets, network sync & licensing'}
             </p>
           </div>
@@ -371,7 +423,7 @@ const MainApp: React.FC = () => {
               <span>Rx: {prescriptionPaperType}</span>
             </div>
 
-            {activeTab !== 'new-receipt' && (
+            {activeTab !== 'new-receipt' && allowedTabs.includes('new-receipt') && (
               <button
                 className="btn-primary"
                 onClick={() => { setEditingReceipt(null); setActiveTab('new-receipt'); }}
@@ -385,7 +437,7 @@ const MainApp: React.FC = () => {
 
         <div className="content-inner">
           {/* Pending appointments alert banner */}
-          {pendingAppointmentsCount > 0 && activeTab !== 'appointments' && (
+          {pendingAppointmentsCount > 0 && activeTab !== 'appointments' && allowedTabs.includes('appointments') && (
             <div
               className="no-print"
               style={{
@@ -436,6 +488,7 @@ const MainApp: React.FC = () => {
           )}
           {activeTab === 'doctors' && <DoctorManagement doctors={doctors} onUpdate={refreshData} />}
           {activeTab === 'services' && <ServiceManagement services={services} onUpdate={refreshData} />}
+          {activeTab === 'expenses' && <ExpensesTab />}
           {activeTab === 'new-receipt' && (
             <ReceiptForm
               doctors={doctors}
@@ -511,6 +564,14 @@ const MainApp: React.FC = () => {
               }}
             />
           )}
+          {activeTab === 'users' && (
+            <UsersTab
+              currentUser={currentUser}
+              knownUsers={knownUsers}
+              setKnownUsers={setKnownUsers}
+              doctors={doctors}
+            />
+          )}
           {activeTab === 'settings' && (
             <SettingsTab
               activationStatus={activationStatus}
@@ -525,10 +586,6 @@ const MainApp: React.FC = () => {
               localIp={localIp}
               botStatus={botStatus}
               setBotStatus={setBotStatus}
-              currentUser={currentUser}
-              knownUsers={knownUsers}
-              setKnownUsers={setKnownUsers}
-              doctors={doctors}
               receiptPaperType={receiptPaperType}
               setReceiptPaperType={setReceiptPaperType}
               prescriptionPaperType={prescriptionPaperType}

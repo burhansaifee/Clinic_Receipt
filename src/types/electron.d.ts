@@ -12,6 +12,7 @@ import type {
   AppointmentStatus,
   FollowUp,
   FollowUpStatus,
+  Expense,
 } from '../lib/storage';
 
 interface DatabaseBridge {
@@ -46,6 +47,9 @@ interface DatabaseBridge {
   saveFollowUp(followUp: FollowUp): Promise<void>;
   updateFollowUpStatus(id: string, status: FollowUpStatus): Promise<void>;
   deleteFollowUp(id: string): Promise<void>;
+  getExpenses(options?: { limit?: number; offset?: number; search?: string; category?: string; startDate?: string; endDate?: string }): Promise<Expense[]>;
+  saveExpense(expense: Expense): Promise<Expense>;
+  deleteExpense(id: string): Promise<void>;
 }
 
 interface LicensingBridge {
@@ -62,12 +66,13 @@ interface LicensingBridge {
 
 interface UsersBridge {
   getKnownUsers(): Promise<
-    { id: string; role: string; doctorId?: string }[]
+    { id: string; role: string; doctorId?: string; allowedTabs?: string[] }[]
   >;
   addKnownUser(
     userId: string,
     role: string,
-    doctorId?: string
+    doctorId?: string,
+    allowedTabs?: string[]
   ): Promise<{ success: boolean; error?: string }>;
   deleteKnownUser(
     userId: string
@@ -87,10 +92,12 @@ interface UsersBridge {
     userId: string,
     password?: string
   ): Promise<{ success: boolean; error?: string }>;
-  getCurrentUser(): Promise<string>;
+  getCurrentUser(): Promise<string | null>;
   getCurrentUserRole(): Promise<string>;
-  getCurrentUserDoctorId(): Promise<string>;
-  disconnectUser(): Promise<boolean>;
+  getCurrentUserDoctorId(): Promise<string | null>;
+  getCurrentUserTabs(): Promise<string[] | null>;
+  updateUserTabs(userId: string, tabs: string[]): Promise<{ success: boolean; error?: string }>;
+  disconnectUser(): Promise<void>;
   resetAdminPassword(): Promise<{ success: boolean; message?: string; error?: string }>;
 }
 
@@ -130,6 +137,7 @@ interface WhatsAppBotBridge {
   getStatus(): Promise<{ status: string; qrCodeDataUrl?: string }>;
   toggleAutoReply(enabled: boolean): Promise<void>;
   sendMessage(phone: string, message: string): Promise<void>;
+  sharePrescriptionPdf(phone: string, rxData: any): Promise<{ success: boolean; message?: string; error?: string }>;
   getSchedule(): Promise<{
     allowedDays: string[];
     timeSlots: string[];

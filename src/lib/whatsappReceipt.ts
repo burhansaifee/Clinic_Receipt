@@ -22,20 +22,36 @@ export function cleanPhoneNumber(phone: string): string {
  */
 export function formatReceiptWhatsAppMessage(receipt: Receipt): string {
   const formattedDate = receipt.date ? receipt.date.split(' ')[0] : format(new Date(), 'yyyy-MM-dd');
+  const isFacility = receipt.billType === 'FACILITY';
   const itemsText = (receipt.items || [])
     .filter(item => item.description)
-    .map(item => `  • *${item.description}*: ₹${Number(item.amount || 0).toFixed(2)}`)
+    .map(item => {
+      const unitPart = item.quantity && item.rate ? ` (${item.quantity} ${item.unit || 'units'} @ ₹${item.rate})` : '';
+      return `  • *${item.description}*${unitPart}: ₹${Number(item.amount || 0).toFixed(2)}`;
+    })
     .join('\n');
 
   const totalNum = typeof receipt.total === 'number' ? receipt.total : parseFloat(receipt.total as any) || 0;
 
-  let message = `🏥 *BUVORA CLINIC - MEDICAL INVOICE*\n`;
+  let message = `🏥 *BUVORA CLINIC - ${isFacility ? 'INPATIENT & FACILITY BILL' : 'MEDICAL INVOICE'}*\n`;
   message += `━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-  message += `📄 *Receipt No:* #${receipt.receiptNumber}\n`;
+  message += `📄 *Bill No:* #${receipt.receiptNumber}\n`;
   message += `📅 *Date:* ${formattedDate}\n`;
+  if (isFacility && receipt.roomNumber) {
+    message += `🛏️ *Room / Bed:* ${receipt.roomNumber}\n`;
+  }
+  if (isFacility && receipt.admissionDate) {
+    message += `📥 *Admission:* ${receipt.admissionDate}\n`;
+  }
+  if (isFacility && receipt.dischargeDate) {
+    message += `📤 *Discharge:* ${receipt.dischargeDate}\n`;
+  }
   message += `━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
 
   message += `👤 *PATIENT INFORMATION:*\n`;
+  if (receipt.patientId) {
+    message += `• *Patient ID:* ${receipt.patientId}\n`;
+  }
   message += `• *Name:* ${receipt.patientName}\n`;
   if (receipt.patientAge || receipt.patientGender) {
     message += `• *Age / Gender:* ${receipt.patientAge || 'N/A'} | ${receipt.patientGender || 'N/A'}\n`;
@@ -45,15 +61,23 @@ export function formatReceiptWhatsAppMessage(receipt: Receipt): string {
   }
   message += `• *Consulting Doctor:*  ${receipt.doctorName || 'Consulting Physician'}\n\n`;
 
-  message += `📋 *SERVICES & CHARGES:*\n`;
+  message += `📋 *SERVICES & FACILITY CHARGES:*\n`;
   if (itemsText) {
     message += `${itemsText}\n`;
   } else {
     message += `  • General Consultation: ₹${totalNum.toFixed(2)}\n`;
   }
   message += `━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+  if (isFacility && receipt.advancePaid && receipt.advancePaid > 0) {
+    const gross = (receipt.items || []).reduce((s, i) => s + (Number(i.amount) || 0), 0);
+    message += `📋 *Gross Subtotal:* ₹${gross.toFixed(2)}\n`;
+    if (receipt.discount && receipt.discount > 0) {
+      message += `🏷️ *Discount:* -₹${Number(receipt.discount).toFixed(2)}\n`;
+    }
+    message += `💵 *Advance Deposit:* -₹${Number(receipt.advancePaid).toFixed(2)}\n`;
+  }
   message += `💳 *Payment Mode:* ${receipt.paymentMethod || 'CASH'}\n`;
-  message += `💰 *TOTAL AMOUNT:* *₹${totalNum.toFixed(2)}*\n`;
+  message += `💰 *${isFacility ? 'NET BALANCE DUE' : 'TOTAL AMOUNT'}:* *₹${totalNum.toFixed(2)}*\n`;
   message += `━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
 
   message += `✨ _Thank you for visiting Buvora Clinic. Wishing you a swift recovery and good health!_\n`;
@@ -134,6 +158,7 @@ export async function sendReceiptViaWhatsApp(
  * Formats a friendly follow-up reminder message for WhatsApp
  */
 export function formatFollowUpWhatsAppMessage(followUp: {
+  patientId?: string;
   patientName: string;
   doctorName: string;
   scheduledDate: string;
@@ -148,7 +173,7 @@ export function formatFollowUpWhatsAppMessage(followUp: {
 
   let message = `🏥 *BUVORA CLINIC - DOCTOR FOLLOW-UP REMINDER*\n`;
   message += `━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-  message += `Dear *${followUp.patientName}*,\n\n`;
+  message += `Dear *${followUp.patientName}*${followUp.patientId ? ` (ID: ${followUp.patientId})` : ''},\n\n`;
   message += `This is a gentle reminder from *Buvora Clinic* regarding your upcoming follow-up consultation with  ${followUp.doctorName.replace(/^Dr\.?\s*/i, '')}*.\n\n`;
   message += `📅 *Scheduled Date:* ${formattedDate}\n`;
   if (followUp.notes && followUp.notes.trim()) {

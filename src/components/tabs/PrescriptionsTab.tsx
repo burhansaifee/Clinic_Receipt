@@ -47,6 +47,7 @@ const PrescriptionsTab: React.FC<PrescriptionsTabProps> = ({ prescriptions, onPr
     const query = rxSearchQuery.toLowerCase();
     return (
       !query ||
+      (p.patientId && p.patientId.toLowerCase().includes(query)) ||
       p.patientName.toLowerCase().includes(query) ||
       p.patientPhone.includes(query) ||
       p.doctorName.toLowerCase().includes(query) ||
@@ -85,7 +86,7 @@ const PrescriptionsTab: React.FC<PrescriptionsTabProps> = ({ prescriptions, onPr
             />
             <input
               type="text"
-              placeholder="Search patient name, phone, doctor..."
+              placeholder="Search by Patient ID, name, phone, doctor..."
               value={rxSearchQuery}
               onChange={e => setRxSearchQuery(e.target.value)}
               className="sync-input-line"
@@ -135,6 +136,11 @@ const PrescriptionsTab: React.FC<PrescriptionsTabProps> = ({ prescriptions, onPr
                   <tr key={p.id} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td style={{ padding: '1rem', fontSize: '0.875rem', whiteSpace: 'nowrap' }}>{p.date}</td>
                     <td style={{ padding: '1rem', fontSize: '0.875rem' }}>
+                      {p.patientId && (
+                        <div style={{ marginBottom: '3px' }}>
+                          <span className="patient-id-badge">{p.patientId}</span>
+                        </div>
+                      )}
                       <strong style={{ color: 'var(--text-main)' }}>{p.patientName}</strong>
                       <br />
                       <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{p.patientPhone || 'No Phone'}</span>

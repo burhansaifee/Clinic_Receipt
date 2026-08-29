@@ -426,20 +426,30 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
                 )}
 
                 <div className="print-title-bar">
-                  <h1>PAYMENT RECEIPT (DUPLICATE)</h1>
+                  <h1>{r.billType === 'FACILITY' ? 'IN-PATIENT & FACILITY BILL' : 'PAYMENT RECEIPT (DUPLICATE)'}</h1>
                 </div>
 
                 <div className="print-info-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
                   <div className="info-section">
                     <h3>PATIENT DETAILS</h3>
+                    {r.patientId && <p><strong>Patient ID:</strong> {r.patientId}</p>}
                     <p><strong>Name:</strong> {r.patientName}</p>
                     <p><strong>Age/Gender:</strong> {formatAgeGender(r.patientAge, r.patientGender)}</p>
                     <p><strong>Phone No.:</strong> {r.patientPhone || 'N/A'}</p>
                   </div>
                   <div className="info-section">
-                    <h3>BILL DETAILS</h3>
-                    <p><strong>Receipt #:</strong> {r.receiptNumber}</p>
-                    <p><strong>Original Date:</strong> {formatDate(r.date)}</p>
+                    <h3>{r.billType === 'FACILITY' ? 'STAY & BILL DETAILS' : 'BILL DETAILS'}</h3>
+                    <p><strong>Receipt #:</strong> #{r.receiptNumber}</p>
+                    {r.billType === 'FACILITY' && r.roomNumber && (
+                      <p><strong>Room / Bed:</strong> {r.roomNumber}</p>
+                    )}
+                    {r.billType === 'FACILITY' && r.admissionDate && (
+                      <p><strong>Admission:</strong> {r.admissionDate}</p>
+                    )}
+                    {r.billType === 'FACILITY' && r.dischargeDate && (
+                      <p><strong>Discharge:</strong> {r.dischargeDate}</p>
+                    )}
+                    <p><strong>Bill Date:</strong> {formatDate(r.date)}</p>
                     <p><strong>Payment Mode:</strong> {r.paymentMethod || 'CASH'}</p>
                   </div>
                 </div>
@@ -447,16 +457,35 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
                 <table className="print-table">
                   <thead>
                     <tr>
-                      <th style={{ width: '40px' }}>Sr.</th>
+                      <th style={{ width: '35px' }}>Sr.</th>
                       <th>Description of Services</th>
-                      <th className="text-right">Amount</th>
+                      {r.billType === 'FACILITY' && <th style={{ width: '80px', textAlign: 'right' }}>Rate</th>}
+                      {r.billType === 'FACILITY' && <th style={{ width: '70px', textAlign: 'center' }}>Qty</th>}
+                      <th className="text-right" style={{ width: '90px' }}>Amount</th>
                     </tr>
                   </thead>
                   <tbody>
                     {r.items.map((item, index) => (
-                      <tr key={item.id}>
+                      <tr key={item.id || index}>
                         <td>{index + 1}</td>
-                        <td>{item.description}</td>
+                        <td>
+                          {item.category && item.category !== 'Other' && (
+                            <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600, marginRight: '5px' }}>
+                              [{item.category}]
+                            </span>
+                          )}
+                          {item.description}
+                        </td>
+                        {r.billType === 'FACILITY' && (
+                          <td className="text-right">
+                            {item.rate ? `₹${Number(item.rate).toFixed(2)}` : '-'}
+                          </td>
+                        )}
+                        {r.billType === 'FACILITY' && (
+                          <td className="text-center">
+                            {item.quantity ? `${item.quantity} ${item.unit || ''}` : '1'}
+                          </td>
+                        )}
                         <td className="text-right">
                           ₹{(r.paymentMethod === 'FREE' ? 0 : (Number(item.amount) || 0)).toFixed(2)}
                         </td>
@@ -464,8 +493,30 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
                     ))}
                   </tbody>
                   <tfoot>
+                    {r.billType === 'FACILITY' && ((r.advancePaid && r.advancePaid > 0) || (r.discount && r.discount > 0)) && (
+                      <>
+                        <tr>
+                          <th colSpan={4} className="text-right">Gross Subtotal:</th>
+                          <th className="text-right">
+                            ₹{(r.items.reduce((s, i) => s + (Number(i.amount) || 0), 0)).toFixed(2)}
+                          </th>
+                        </tr>
+                        {r.discount && r.discount > 0 ? (
+                          <tr>
+                            <th colSpan={4} className="text-right">Discount:</th>
+                            <th className="text-right">-₹{Number(r.discount).toFixed(2)}</th>
+                          </tr>
+                        ) : null}
+                        {r.advancePaid && r.advancePaid > 0 ? (
+                          <tr>
+                            <th colSpan={4} className="text-right">Less: Advance Deposit:</th>
+                            <th className="text-right">-₹{Number(r.advancePaid).toFixed(2)}</th>
+                          </tr>
+                        ) : null}
+                      </>
+                    )}
                     <tr>
-                      <th colSpan={2} className="text-right">Total Payable Amount:</th>
+                      <th colSpan={r.billType === 'FACILITY' ? 4 : 2} className="text-right">Total Payable Amount:</th>
                       <th className="text-right">₹{(Number(r.total) || 0).toFixed(2)}</th>
                     </tr>
                   </tfoot>
@@ -554,6 +605,12 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
                   <span className="meta-label">Patient Name</span>
                   <strong className="meta-value">{activePrintPrescription.patientName}</strong>
                 </div>
+                {activePrintPrescription.patientId && (
+                  <div>
+                    <span className="meta-label">Patient ID</span>
+                    <strong className="meta-value">{activePrintPrescription.patientId}</strong>
+                  </div>
+                )}
                 <div>
                   <span className="meta-label">Age / Gender</span>
                   <strong className="meta-value">{formatAgeGender(activePrintPrescription.patientAge, activePrintPrescription.patientGender)}</strong>

@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   LayoutDashboard, Users, Receipt, PlusCircle, Settings,
-  Calendar, FileText, Briefcase, LogOut, KeyRound, X, CalendarClock, ReceiptText
+  Calendar, FileText, Briefcase, LogOut, KeyRound, X, CalendarClock, ReceiptText, Bed
 } from 'lucide-react';
 
 export type Tab =
@@ -11,6 +11,7 @@ export type Tab =
   | 'expenses'
   | 'users'
   | 'new-receipt'
+  | 'facility-billing'
   | 'history'
   | 'prescriptions'
   | 'appointments'
@@ -94,6 +95,14 @@ const Sidebar: React.FC<SidebarProps> = ({
             </button>
 
             <button
+              className={`nav-item ${activeTab === 'facility-billing' ? 'active' : ''}`}
+              onClick={() => setActiveTab('facility-billing')}
+            >
+              <Bed size={18} />
+              <span>Facility Billing</span>
+            </button>
+
+            <button
               className={`nav-item ${activeTab === 'history' ? 'active' : ''}`}
               onClick={() => setActiveTab('history')}
             >
@@ -162,7 +171,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               onClick={() => setActiveTab('expenses')}
             >
               <ReceiptText size={18} />
-              <span>Bills &amp; Expenses</span>
+              <span>Clinic Expenses</span>
             </button>
 
             <button

@@ -80,11 +80,12 @@ export const FollowUpsTab: React.FC<FollowUpsTabProps> = ({
       // Search
       const q = searchQuery.toLowerCase().trim();
       if (q) {
+        const matchesPid = (fu.patientId || '').toLowerCase().includes(q);
         const matchesName = fu.patientName.toLowerCase().includes(q);
         const matchesPhone = (fu.patientPhone || '').includes(q);
         const matchesDoctor = fu.doctorName.toLowerCase().includes(q);
         const matchesNotes = (fu.notes || '').toLowerCase().includes(q);
-        if (!matchesName && !matchesPhone && !matchesDoctor && !matchesNotes) {
+        if (!matchesPid && !matchesName && !matchesPhone && !matchesDoctor && !matchesNotes) {
           return false;
         }
       }
@@ -365,11 +366,12 @@ export const FollowUpsTab: React.FC<FollowUpsTabProps> = ({
             <div className="search-bar" style={{ position: 'relative', width: '240px' }}>
               <Search
                 size={16}
-                style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}
+                className="search-icon"
+                style={{ position: 'absolute', left: '0.7rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}
               />
               <input
                 type="text"
-                placeholder="Search patient, phone, notes..."
+                placeholder="Search PID, name, phone, notes..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 className="sync-input-line"
@@ -443,6 +445,11 @@ export const FollowUpsTab: React.FC<FollowUpsTabProps> = ({
                         onMouseEnter={(e) => e.currentTarget.style.background = '#f1f5f9'}
                         onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                       >
+                        {fu.patientId && (
+                          <div style={{ marginBottom: '3px' }}>
+                            <span className="patient-id-badge">{fu.patientId}</span>
+                          </div>
+                        )}
                         <strong style={{ color: 'var(--text-main)', display: 'block', fontSize: '0.9rem' }}>{fu.patientName}</strong>
                         {fu.patientPhone ? (
                           <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '3px' }}>

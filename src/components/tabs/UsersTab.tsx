@@ -17,13 +17,14 @@ interface UsersTabProps {
 export const AVAILABLE_TABS = [
   { id: 'dashboard', label: 'Dashboard', desk: 'Clinical Desk' },
   { id: 'new-receipt', label: 'New Receipt', desk: 'Clinical Desk' },
+  { id: 'facility-billing', label: 'Facility Billing', desk: 'Clinical Desk' },
   { id: 'history', label: 'Receipt History', desk: 'Clinical Desk' },
   { id: 'prescriptions', label: 'Prescriptions (Rx)', desk: 'Clinical Desk' },
   { id: 'appointments', label: 'Appointments', desk: 'Clinical Desk' },
   { id: 'follow-ups', label: 'Follow-Ups', desk: 'Clinical Desk' },
   { id: 'doctors', label: 'Doctors Registry', desk: 'Management' },
   { id: 'services', label: 'Clinic Services', desk: 'Management' },
-  { id: 'expenses', label: 'Bills & Expenses', desk: 'Management' },
+  { id: 'expenses', label: 'Clinic Expenses', desk: 'Management' },
   { id: 'users', label: 'Profiles & Users', desk: 'Management' },
   { id: 'settings', label: 'Control Center', desk: 'Management' },
 ];

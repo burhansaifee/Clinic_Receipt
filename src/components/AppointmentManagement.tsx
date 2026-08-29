@@ -279,6 +279,7 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
     const query = searchQuery.toLowerCase();
     const matchesSearch =
       !query ||
+      (apt.patientId && apt.patientId.toLowerCase().includes(query)) ||
       apt.patientName.toLowerCase().includes(query) ||
       apt.patientPhone.includes(query) ||
       apt.doctorName.toLowerCase().includes(query) ||
@@ -422,7 +423,7 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
             <Search size={16} className="input-icon" />
             <input
               type="text"
-              placeholder="Search patient, phone, doctor..."
+              placeholder="Search by Patient ID, patient name, phone..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -486,6 +487,11 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
                 {filteredAppointments.map((apt) => (
                   <tr key={apt.id} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td style={{ padding: '1rem' }}>
+                      {apt.patientId && (
+                        <div style={{ marginBottom: '3px' }}>
+                          <span className="patient-id-badge">{apt.patientId}</span>
+                        </div>
+                      )}
                       <strong style={{ color: 'var(--text-main)', fontSize: '0.95rem' }}>{apt.patientName}</strong>
                       <span style={{ fontSize: '0.75rem', color: '#0ea5e9', marginLeft: '6px', fontWeight: 600 }}>({apt.id})</span>
                       <br />

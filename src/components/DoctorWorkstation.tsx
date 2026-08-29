@@ -96,6 +96,7 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
   // Prescription History filtered
   const filteredPrescriptions = prescriptions.filter(p => {
     const matchesSearch = !searchQuery ||
+      (p.patientId && p.patientId.toLowerCase().includes(searchQuery.toLowerCase())) ||
       p.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.patientPhone.includes(searchQuery) ||
       p.doctorName.toLowerCase().includes(searchQuery.toLowerCase());
@@ -203,6 +204,7 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
     const prescription: Prescription = {
       id: rxId,
       receiptId: selectedReceipt.id,
+      patientId: selectedReceipt.patientId,
       date: format(currentTime, 'yyyy-MM-dd HH:mm'),
       patientName: selectedReceipt.patientName,
       patientAge: selectedReceipt.patientAge,
@@ -226,6 +228,7 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
         id: `fu_${rxId}`,
         prescriptionId: rxId,
         receiptId: selectedReceipt.id,
+        patientId: selectedReceipt.patientId,
         patientName: selectedReceipt.patientName,
         patientPhone: selectedReceipt.patientPhone,
         patientAge: selectedReceipt.patientAge,
@@ -381,6 +384,7 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
                       <div key={r.id} className={`queue-card ${isPrescribed ? 'prescribed' : ''}`}>
                         <div className="card-top">
                           <div className="patient-meta">
+                            {r.patientId && <span className="patient-id-badge" style={{ marginBottom: '2px' }}>{r.patientId}</span>}
                             <h4>{r.patientName}</h4>
                             <span className="patient-specs">
                               {formatAgeGender(r.patientAge, r.patientGender)}
@@ -393,6 +397,7 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
 
                         <div className="card-middle">
                           <p><strong>Receipt No:</strong> #{r.receiptNumber}</p>
+                          {r.patientId && <p><strong>Patient ID:</strong> {r.patientId}</p>}
                           <p><strong>Phone:</strong> {r.patientPhone || 'N/A'}</p>
                           <p><strong>Doctor:</strong> {r.doctorName}</p>
                           <p><strong>Services:</strong> {r.items.map(i => i.description).join(', ')}</p>
@@ -474,7 +479,10 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
                       {filteredPrescriptions.map(p => (
                         <tr key={p.id}>
                           <td>{p.date}</td>
-                          <td><strong>{p.patientName}</strong><br/><span className="sub-text">{p.patientPhone}</span></td>
+                          <td>
+                            {p.patientId && <div style={{ marginBottom: '2px' }}><span className="patient-id-badge">{p.patientId}</span></div>}
+                            <strong>{p.patientName}</strong><br/><span className="sub-text">{p.patientPhone}</span>
+                          </td>
                           <td>{formatAgeGender(p.patientAge, p.patientGender)}</td>
                           <td>{p.doctorName}</td>
                           <td>{p.diagnosis || 'N/A'}</td>
@@ -525,7 +533,10 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
             <div className="writer-header">
               <div>
                 <h3>Write Medical Prescription (Rx)</h3>
-                <p>Patient: <strong>{selectedReceipt.patientName}</strong> ({formatAgeGender(selectedReceipt.patientAge, selectedReceipt.patientGender)})</p>
+                <p>
+                  {selectedReceipt.patientId && <span className="patient-id-badge" style={{ marginRight: '6px' }}>{selectedReceipt.patientId}</span>}
+                  Patient: <strong>{selectedReceipt.patientName}</strong> ({formatAgeGender(selectedReceipt.patientAge, selectedReceipt.patientGender)})
+                </p>
               </div>
               <button className="btn-close" onClick={() => setSelectedReceipt(null)}>×</button>
             </div>
@@ -780,10 +791,11 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
                   {(() => {
                     const history = prescriptions
                       .filter(p => {
+                        const pidMatch = selectedReceipt.patientId && p.patientId && p.patientId.toLowerCase() === selectedReceipt.patientId.toLowerCase();
                         const nameMatch = p.patientName.toLowerCase() === selectedReceipt.patientName.toLowerCase();
                         const phoneMatch = selectedReceipt.patientPhone && p.patientPhone === selectedReceipt.patientPhone;
                         const isCurrent = p.receiptId === selectedReceipt.id;
-                        return (nameMatch || phoneMatch) && !isCurrent;
+                        return (pidMatch || nameMatch || phoneMatch) && !isCurrent;
                       })
                       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
@@ -913,6 +925,12 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
                   <span className="meta-label">Patient Name</span>
                   <strong className="meta-value">{activePrintPrescription.patientName}</strong>
                 </div>
+                {activePrintPrescription.patientId && (
+                  <div>
+                    <span className="meta-label">Patient ID</span>
+                    <strong className="meta-value">{activePrintPrescription.patientId}</strong>
+                  </div>
+                )}
                 <div>
                   <span className="meta-label">Age / Gender</span>
                   <strong className="meta-value">{formatAgeGender(activePrintPrescription.patientAge, activePrintPrescription.patientGender)}</strong>

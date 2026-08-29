@@ -31,6 +31,7 @@ import SettingsTab from './components/tabs/SettingsTab';
 import { FollowUpsTab } from './components/tabs/FollowUpsTab';
 import ExpensesTab from './components/tabs/ExpensesTab';
 import { UsersTab } from './components/tabs/UsersTab';
+import FacilityBillingTab from './components/tabs/FacilityBillingTab';
 
 import type { Tab } from './components/layout/Sidebar';
 import type { FollowUp } from './lib/storage';
@@ -115,7 +116,7 @@ const MainApp: React.FC = () => {
     if (!currentUser) return [];
     const isUserAdmin = currentUser.toLowerCase() === 'admin';
     if (isUserAdmin) {
-      return ['dashboard', 'doctors', 'services', 'expenses', 'users', 'new-receipt', 'history', 'prescriptions', 'appointments', 'follow-ups', 'settings'];
+      return ['dashboard', 'doctors', 'services', 'expenses', 'users', 'new-receipt', 'facility-billing', 'history', 'prescriptions', 'appointments', 'follow-ups', 'settings'];
     }
     if (currentUserTabs && currentUserTabs.length > 0) {
       return currentUserTabs;
@@ -124,7 +125,7 @@ const MainApp: React.FC = () => {
       return ['doctors', 'services', 'expenses', 'users', 'settings'];
     }
     if (currentUserRole === 'reception') {
-      return ['dashboard', 'new-receipt', 'history', 'prescriptions', 'appointments', 'follow-ups'];
+      return ['dashboard', 'new-receipt', 'facility-billing', 'history', 'prescriptions', 'appointments', 'follow-ups'];
     }
     return [];
   }, [currentUser, currentUserRole, currentUserTabs]);
@@ -391,19 +392,21 @@ const MainApp: React.FC = () => {
             <h1 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.01em' }}>
               {activeTab === 'dashboard' && 'Executive Dashboard'}
               {activeTab === 'new-receipt' && 'Create Patient Receipt'}
+              {activeTab === 'facility-billing' && 'Inpatient & Facility Billing'}
               {activeTab === 'history' && 'Invoices & Billing History'}
               {activeTab === 'prescriptions' && 'Prescriptions (Rx) Registry'}
               {activeTab === 'appointments' && 'Appointment Booking Desk'}
               {activeTab === 'follow-ups' && 'Patient Follow-Up Tracker'}
               {activeTab === 'doctors' && 'Doctors Registry'}
               {activeTab === 'services' && 'Clinic Services Catalog'}
-              {activeTab === 'expenses' && 'Clinic Bills & Expenses'}
+              {activeTab === 'expenses' && 'Clinic Expenses'}
               {activeTab === 'users' && 'Clinic Profiles & Users'}
               {activeTab === 'settings' && 'System Control Center'}
             </h1>
             <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
               {activeTab === 'dashboard' && 'Overview of clinic operations, revenue, and live queue'}
               {activeTab === 'new-receipt' && 'Generate and print patient consultation invoices'}
+              {activeTab === 'facility-billing' && 'Itemized billing for room rent, oxygen supply, nursing care & procedures'}
               {activeTab === 'history' && 'Search, filter, reprint, and export financial records'}
               {activeTab === 'prescriptions' && 'Patient consultation records, diagnoses & medication charts'}
               {activeTab === 'appointments' && 'Manage WhatsApp & reception patient appointment requests'}
@@ -494,6 +497,16 @@ const MainApp: React.FC = () => {
               doctors={doctors}
               initialData={editingReceipt}
               onSave={() => { refreshData(); setEditingReceipt(null); setActiveTab('history'); }}
+              onPrintRequest={(receipt) => {
+                setReceiptsToPrint([receipt]);
+                setTimeout(() => window.print(), 150);
+              }}
+            />
+          )}
+          {activeTab === 'facility-billing' && (
+            <FacilityBillingTab
+              doctors={doctors}
+              onSave={() => { refreshData(); setActiveTab('history'); }}
               onPrintRequest={(receipt) => {
                 setReceiptsToPrint([receipt]);
                 setTimeout(() => window.print(), 150);

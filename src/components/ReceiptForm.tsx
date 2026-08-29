@@ -31,6 +31,7 @@ const parseAge = (ageStr: string) => {
 
 const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, onPrintRequest, initialData }) => {
   const toast = useToast();
+  const [patientId, setPatientId] = useState(initialData?.patientId || '');
   const [patientName, setPatientName] = useState(initialData?.patientName || '');
   const [ageYears, setAgeYears] = useState(() => {
     if (initialData?.patientAge) {
@@ -93,8 +94,15 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, onPrintReque
             setShowQrCode(doctors[0].showQrCodeOnReceipt);
           }
         }
+        if (!initialData?.patientId) {
+          const nextPid = await storage.getNextPatientId();
+          setPatientId(nextPid);
+        }
       } else {
         setReceiptNumber(initialData.receiptNumber);
+        if (initialData.patientId) {
+          setPatientId(initialData.patientId);
+        }
       }
       setAvailableServices(await storage.getServices());
     };
@@ -145,11 +153,11 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, onPrintReque
     
     // Auto-fill logic when phone is 10 digits
     if (value.length === 10) {
-      const allReceipts = await storage.getReceipts();
-      // Find the most recent receipt with this phone number
-      const match = allReceipts.slice().reverse().find(r => r.patientPhone === value);
-      
+      const match = await storage.findPatientByPhoneOrId(value);
       if (match) {
+        if (match.patientId) {
+          setPatientId(match.patientId);
+        }
         setPatientName(match.patientName);
         setPatientAge(match.patientAge);
         const { years, months } = parseAge(match.patientAge);
@@ -157,13 +165,31 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, onPrintReque
         setAgeMonths(months);
         setPatientGender(match.patientGender);
         setIsReturningPatient(true);
-        // Reset the indicator after a few seconds
-        setTimeout(() => setIsReturningPatient(false), 3000);
+        setTimeout(() => setIsReturningPatient(false), 4000);
       } else {
         setIsReturningPatient(false);
       }
     } else {
       setIsReturningPatient(false);
+    }
+  };
+
+  const handlePatientIdChange = async (value: string) => {
+    setPatientId(value);
+    const clean = value.trim();
+    if (clean.length >= 3) {
+      const match = await storage.findPatientByPhoneOrId(clean);
+      if (match && match.patientId && match.patientId.toLowerCase() === clean.toLowerCase()) {
+        setPatientName(match.patientName);
+        if (match.patientPhone) setPatientPhone(match.patientPhone);
+        setPatientAge(match.patientAge);
+        const { years, months } = parseAge(match.patientAge);
+        setAgeYears(years);
+        setAgeMonths(months);
+        setPatientGender(match.patientGender);
+        setIsReturningPatient(true);
+        setTimeout(() => setIsReturningPatient(false), 4000);
+      }
     }
   };
 
@@ -231,6 +257,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, onPrintReque
       id: isNew ? crypto.randomUUID() : initialData.id,
       receiptNumber,
       date: appointmentDate,
+      patientId: patientId.trim() || undefined,
       patientName,
       patientAge,
       patientGender,
@@ -289,6 +316,40 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, onPrintReque
                 <input value={patientName} onChange={e => setPatientName(e.target.value)} required placeholder="Full Name" />
               </div>
               <div className="form-group">
+                <label className="flex-label">
+                  <span>Patient ID (UHID)</span>
+                  {isReturningPatient && <span className="returning-badge">Returning Patient Found!</span>}
+                </label>
+                <input 
+                  value={patientId} 
+                  onChange={e => handlePatientIdChange(e.target.value)} 
+                  placeholder="e.g. PID-1001" 
+                  style={{ fontFamily: 'ui-monospace, SFMono-Regular, monospace', fontWeight: 600 }}
+                  title="Unique Patient ID (auto-generated or enter existing)"
+                />
+              </div>
+              <div className="form-group">
+                <label className="flex-label">
+                  Phone Number
+                </label>
+                <input 
+                  value={patientPhone} 
+                  onChange={e => handlePhoneChange(e.target.value)} 
+                  required 
+                  placeholder="10-digit Mobile" 
+                  type="tel"
+                  maxLength={10}
+                />
+              </div>
+              <div className="form-group">
+                <label>Gender</label>
+                <select value={patientGender} onChange={e => setPatientGender(e.target.value)}>
+                  <option>Male</option>
+                  <option>Female</option>
+                  <option>Other</option>
+                </select>
+              </div>
+              <div className="form-group" style={{ gridColumn: 'span 2' }}>
                 <label>Age</label>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
                   <input 
@@ -308,28 +369,6 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, onPrintReque
                     max="11"
                   />
                 </div>
-              </div>
-              <div className="form-group">
-                <label>Gender</label>
-                <select value={patientGender} onChange={e => setPatientGender(e.target.value)}>
-                  <option>Male</option>
-                  <option>Female</option>
-                  <option>Other</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="flex-label">
-                  Phone Number
-                  {isReturningPatient && <span className="returning-badge">Returning Patient Found!</span>}
-                </label>
-                <input 
-                  value={patientPhone} 
-                  onChange={e => handlePhoneChange(e.target.value)} 
-                  required 
-                  placeholder="10-digit Mobile" 
-                  type="tel"
-                  maxLength={10}
-                />
               </div>
             </div>
           </div>

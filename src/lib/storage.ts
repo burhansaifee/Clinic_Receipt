@@ -19,18 +19,71 @@ export interface ReceiptItem {
   id: string;
   description: string;
   amount: number;
+  category?: string;
+  rate?: number;
+  quantity?: number;
+  unit?: string;
 }
 
 export interface Service {
   id: string;
   name: string;
   amount: number;
+  category?: string;
+  unit?: string;
+  serviceType?: 'OPD' | 'FACILITY' | 'ALL';
 }
+
+export interface FacilityPreset {
+  category: 'Room Rent' | 'Oxygen' | 'Nursing' | 'Doctor Rounds' | 'Equipment' | 'Procedures' | 'Consumables';
+  name: string;
+  defaultRate: number;
+  defaultUnit: string;
+}
+
+export const FACILITY_PRESETS: FacilityPreset[] = [
+  // Room / Bed
+  { category: 'Room Rent', name: 'General Ward Bed', defaultRate: 800, defaultUnit: 'Days' },
+  { category: 'Room Rent', name: 'Semi-Private Room', defaultRate: 1500, defaultUnit: 'Days' },
+  { category: 'Room Rent', name: 'Deluxe Private Room', defaultRate: 2500, defaultUnit: 'Days' },
+  { category: 'Room Rent', name: 'ICU / Critical Care Bed', defaultRate: 4500, defaultUnit: 'Days' },
+  { category: 'Room Rent', name: 'Daycare Observation Bed', defaultRate: 600, defaultUnit: 'Hours' },
+
+  // Oxygen
+  { category: 'Oxygen', name: 'Medical Oxygen (Hourly)', defaultRate: 150, defaultUnit: 'Hours' },
+  { category: 'Oxygen', name: 'Medical Oxygen (24h Flow)', defaultRate: 1200, defaultUnit: 'Days' },
+  { category: 'Oxygen', name: 'Oxygen Cylinder Refill', defaultRate: 650, defaultUnit: 'Cylinders' },
+  { category: 'Oxygen', name: 'Oxygen Concentrator Usage', defaultRate: 400, defaultUnit: 'Days' },
+
+  // Nursing & Attendant
+  { category: 'Nursing', name: 'General Nursing Care (24h)', defaultRate: 500, defaultUnit: 'Days' },
+  { category: 'Nursing', name: 'Specialized ICU Nursing', defaultRate: 1000, defaultUnit: 'Days' },
+  { category: 'Nursing', name: 'Attendant / DDA Support', defaultRate: 300, defaultUnit: 'Days' },
+
+  // Doctor Rounds
+  { category: 'Doctor Rounds', name: 'In-Patient Doctor Daily Round', defaultRate: 600, defaultUnit: 'Visits' },
+  { category: 'Doctor Rounds', name: 'Specialist Consultant Visit', defaultRate: 1000, defaultUnit: 'Visits' },
+  { category: 'Doctor Rounds', name: 'Emergency RMO Call', defaultRate: 400, defaultUnit: 'Visits' },
+
+  // Equipment & Monitoring
+  { category: 'Equipment', name: 'Multipara Vital Monitor', defaultRate: 500, defaultUnit: 'Days' },
+  { category: 'Equipment', name: 'Pulse Oximeter & BP Monitor', defaultRate: 200, defaultUnit: 'Days' },
+  { category: 'Equipment', name: 'Syringe / Infusion Pump', defaultRate: 350, defaultUnit: 'Days' },
+  { category: 'Equipment', name: 'Nebulizer Therapy Session', defaultRate: 150, defaultUnit: 'Sessions' },
+
+  // Procedures & Care
+  { category: 'Procedures', name: 'IV Cannulation & Infusion Setup', defaultRate: 250, defaultUnit: 'Procedures' },
+  { category: 'Procedures', name: 'Surgical Wound Dressing', defaultRate: 300, defaultUnit: 'Procedures' },
+  { category: 'Procedures', name: 'Foley Catheterization', defaultRate: 400, defaultUnit: 'Procedures' },
+  { category: 'Procedures', name: 'Ryle Tube Insertion', defaultRate: 450, defaultUnit: 'Procedures' },
+  { category: 'Procedures', name: 'ECG Recording & Interpretation', defaultRate: 300, defaultUnit: 'Tests' },
+];
 
 export interface Receipt {
   id: string;
   receiptNumber: string;
   date: string;
+  patientId?: string;
   patientName: string;
   patientAge: string;
   patientGender: string;
@@ -43,6 +96,12 @@ export interface Receipt {
   appointmentId?: string;
   showQrCode?: boolean;
   qrCodeText?: string;
+  billType?: 'OPD' | 'FACILITY';
+  roomNumber?: string;
+  admissionDate?: string;
+  dischargeDate?: string;
+  advancePaid?: number;
+  discount?: number;
 }
 
 export interface PrescribedMedicine {
@@ -55,6 +114,7 @@ export interface PrescribedMedicine {
 export interface Prescription {
   id: string;
   receiptId?: string;
+  patientId?: string;
   date: string;
   patientName: string;
   patientAge: string;
@@ -76,6 +136,7 @@ export interface FollowUp {
   id: string;
   prescriptionId?: string;
   receiptId?: string;
+  patientId?: string;
   patientName: string;
   patientPhone?: string;
   patientAge?: string;
@@ -92,6 +153,7 @@ export type AppointmentStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLET
 
 export interface Appointment {
   id: string;
+  patientId?: string;
   patientName: string;
   patientPhone: string;
   patientAge?: string;
@@ -105,6 +167,18 @@ export interface Appointment {
   source?: 'WHATSAPP' | 'MANUAL';
   status: AppointmentStatus;
   createdAt: string;
+}
+
+export interface PatientHistorySummary {
+  receipts: Receipt[];
+  prescriptions: Prescription[];
+  appointments: Appointment[];
+  followUps: FollowUp[];
+  totalVisits: number;
+  totalSpent: number;
+  opdCount: number;
+  facilityCount: number;
+  prescriptionCount: number;
 }
 
 export type ExpenseCategory =
@@ -257,6 +331,22 @@ export const storage = {
         await window.database.saveReceipt(receipt);
         await window.database.setMetadata(key, nextNum);
     }
+
+    // Update last_patient_id metadata if a new PID number is higher
+    if (receipt.patientId) {
+      try {
+        const num = parseInt(receipt.patientId.replace(/\D/g, '')) || 0;
+        if (num > 0) {
+          const meta = await window.database?.getMetadata('last_patient_id');
+          const currentMax = meta?.value ? (parseInt(meta.value.replace(/\D/g, '')) || 0) : 0;
+          if (num > currentMax) {
+            await window.database?.setMetadata('last_patient_id', `PID-${num}`);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to update last_patient_id', err);
+      }
+    }
   },
 
   deleteReceipt: async (id: string) => {
@@ -273,6 +363,114 @@ export const storage = {
     const meta = await window.database.getMetadata(key);
     if (meta) return meta.value;
     return isFree ? 'F1001' : '1001';
+  },
+
+  getNextPatientId: async (): Promise<string> => {
+    try {
+      const meta = await window.database?.getMetadata('last_patient_id');
+      if (meta && meta.value) {
+        const num = parseInt(meta.value.replace(/\D/g, '')) || 1000;
+        return `PID-${num + 1}`;
+      }
+      const receipts = await storage.getReceipts({ limit: 50 });
+      let maxNum = 1000;
+      for (const r of receipts) {
+        if (r.patientId) {
+          const num = parseInt(r.patientId.replace(/\D/g, '')) || 0;
+          if (num > maxNum) maxNum = num;
+        }
+      }
+      return `PID-${maxNum + 1}`;
+    } catch {
+      return 'PID-1001';
+    }
+  },
+
+  findPatientByPhoneOrId: async (query: string): Promise<Receipt | null> => {
+    if (!query || !query.trim()) return null;
+    const q = query.trim().toLowerCase();
+    const receipts = await storage.getReceipts({ search: q, limit: 10 });
+    const exactMatch = receipts.find(r => 
+      (r.patientId && r.patientId.toLowerCase() === q) ||
+      (r.patientPhone && r.patientPhone.trim() === q)
+    );
+    return exactMatch || receipts[0] || null;
+  },
+
+  getPatientCompleteHistory: async (patient: {
+    patientId?: string;
+    patientPhone?: string;
+    patientName?: string;
+  }): Promise<PatientHistorySummary> => {
+    const pid = patient.patientId?.trim().toLowerCase();
+    const phone = patient.patientPhone?.trim();
+    const name = patient.patientName?.trim().toLowerCase();
+
+    // 1. Fetch receipts (search broadly then match specifically)
+    const searchTarget = pid || phone || name || '';
+    const allReceipts = await storage.getReceipts({ search: searchTarget, limit: 200 });
+    const matchedReceipts = allReceipts.filter(r => {
+      const matchPid = Boolean(pid && r.patientId && r.patientId.trim().toLowerCase() === pid);
+      const matchPhone = Boolean(phone && r.patientPhone && r.patientPhone.trim() === phone);
+      const matchName = Boolean(name && r.patientName && r.patientName.trim().toLowerCase() === name);
+      return matchPid || matchPhone || matchName;
+    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    // 2. Fetch prescriptions
+    let allPrescriptions: Prescription[] = [];
+    try {
+      allPrescriptions = await storage.getPrescriptions();
+    } catch (e) {
+      console.warn('Failed to load prescriptions for patient history', e);
+    }
+    const matchedPrescriptions = allPrescriptions.filter(p => {
+      const matchPid = Boolean(pid && p.patientId && p.patientId.trim().toLowerCase() === pid);
+      const matchPhone = Boolean(phone && p.patientPhone && p.patientPhone.trim() === phone);
+      const matchName = Boolean(name && p.patientName && p.patientName.trim().toLowerCase() === name);
+      return matchPid || matchPhone || matchName;
+    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    // 3. Fetch appointments
+    let allAppointments: Appointment[] = [];
+    try {
+      allAppointments = await storage.getAppointments();
+    } catch (e) {
+      console.warn('Failed to load appointments for patient history', e);
+    }
+    const matchedAppointments = allAppointments.filter(a => {
+      const matchPid = Boolean(pid && a.patientId && a.patientId.trim().toLowerCase() === pid);
+      const matchPhone = Boolean(phone && a.patientPhone && a.patientPhone.trim() === phone);
+      const matchName = Boolean(name && a.patientName && a.patientName.trim().toLowerCase() === name);
+      return matchPid || matchPhone || matchName;
+    }).sort((a, b) => new Date(b.appointmentDate).getTime() - new Date(a.appointmentDate).getTime());
+
+    // 4. Fetch follow-ups
+    let allFollowUps: FollowUp[] = [];
+    try {
+      allFollowUps = await storage.getFollowUps();
+    } catch (e) {
+      console.warn('Failed to load follow-ups for patient history', e);
+    }
+    const matchedFollowUps = allFollowUps.filter(f => {
+      const matchPid = Boolean(pid && f.patientId && f.patientId.trim().toLowerCase() === pid);
+      const matchPhone = Boolean(phone && f.patientPhone && f.patientPhone.trim() === phone);
+      const matchName = Boolean(name && f.patientName && f.patientName.trim().toLowerCase() === name);
+      return matchPid || matchPhone || matchName;
+    }).sort((a, b) => new Date(b.scheduledDate).getTime() - new Date(a.scheduledDate).getTime());
+
+    const totalSpent = matchedReceipts.reduce((sum, r) => sum + (Number(r.total) || 0), 0);
+
+    return {
+      receipts: matchedReceipts,
+      prescriptions: matchedPrescriptions,
+      appointments: matchedAppointments,
+      followUps: matchedFollowUps,
+      totalVisits: matchedReceipts.length,
+      totalSpent,
+      opdCount: matchedReceipts.filter(r => r.billType !== 'FACILITY').length,
+      facilityCount: matchedReceipts.filter(r => r.billType === 'FACILITY').length,
+      prescriptionCount: matchedPrescriptions.length
+    };
   },
 
   exportData: async () => {
@@ -334,11 +532,12 @@ export const storage = {
     const paidReceipts = receipts.filter(r => r.paymentMethod !== 'FREE');
     const freeReceipts = receipts.filter(r => r.paymentMethod === 'FREE');
 
-    const headers = ['Date', 'Receipt #', 'Patient Name', 'Phone No.', 'Doctor Name', 'Services', 'Total Amount (₹)', 'Payment Method'];
+    const headers = ['Date', 'Receipt #', 'Patient ID', 'Patient Name', 'Phone No.', 'Doctor Name', 'Services', 'Total Amount (₹)', 'Payment Method'];
     
     const formatRow = (r: any) => [
       r.date,
       `#${r.receiptNumber}`,
+      r.patientId || 'N/A',
       r.patientName,
       r.patientPhone || 'N/A',
       r.doctorName,

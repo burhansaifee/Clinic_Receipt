@@ -619,7 +619,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
               <div>Phone / WhatsApp: <span style={{ fontWeight: 600 }}>+91 9981188253, +91 9039010987</span></div>
               <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '0.4rem', textAlign: 'center' }}>
                 © 2026 Buvora • Developed by Badshah Computers<br/>
-                <span style={{ opacity: 0.8 }}>Version 3.0.4</span>
+                <span style={{ opacity: 0.8 }}>Version 4.0.1</span>
               </div>
             </div>
           </div>

@@ -58,13 +58,17 @@ export const database = {
       CREATE TABLE IF NOT EXISTS services (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
-        amount REAL NOT NULL
+        amount REAL NOT NULL,
+        category TEXT DEFAULT 'General',
+        unit TEXT DEFAULT 'Units',
+        serviceType TEXT DEFAULT 'OPD'
       );
 
       CREATE TABLE IF NOT EXISTS receipts (
         id TEXT PRIMARY KEY,
         receiptNumber TEXT NOT NULL,
         date TEXT NOT NULL,
+        patientId TEXT,
         patientName TEXT NOT NULL,
         patientAge TEXT,
         patientGender TEXT,
@@ -76,7 +80,13 @@ export const database = {
         paymentMethod TEXT DEFAULT 'CASH',
         appointmentId TEXT,
         showQrCode INTEGER DEFAULT 0,
-        qrCodeText TEXT
+        qrCodeText TEXT,
+        billType TEXT DEFAULT 'OPD',
+        roomNumber TEXT,
+        admissionDate TEXT,
+        dischargeDate TEXT,
+        advancePaid REAL DEFAULT 0,
+        discount REAL DEFAULT 0
       );
 
       CREATE TABLE IF NOT EXISTS receipt_items (
@@ -95,6 +105,7 @@ export const database = {
       CREATE TABLE IF NOT EXISTS prescriptions (
         id TEXT PRIMARY KEY,
         receiptId TEXT,
+        patientId TEXT,
         date TEXT NOT NULL,
         patientName TEXT NOT NULL,
         patientAge TEXT,
@@ -114,6 +125,7 @@ export const database = {
         id TEXT PRIMARY KEY,
         prescriptionId TEXT,
         receiptId TEXT,
+        patientId TEXT,
         patientName TEXT NOT NULL,
         patientPhone TEXT,
         patientAge TEXT,
@@ -128,6 +140,7 @@ export const database = {
 
       CREATE TABLE IF NOT EXISTS appointments (
         id TEXT PRIMARY KEY,
+        patientId TEXT,
         patientName TEXT NOT NULL,
         patientPhone TEXT NOT NULL,
         patientAge TEXT,
@@ -265,18 +278,148 @@ export const database = {
       } catch (e) {}
     }
 
+    // Patient ID Migrations
+    try {
+      db.exec('ALTER TABLE receipts ADD COLUMN patientId TEXT;');
+    } catch (e) {}
+    try {
+      db.exec('ALTER TABLE prescriptions ADD COLUMN patientId TEXT;');
+    } catch (e) {}
+    try {
+      db.exec('ALTER TABLE follow_ups ADD COLUMN patientId TEXT;');
+    } catch (e) {}
+    try {
+      db.exec('ALTER TABLE appointments ADD COLUMN patientId TEXT;');
+    } catch (e) {}
+
+    // Facility & Inpatient Billing Migrations
+    const facilityCols = [
+      "billType TEXT DEFAULT 'OPD'",
+      "roomNumber TEXT",
+      "admissionDate TEXT",
+      "dischargeDate TEXT",
+      "advancePaid REAL DEFAULT 0",
+      "discount REAL DEFAULT 0"
+    ];
+    for (const col of facilityCols) {
+      try {
+        db.exec(`ALTER TABLE receipts ADD COLUMN ${col};`);
+      } catch (e) {}
+    }
+
+    // Services table enhancement for Facility & Inpatient items
+    const serviceCols = [
+      "category TEXT DEFAULT 'General'",
+      "unit TEXT DEFAULT 'Units'",
+      "serviceType TEXT DEFAULT 'OPD'"
+    ];
+    for (const col of serviceCols) {
+      try {
+        db.exec(`ALTER TABLE services ADD COLUMN ${col};`);
+      } catch (e) {}
+    }
+
+    // Seed default facility items if none exist
+    try {
+      const facCount = (db.prepare("SELECT count(*) as count FROM services WHERE serviceType = 'FACILITY'").get() as any)?.count || 0;
+      if (facCount === 0) {
+        const seedStmt = db.prepare(`
+          INSERT INTO services (id, name, amount, category, unit, serviceType)
+          VALUES (@id, @name, @amount, @category, @unit, 'FACILITY')
+        `);
+        const defaultFacilityItems = [
+          { id: 'fac_s_1', name: 'General Ward Bed', amount: 800, category: 'Room Rent', unit: 'Days' },
+          { id: 'fac_s_2', name: 'Semi-Private Room', amount: 1500, category: 'Room Rent', unit: 'Days' },
+          { id: 'fac_s_3', name: 'Deluxe Private Room', amount: 2500, category: 'Room Rent', unit: 'Days' },
+          { id: 'fac_s_4', name: 'ICU / Critical Care Bed', amount: 4500, category: 'Room Rent', unit: 'Days' },
+          { id: 'fac_s_5', name: 'Daycare Observation Bed', amount: 600, category: 'Room Rent', unit: 'Hours' },
+          { id: 'fac_s_6', name: 'Medical Oxygen (Hourly)', amount: 150, category: 'Oxygen', unit: 'Hours' },
+          { id: 'fac_s_7', name: 'Medical Oxygen (24h Flow)', amount: 1200, category: 'Oxygen', unit: 'Days' },
+          { id: 'fac_s_8', name: 'Oxygen Cylinder Refill', amount: 650, category: 'Oxygen', unit: 'Cylinders' },
+          { id: 'fac_s_9', name: 'Oxygen Concentrator Usage', amount: 400, category: 'Oxygen', unit: 'Days' },
+          { id: 'fac_s_10', name: 'General Nursing Care (24h)', amount: 500, category: 'Nursing', unit: 'Days' },
+          { id: 'fac_s_11', name: 'Specialized ICU Nursing', amount: 1000, category: 'Nursing', unit: 'Days' },
+          { id: 'fac_s_12', name: 'Attendant / DDA Support', amount: 300, category: 'Nursing', unit: 'Days' },
+          { id: 'fac_s_13', name: 'In-Patient Doctor Daily Round', amount: 600, category: 'Doctor Rounds', unit: 'Visits' },
+          { id: 'fac_s_14', name: 'Specialist Consultant Visit', amount: 1000, category: 'Doctor Rounds', unit: 'Visits' },
+          { id: 'fac_s_15', name: 'Emergency RMO Call', amount: 400, category: 'Doctor Rounds', unit: 'Visits' },
+          { id: 'fac_s_16', name: 'Multipara Vital Monitor', amount: 500, category: 'Equipment', unit: 'Days' },
+          { id: 'fac_s_17', name: 'Pulse Oximeter & BP Monitor', amount: 200, category: 'Equipment', unit: 'Days' },
+          { id: 'fac_s_18', name: 'Syringe / Infusion Pump', amount: 350, category: 'Equipment', unit: 'Days' },
+          { id: 'fac_s_19', name: 'Nebulizer Therapy Session', amount: 150, category: 'Equipment', unit: 'Sessions' },
+          { id: 'fac_s_20', name: 'IV Cannulation & Infusion Setup', amount: 250, category: 'Procedures', unit: 'Procedures' },
+          { id: 'fac_s_21', name: 'Surgical Wound Dressing', amount: 300, category: 'Procedures', unit: 'Procedures' },
+          { id: 'fac_s_22', name: 'Foley Catheterization', amount: 400, category: 'Procedures', unit: 'Procedures' },
+          { id: 'fac_s_23', name: 'Ryle Tube Insertion', amount: 450, category: 'Procedures', unit: 'Procedures' },
+          { id: 'fac_s_24', name: 'ECG Recording & Interpretation', amount: 300, category: 'Procedures', unit: 'Tests' }
+        ];
+        const seedTxn = db.transaction(() => {
+          for (const item of defaultFacilityItems) {
+            seedStmt.run(item);
+          }
+        });
+        seedTxn();
+      }
+    } catch (e) {
+      console.error('[DB] Failed to seed facility services:', e);
+    }
+
+    // Backfill Patient IDs for existing records without one
+    try {
+      const receiptsWithoutPid = db.prepare("SELECT id, patientName, patientPhone FROM receipts WHERE patientId IS NULL OR patientId = ''").all() as any[];
+      if (receiptsWithoutPid.length > 0) {
+        const metaRow = db.prepare("SELECT value FROM metadata WHERE key = 'last_patient_id'").get() as { value?: string } | undefined;
+        let nextPidNum = metaRow?.value ? (parseInt(metaRow.value.replace(/\D/g, '')) || 1000) : 1000;
+
+        // Build mapping of known patients by phone or name
+        const existingWithPid = db.prepare("SELECT patientId, patientName, patientPhone FROM receipts WHERE patientId IS NOT NULL AND patientId != ''").all() as any[];
+        const patientMap = new Map<string, string>();
+        for (const r of existingWithPid) {
+          const key = (r.patientPhone && r.patientPhone.trim()) || (r.patientName && r.patientName.trim().toLowerCase());
+          if (key && !patientMap.has(key)) {
+            patientMap.set(key, r.patientId);
+          }
+        }
+
+        const updateReceiptPid = db.prepare("UPDATE receipts SET patientId = ? WHERE id = ?");
+        const updatePrescriptionPid = db.prepare("UPDATE prescriptions SET patientId = ? WHERE receiptId = ?");
+
+        const backfillTxn = db.transaction(() => {
+          for (const r of receiptsWithoutPid) {
+            const key = (r.patientPhone && r.patientPhone.trim()) || (r.patientName && r.patientName.trim().toLowerCase());
+            let pid = key ? patientMap.get(key) : undefined;
+            if (!pid) {
+              nextPidNum++;
+              pid = `PID-${nextPidNum}`;
+              if (key) patientMap.set(key, pid);
+            }
+            updateReceiptPid.run(pid, r.id);
+            updatePrescriptionPid.run(pid, r.id);
+          }
+          db.prepare("INSERT OR REPLACE INTO metadata (key, value) VALUES ('last_patient_id', ?)").run(`PID-${nextPidNum}`);
+        });
+        backfillTxn();
+      }
+    } catch (err) {
+      console.error('[DB] Failed to backfill patient IDs:', err);
+    }
+
     // Performance indexes (CREATE IF NOT EXISTS is idempotent)
     try {
       db.exec(`
         CREATE INDEX IF NOT EXISTS idx_receipts_date ON receipts(date);
         CREATE INDEX IF NOT EXISTS idx_receipts_doctorId ON receipts(doctorId);
+        CREATE INDEX IF NOT EXISTS idx_receipts_patientId ON receipts(patientId);
         CREATE INDEX IF NOT EXISTS idx_appointments_date ON appointments(appointmentDate);
         CREATE INDEX IF NOT EXISTS idx_appointments_status ON appointments(status);
+        CREATE INDEX IF NOT EXISTS idx_appointments_patientId ON appointments(patientId);
         CREATE INDEX IF NOT EXISTS idx_prescriptions_doctorId ON prescriptions(doctorId);
         CREATE INDEX IF NOT EXISTS idx_prescriptions_date ON prescriptions(date);
+        CREATE INDEX IF NOT EXISTS idx_prescriptions_patientId ON prescriptions(patientId);
         CREATE INDEX IF NOT EXISTS idx_follow_ups_date ON follow_ups(scheduledDate);
         CREATE INDEX IF NOT EXISTS idx_follow_ups_status ON follow_ups(status);
         CREATE INDEX IF NOT EXISTS idx_follow_ups_doctorId ON follow_ups(doctorId);
+        CREATE INDEX IF NOT EXISTS idx_follow_ups_patientId ON follow_ups(patientId);
       `);
     } catch (e) {
       console.error('[DB] Failed to create indexes:', e);
@@ -321,8 +464,18 @@ export const database = {
   // Services
   getServices: () => db.prepare('SELECT * FROM services').all(),
   saveService: (service: any) => {
-    const stmt = db.prepare('INSERT OR REPLACE INTO services (id, name, amount) VALUES (@id, @name, @amount)');
-    return stmt.run(service);
+    const stmt = db.prepare(`
+      INSERT OR REPLACE INTO services (id, name, amount, category, unit, serviceType)
+      VALUES (@id, @name, @amount, @category, @unit, @serviceType)
+    `);
+    return stmt.run({
+      id: service.id || crypto.randomUUID(),
+      name: service.name,
+      amount: typeof service.amount === 'number' ? service.amount : parseFloat(service.amount) || 0,
+      category: service.category || 'General',
+      unit: service.unit || 'Units',
+      serviceType: service.serviceType || 'OPD'
+    });
   },
   deleteService: (id: string) => db.prepare('DELETE FROM services WHERE id = ?').run(id),
 
@@ -341,7 +494,7 @@ export const database = {
       params.endDate = options.endDate;
     }
     if (options?.search) {
-      conditions.push("(patientName LIKE @search OR patientPhone LIKE @search OR receiptNumber LIKE @search)");
+      conditions.push("(patientName LIKE @search OR patientPhone LIKE @search OR receiptNumber LIKE @search OR patientId LIKE @search)");
       params.search = `%${options.search}%`;
     }
 
@@ -401,8 +554,16 @@ export const database = {
       }
     }
     const stmt = db.prepare(`
-      INSERT OR REPLACE INTO receipts (id, receiptNumber, date, patientName, patientAge, patientGender, patientPhone, doctorId, doctorName, items, total, paymentMethod, showQrCode, qrCodeText)
-      VALUES (@id, @receiptNumber, @date, @patientName, @patientAge, @patientGender, @patientPhone, @doctorId, @doctorName, @items, @total, @paymentMethod, @showQrCode, @qrCodeText)
+      INSERT OR REPLACE INTO receipts (
+        id, receiptNumber, date, patientId, patientName, patientAge, patientGender, patientPhone,
+        doctorId, doctorName, items, total, paymentMethod, showQrCode, qrCodeText,
+        billType, roomNumber, admissionDate, dischargeDate, advancePaid, discount
+      )
+      VALUES (
+        @id, @receiptNumber, @date, @patientId, @patientName, @patientAge, @patientGender, @patientPhone,
+        @doctorId, @doctorName, @items, @total, @paymentMethod, @showQrCode, @qrCodeText,
+        @billType, @roomNumber, @admissionDate, @dischargeDate, @advancePaid, @discount
+      )
     `);
     return stmt.run({
       patientAge: '',
@@ -412,10 +573,17 @@ export const database = {
       doctorName: '',
       paymentMethod: 'CASH',
       ...receipt,
+      patientId: receipt.patientId || '',
       patientName: String(receipt.patientName).substring(0, 500),
       items: JSON.stringify(receipt.items || []),
       showQrCode: receipt.showQrCode ? 1 : 0,
-      qrCodeText: receipt.qrCodeText || ''
+      qrCodeText: receipt.qrCodeText || '',
+      billType: receipt.billType || 'OPD',
+      roomNumber: receipt.roomNumber || '',
+      admissionDate: receipt.admissionDate || '',
+      dischargeDate: receipt.dischargeDate || '',
+      advancePaid: typeof receipt.advancePaid === 'number' ? receipt.advancePaid : 0,
+      discount: typeof receipt.discount === 'number' ? receipt.discount : 0
     });
   },
   updateReceipt: (receipt: any) => {
@@ -430,6 +598,7 @@ export const database = {
       UPDATE receipts SET 
         receiptNumber = @receiptNumber,
         date = @date,
+        patientId = @patientId,
         patientName = @patientName,
         patientAge = @patientAge,
         patientGender = @patientGender,
@@ -440,7 +609,13 @@ export const database = {
         total = @total,
         paymentMethod = @paymentMethod,
         showQrCode = @showQrCode,
-        qrCodeText = @qrCodeText
+        qrCodeText = @qrCodeText,
+        billType = @billType,
+        roomNumber = @roomNumber,
+        admissionDate = @admissionDate,
+        dischargeDate = @dischargeDate,
+        advancePaid = @advancePaid,
+        discount = @discount
       WHERE id = @id
     `);
     return stmt.run({
@@ -451,9 +626,16 @@ export const database = {
       doctorName: '',
       paymentMethod: 'CASH',
       ...receipt,
+      patientId: receipt.patientId || '',
       items: JSON.stringify(receipt.items || []),
       showQrCode: receipt.showQrCode ? 1 : 0,
-      qrCodeText: receipt.qrCodeText || ''
+      qrCodeText: receipt.qrCodeText || '',
+      billType: receipt.billType || 'OPD',
+      roomNumber: receipt.roomNumber || '',
+      admissionDate: receipt.admissionDate || '',
+      dischargeDate: receipt.dischargeDate || '',
+      advancePaid: typeof receipt.advancePaid === 'number' ? receipt.advancePaid : 0,
+      discount: typeof receipt.discount === 'number' ? receipt.discount : 0
     });
   },
   deleteReceipt: (id: string) => db.prepare('DELETE FROM receipts WHERE id = ?').run(id),
@@ -468,8 +650,16 @@ export const database = {
   // Atomic receipt save + number increment in a single transaction
   saveReceiptAtomic: (receipt: any, metaKey: string, nextNum: string) => {
     const saveStmt = db.prepare(`
-      INSERT OR REPLACE INTO receipts (id, receiptNumber, date, patientName, patientAge, patientGender, patientPhone, doctorId, doctorName, items, total, paymentMethod)
-      VALUES (@id, @receiptNumber, @date, @patientName, @patientAge, @patientGender, @patientPhone, @doctorId, @doctorName, @items, @total, @paymentMethod)
+      INSERT OR REPLACE INTO receipts (
+        id, receiptNumber, date, patientId, patientName, patientAge, patientGender, patientPhone,
+        doctorId, doctorName, items, total, paymentMethod,
+        billType, roomNumber, admissionDate, dischargeDate, advancePaid, discount
+      )
+      VALUES (
+        @id, @receiptNumber, @date, @patientId, @patientName, @patientAge, @patientGender, @patientPhone,
+        @doctorId, @doctorName, @items, @total, @paymentMethod,
+        @billType, @roomNumber, @admissionDate, @dischargeDate, @advancePaid, @discount
+      )
     `);
     const metaStmt = db.prepare('INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)');
     const txn = db.transaction(() => {
@@ -481,8 +671,15 @@ export const database = {
         doctorName: '',
         paymentMethod: 'CASH',
         ...receipt,
+        patientId: receipt.patientId || '',
         patientName: String(receipt.patientName).substring(0, 500),
-        items: JSON.stringify(receipt.items || [])
+        items: JSON.stringify(receipt.items || []),
+        billType: receipt.billType || 'OPD',
+        roomNumber: receipt.roomNumber || '',
+        admissionDate: receipt.admissionDate || '',
+        dischargeDate: receipt.dischargeDate || '',
+        advancePaid: typeof receipt.advancePaid === 'number' ? receipt.advancePaid : 0,
+        discount: typeof receipt.discount === 'number' ? receipt.discount : 0
       });
       metaStmt.run(metaKey, nextNum);
     });
@@ -528,8 +725,8 @@ export const database = {
   },
   savePrescription: (prescription: any) => {
     const stmt = db.prepare(`
-      INSERT OR REPLACE INTO prescriptions (id, receiptId, date, patientName, patientAge, patientGender, patientPhone, doctorId, doctorName, symptoms, diagnosis, medicines, notes, followUpDate, followUpNotes)
-      VALUES (@id, @receiptId, @date, @patientName, @patientAge, @patientGender, @patientPhone, @doctorId, @doctorName, @symptoms, @diagnosis, @medicines, @notes, @followUpDate, @followUpNotes)
+      INSERT OR REPLACE INTO prescriptions (id, receiptId, patientId, date, patientName, patientAge, patientGender, patientPhone, doctorId, doctorName, symptoms, diagnosis, medicines, notes, followUpDate, followUpNotes)
+      VALUES (@id, @receiptId, @patientId, @date, @patientName, @patientAge, @patientGender, @patientPhone, @doctorId, @doctorName, @symptoms, @diagnosis, @medicines, @notes, @followUpDate, @followUpNotes)
     `);
     return stmt.run({
       receiptId: '',
@@ -544,6 +741,7 @@ export const database = {
       followUpDate: '',
       followUpNotes: '',
       ...prescription,
+      patientId: prescription.patientId || '',
       medicines: JSON.stringify(prescription.medicines || [])
     });
   },
@@ -574,7 +772,7 @@ export const database = {
         params.endDate = options.endDate;
       }
       if (options?.search) {
-        query += ' AND (patientName LIKE @search OR patientPhone LIKE @search OR notes LIKE @search)';
+        query += ' AND (patientName LIKE @search OR patientPhone LIKE @search OR notes LIKE @search OR patientId LIKE @search)';
         params.search = `%${options.search}%`;
       }
       query += `
@@ -600,10 +798,10 @@ export const database = {
   saveFollowUp: (followUp: any) => {
     const stmt = db.prepare(`
       INSERT OR REPLACE INTO follow_ups (
-        id, prescriptionId, receiptId, patientName, patientPhone, patientAge, patientGender,
+        id, prescriptionId, receiptId, patientId, patientName, patientPhone, patientAge, patientGender,
         doctorId, doctorName, scheduledDate, notes, status, createdAt
       ) VALUES (
-        @id, @prescriptionId, @receiptId, @patientName, @patientPhone, @patientAge, @patientGender,
+        @id, @prescriptionId, @receiptId, @patientId, @patientName, @patientPhone, @patientAge, @patientGender,
         @doctorId, @doctorName, @scheduledDate, @notes, @status, @createdAt
       )
     `);
@@ -612,6 +810,7 @@ export const database = {
       id,
       prescriptionId: followUp.prescriptionId || '',
       receiptId: followUp.receiptId || '',
+      patientId: followUp.patientId || '',
       patientName: followUp.patientName || 'Unknown Patient',
       patientPhone: followUp.patientPhone || '',
       patientAge: followUp.patientAge || '',
@@ -656,11 +855,12 @@ export const database = {
     const aptDate = appointment.appointmentDate || appointment.date || new Date().toISOString().split('T')[0];
     const aptTime = appointment.appointmentTime || appointment.timeSlot || 'Standard Slot';
     const stmt = db.prepare(`
-      INSERT OR REPLACE INTO appointments (id, patientName, patientPhone, patientAge, patientGender, doctorId, doctorName, appointmentDate, appointmentTime, date, timeSlot, notes, rejectionReason, source, status, createdAt)
-      VALUES (@id, @patientName, @patientPhone, @patientAge, @patientGender, @doctorId, @doctorName, @appointmentDate, @appointmentTime, @date, @timeSlot, @notes, @rejectionReason, @source, @status, @createdAt)
+      INSERT OR REPLACE INTO appointments (id, patientId, patientName, patientPhone, patientAge, patientGender, doctorId, doctorName, appointmentDate, appointmentTime, date, timeSlot, notes, rejectionReason, source, status, createdAt)
+      VALUES (@id, @patientId, @patientName, @patientPhone, @patientAge, @patientGender, @doctorId, @doctorName, @appointmentDate, @appointmentTime, @date, @timeSlot, @notes, @rejectionReason, @source, @status, @createdAt)
     `);
     return stmt.run({
       id: appointment.id || ('APT-' + Math.floor(100000 + Math.random() * 900000)),
+      patientId: appointment.patientId || '',
       patientName: appointment.patientName || 'Unknown Patient',
       patientPhone: appointment.patientPhone || '',
       patientAge: appointment.patientAge || '30',

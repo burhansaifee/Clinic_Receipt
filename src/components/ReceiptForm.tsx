@@ -104,7 +104,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, onPrintReque
           setPatientId(initialData.patientId);
         }
       }
-      setAvailableServices(await storage.getServices());
+      setAvailableServices(await storage.getServices('OPD'));
     };
     init();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -198,7 +198,11 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, onPrintReque
     let autoAmount: number | null = null;
 
     if (field === 'description' && typeof value === 'string') {
-      const matched = availableServices.find(s => s.name.toLowerCase() === value.toLowerCase());
+      const matched = availableServices.find(s =>
+        s.serviceType !== 'FACILITY' &&
+        !s.id?.startsWith('fac_') &&
+        s.name.toLowerCase() === value.toLowerCase()
+      );
       if (matched) {
         autoAmount = matched.amount;
       }
@@ -267,6 +271,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, onPrintReque
       items,
       total,
       paymentMethod,
+      billType: 'OPD',
       appointmentId: initialData?.appointmentId,
       showQrCode,
       qrCodeText: showQrCode ? effectiveQrText : undefined,
@@ -545,6 +550,9 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, onPrintReque
             </div>
             {items.map(item => {
               const filteredServices = availableServices.filter(s =>
+                s.serviceType !== 'FACILITY' &&
+                !['Room Rent', 'Oxygen', 'Nursing', 'Doctor Rounds', 'Equipment'].includes(s.category || '') &&
+                !s.id?.startsWith('fac_') &&
                 s.name.toLowerCase().includes((item.description || '').toLowerCase())
               );
 

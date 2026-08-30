@@ -4,7 +4,7 @@ import {
   User, Activity, Sparkles, PlusCircle, X, QrCode
 } from 'lucide-react';
 import { format, differenceInCalendarDays } from 'date-fns';
-import type { Doctor, Receipt, ReceiptItem, Service } from '../../lib/storage';
+import type { Doctor, Receipt, ReceiptItem, Service, ClinicProfile } from '../../lib/storage';
 import { storage } from '../../lib/storage';
 import { sendReceiptViaWhatsApp } from '../../lib/whatsappReceipt';
 import { useToast } from '../ui/Toast';
@@ -86,14 +86,18 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
   const [showQrCode, setShowQrCode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Hospital / Clinic Identity & UPI for facility billing
+  const [clinicProfile, setClinicProfile] = useState<ClinicProfile>({
+    clinicName: 'Buvora Clinic',
+    clinicUpiId: '',
+    showFacilityQr: true
+  });
+  const [customHospitalUpi, setCustomHospitalUpi] = useState('');
+
   // Load facility services dynamically from SQLite database
   const loadFacilityServices = async () => {
     try {
-      const all = await storage.getServices();
-      const facilityOnly = all.filter(s =>
-        s.serviceType === 'FACILITY' ||
-        ['Room Rent', 'Oxygen', 'Nursing', 'Doctor Rounds', 'Equipment', 'Procedures', 'Consumables'].includes(s.category || '')
-      );
+      const facilityOnly = await storage.getServices('FACILITY');
       setFacilityServices(facilityOnly);
     } catch (err) {
       console.error('Failed to load clinic facility services', err);
@@ -109,6 +113,18 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
         const nextRec = await storage.getNextReceiptNumber(false);
         setReceiptNumber(nextRec);
         await loadFacilityServices();
+
+        // Load Clinic / Hospital profile & payment UPI QR
+        const profile = await storage.getClinicProfile();
+        setClinicProfile(profile);
+        if (profile.clinicUpiId) {
+          setCustomHospitalUpi(profile.clinicUpiId);
+        }
+        if (profile.showFacilityQr !== undefined) {
+          setShowQrCode(profile.showFacilityQr);
+        } else {
+          setShowQrCode(Boolean(profile.clinicUpiId || profile.clinicQrText));
+        }
       } catch (err) {
         console.error('Failed to initialize facility bill numbers', err);
       }
@@ -119,9 +135,6 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
   useEffect(() => {
     if (doctors.length > 0 && !selectedDoctorId) {
       setSelectedDoctorId(doctors[0].id);
-      if (doctors[0].showQrCodeOnReceipt) {
-        setShowQrCode(true);
-      }
     }
   }, [doctors, selectedDoctorId]);
 
@@ -298,25 +311,37 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
     setItems([]);
     setDiscount(0);
     setAdvancePaid(0);
-    setRemarks('');
+        setRemarks('');
     const nextPid = await storage.getNextPatientId();
     setPatientId(nextPid);
     const nextRec = await storage.getNextReceiptNumber(false);
     setReceiptNumber(nextRec);
   };
 
-  // Build the receipt payload
-  const buildReceiptObject = (): Receipt => {
+  // Build receipt payload
+  const buildReceiptData = (): Receipt => {
     const doctor = doctors.find(d => d.id === selectedDoctorId);
+    const effectiveHospitalUpi = customHospitalUpi.trim() || clinicProfile.clinicUpiId?.trim() || '';
+    const effectiveHospitalName = clinicProfile.clinicName || 'Hospital';
+
+    let generatedQr: string | undefined = undefined;
+    if (showQrCode) {
+      if (effectiveHospitalUpi) {
+        generatedQr = `upi://pay?pa=${encodeURIComponent(effectiveHospitalUpi)}&pn=${encodeURIComponent(effectiveHospitalName)}&am=${netBalance.toFixed(2)}&cu=INR`;
+      } else if (clinicProfile.clinicQrText) {
+        generatedQr = clinicProfile.clinicQrText;
+      }
+    }
+
     return {
       id: crypto.randomUUID(),
       receiptNumber,
-      date: `${dischargeDate} ${dischargeTime}`,
+      date: `${admissionDate} ${admissionTime}`,
       patientId: patientId.trim() || undefined,
-      patientName: patientName.trim() || 'Patient',
-      patientAge: patientAge.trim() || '30 Y',
-      patientGender,
-      patientPhone: patientPhone.trim(),
+      patientName: patientName.trim(),
+      patientAge: patientAge.trim() || undefined,
+      patientGender: patientGender || undefined,
+      patientPhone: patientPhone.trim() || undefined,
       doctorId: selectedDoctorId,
       doctorName: doctor?.name || 'Attending Physician',
       items,
@@ -329,7 +354,7 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
       advancePaid: Number(advancePaid) || 0,
       discount: Number(discount) || 0,
       showQrCode,
-      qrCodeText: showQrCode ? doctor?.upiId ? `upi://pay?pa=${encodeURIComponent(doctor.upiId)}&pn=${encodeURIComponent(doctor.name)}&am=${netBalance.toFixed(2)}&cu=INR` : undefined : undefined,
+      qrCodeText: generatedQr,
     };
   };
 
@@ -346,7 +371,7 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
 
     setIsSaving(true);
     try {
-      const receipt = buildReceiptObject();
+      const receipt = buildReceiptData();
       await storage.saveReceipt(receipt);
       toast(`Facility Bill #${receipt.receiptNumber} saved successfully!`, { type: 'success' });
 
@@ -376,7 +401,7 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
       return;
     }
     try {
-      const receipt = buildReceiptObject();
+      const receipt = buildReceiptData();
       const res = await sendReceiptViaWhatsApp(receipt);
       toast(res.message || 'WhatsApp bill sent successfully!', { type: 'success' });
     } catch (e: any) {
@@ -852,52 +877,106 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
             </div>
           </div>
 
+          {/* Hospital UPI QR Code toggle */}
           <div style={{
-            background: '#f8fafc',
-            border: '1px solid var(--border)',
-            borderRadius: '10px',
-            padding: '0.85rem 1rem',
+            background: 'white',
+            borderRadius: '12px',
+            border: showQrCode ? '1px solid #7dd3fc' : '1px solid var(--border)',
+            padding: '0.85rem 1.15rem',
             marginBottom: '1.25rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '1rem'
+            boxShadow: showQrCode ? '0 2px 8px rgba(2, 132, 199, 0.08)' : 'none'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <div style={{
-                background: showQrCode ? 'rgba(2, 132, 199, 0.1)' : '#f1f5f9',
-                color: showQrCode ? '#0284c7' : '#64748b',
-                padding: '0.5rem',
-                borderRadius: '8px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <QrCode size={20} />
-              </div>
-              <div>
-                <div style={{ fontSize: '0.875rem', fontWeight: 700, color: '#0f172a' }}>
-                  Print Dynamic UPI QR Code on Bill
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '1rem'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <div style={{
+                  background: showQrCode ? 'rgba(2, 132, 199, 0.1)' : '#f1f5f9',
+                  color: showQrCode ? '#0284c7' : '#64748b',
+                  padding: '0.5rem',
+                  borderRadius: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <QrCode size={20} />
                 </div>
-                <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
-                  Enables patient to scan and pay directly via GPay / PhonePe / Paytm
+                <div>
+                  <div style={{ fontSize: '0.875rem', fontWeight: 700, color: '#0f172a' }}>
+                    Print Hospital / Clinic UPI QR Code on Bill
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
+                    {(customHospitalUpi.trim() || clinicProfile.clinicUpiId) ? (
+                      <>
+                        Hospital UPI: <strong style={{ color: '#0284c7' }}>{customHospitalUpi.trim() || clinicProfile.clinicUpiId}</strong> ({clinicProfile.clinicName || 'Clinic'})
+                      </>
+                    ) : (
+                      <span style={{ color: '#d97706', fontWeight: 600 }}>
+                        ⚠️ No Hospital UPI configured. Enter below to print Hospital QR.
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
+
+              <label style={{ display: 'inline-flex', alignItems: 'center', cursor: 'pointer', margin: 0 }}>
+                <input
+                  type="checkbox"
+                  checked={showQrCode}
+                  onChange={e => setShowQrCode(e.target.checked)}
+                  style={{
+                    width: '20px',
+                    height: '20px',
+                    accentColor: 'var(--primary)',
+                    cursor: 'pointer'
+                  }}
+                />
+              </label>
             </div>
 
-            <label style={{ display: 'inline-flex', alignItems: 'center', cursor: 'pointer', margin: 0 }}>
-              <input
-                type="checkbox"
-                checked={showQrCode}
-                onChange={e => setShowQrCode(e.target.checked)}
-                style={{
-                  width: '20px',
-                  height: '20px',
-                  accentColor: 'var(--primary)',
-                  cursor: 'pointer'
-                }}
-              />
-            </label>
+            {/* Quick Hospital UPI override field */}
+            {showQrCode && (
+              <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px dashed #e2e8f0', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569' }}>
+                  Hospital VPA:
+                </span>
+                <input
+                  type="text"
+                  value={customHospitalUpi}
+                  onChange={e => setCustomHospitalUpi(e.target.value)}
+                  placeholder="e.g. clinicpay@upi or 9876543210@paytm"
+                  style={{
+                    flex: 1,
+                    minWidth: '220px',
+                    padding: '0.35rem 0.65rem',
+                    fontSize: '0.8rem',
+                    borderRadius: '6px',
+                    border: '1px solid #cbd5e1',
+                    background: '#f8fafc'
+                  }}
+                />
+                <button
+                  type="button"
+                  className="btn-secondary-sm"
+                  style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem' }}
+                  onClick={async () => {
+                    if (!customHospitalUpi.trim()) {
+                      toast('Please enter a valid Hospital UPI VPA', { type: 'error' });
+                      return;
+                    }
+                    await storage.saveClinicProfile({ clinicUpiId: customHospitalUpi.trim() });
+                    setClinicProfile(prev => ({ ...prev, clinicUpiId: customHospitalUpi.trim() }));
+                    toast('Hospital UPI saved as clinic default!', { type: 'success' });
+                  }}
+                  title="Save this UPI ID as clinic default for future bills"
+                >
+                  Save as Default
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="form-group">

@@ -16,7 +16,10 @@ import {
   Gift,
   Activity,
   ChevronRight,
-  CalendarClock
+  CalendarClock,
+  Bed,
+  Wallet,
+  Building2
 } from 'lucide-react';
 import { storage, type Doctor, type Receipt as ReceiptType, type Prescription, type ReceiptPaperType, type PrescriptionPaperType, type FollowUp } from '../lib/storage';
 import type { Tab } from './layout/Sidebar';
@@ -65,14 +68,26 @@ const Dashboard: React.FC<DashboardProps> = ({
     onlineCount: 0,
     freeCount: 0,
   });
+  const [facilityStats, setFacilityStats] = useState({
+    facilityCount: 0,
+    facilityRevenue: 0,
+    opdCount: 0,
+    opdRevenue: 0,
+  });
+  const [expenseStats, setExpenseStats] = useState({
+    totalExpenses: 0,
+    expenseCount: 0,
+  });
 
   useEffect(() => {
     let active = true;
     const loadDashboardData = async () => {
       try {
-        const [receipts, appointments] = await Promise.all([
-          storage.getReceipts({ limit: 5 }),
+        const [receipts, appointments, allReceipts, expenses] = await Promise.all([
+          storage.getReceipts({ limit: 6 }),
           storage.getAppointments(),
+          storage.getReceipts(),
+          storage.getExpenses(),
         ]);
 
         if (!active) return;
@@ -87,13 +102,22 @@ const Dashboard: React.FC<DashboardProps> = ({
         });
         setRecentAppointments(sortedApts.slice(0, 5));
 
-        // Calculate payment breakdown from all receipts
-        const allReceipts = await storage.getReceipts();
+        // Calculate payment and departmental breakdown from all receipts
         let cash = 0, online = 0, free = 0;
         let cashCount = 0, onlineCount = 0, freeCount = 0;
+        let facilityCount = 0, facilityRevenue = 0;
+        let opdCount = 0, opdRevenue = 0;
 
         (allReceipts || []).forEach((r) => {
           const amount = Number(r.total) || 0;
+          if (r.billType === 'FACILITY') {
+            facilityCount++;
+            facilityRevenue += amount;
+          } else {
+            opdCount++;
+            opdRevenue += amount;
+          }
+
           if (r.paymentMethod === 'ONLINE') {
             online += amount;
             onlineCount++;
@@ -107,6 +131,10 @@ const Dashboard: React.FC<DashboardProps> = ({
         });
 
         setPaymentBreakdown({ cash, online, free, cashCount, onlineCount, freeCount });
+        setFacilityStats({ facilityCount, facilityRevenue, opdCount, opdRevenue });
+
+        const totalExp = (expenses || []).reduce((s, e) => s + (Number(e.amount) || 0), 0);
+        setExpenseStats({ totalExpenses: totalExp, expenseCount: (expenses || []).length });
       } catch (err) {
         console.error('Failed to load dashboard extended data:', err);
       }
@@ -145,18 +173,26 @@ const Dashboard: React.FC<DashboardProps> = ({
             Welcome back, <span className="hero-user-highlight">{currentUser || 'Administrator'}</span>
           </h2>
           <p className="hero-subtitle" style={{ margin: 0 }}>
-            Clinic operational summary: {dashboardMetrics.totalReceipts} invoices generated, {prescriptions.length} medical prescriptions issued, and {doctors.length} active doctors on duty.
+            Clinic operational summary: {dashboardMetrics.totalReceipts} invoices ({facilityStats.opdCount} OPD • {facilityStats.facilityCount} Inpatient), {prescriptions.length} prescriptions issued, and {doctors.length} consulting doctors active.
           </p>
         </div>
 
-        <div className="hero-actions">
+        <div className="hero-actions" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
           <button className="btn-hero-primary" onClick={onNewReceipt}>
             <PlusCircle size={18} />
-            <span>Generate Receipt</span>
+            <span>Generate OPD Receipt</span>
+          </button>
+          <button
+            className="btn-hero-secondary"
+            onClick={() => onNavigate('facility-billing')}
+            style={{ background: 'rgba(126, 34, 206, 0.25)', borderColor: 'rgba(192, 132, 252, 0.4)', color: '#f3e8ff' }}
+          >
+            <Bed size={18} style={{ color: '#c084fc' }} />
+            <span>Inpatient &amp; Facility Bill</span>
           </button>
           <button className="btn-hero-secondary" onClick={() => onNavigate('appointments')}>
             <Calendar size={18} />
-            <span>Appointment Desk</span>
+            <span>Appointments</span>
             {pendingAppointmentsCount > 0 && (
               <span className="hero-alert-pill">{pendingAppointmentsCount}</span>
             )}
@@ -166,28 +202,72 @@ const Dashboard: React.FC<DashboardProps> = ({
 
       {/* ── 2. Key Operational Metrics (6-Card Executive Grid) ───────────────── */}
       <div className="stats-metric-grid">
-        {/* Card 1: Total Revenue */}
+        {/* Card 1: Total Gross Revenue */}
         <div className="stat-box stat-emerald">
           <div className="stat-box-top">
             <div className="stat-icon-wrapper emerald-icon">
               <DollarSign size={22} />
             </div>
-            <span className="stat-pill-trend positive">+₹ Net Income</span>
+            <span className="stat-pill-trend positive">+₹ Gross Income</span>
           </div>
           <div className="stat-box-body">
-            <span className="stat-label-text">Total Revenue</span>
+            <span className="stat-label-text">Gross Clinic Revenue</span>
             <div className="stat-number-text">₹{dashboardMetrics.totalRevenue.toLocaleString()}</div>
           </div>
           <div className="stat-footer-bar">
             <div className="stat-progress-bg">
               <div className="stat-progress-fill emerald-fill" style={{ width: '85%' }} />
             </div>
-            <span className="stat-subtext">Includes Cash &amp; Online UPI</span>
+            <span className="stat-subtext">OPD: ₹{facilityStats.opdRevenue.toLocaleString()} • Inpatient: ₹{facilityStats.facilityRevenue.toLocaleString()}</span>
           </div>
         </div>
 
-        {/* Card 2: Receipts Issued */}
-        <div className="stat-box stat-blue">
+        {/* Card 2: Clinic Expenses & Net Profit */}
+        <div className="stat-box stat-rose" onClick={() => onNavigate('expenses')} style={{ cursor: 'pointer' }}>
+          <div className="stat-box-top">
+            <div className="stat-icon-wrapper" style={{ background: '#ffe4e6', color: '#e11d48' }}>
+              <Wallet size={22} />
+            </div>
+            <span className="stat-pill-trend" style={{ background: '#f0fdf4', color: '#16a34a', borderColor: '#bbf7d0' }}>
+              Net: ₹{(dashboardMetrics.totalRevenue - expenseStats.totalExpenses).toLocaleString()}
+            </span>
+          </div>
+          <div className="stat-box-body">
+            <span className="stat-label-text">Clinic Expenses</span>
+            <div className="stat-number-text" style={{ color: '#e11d48' }}>₹{expenseStats.totalExpenses.toLocaleString()}</div>
+          </div>
+          <div className="stat-footer-bar">
+            <div className="stat-progress-bg">
+              <div className="stat-progress-fill" style={{ width: `${Math.min(100, (expenseStats.totalExpenses / (dashboardMetrics.totalRevenue || 1)) * 100)}%`, background: '#f43f5e' }} />
+            </div>
+            <span className="stat-subtext">{expenseStats.expenseCount} logged expenses • Click to view ledger</span>
+          </div>
+        </div>
+
+        {/* Card 3: Inpatient & Facility Care */}
+        <div className="stat-box stat-purple" onClick={() => onNavigate('facility-billing')} style={{ cursor: 'pointer' }}>
+          <div className="stat-box-top">
+            <div className="stat-icon-wrapper" style={{ background: '#f3e8ff', color: '#7e22ce' }}>
+              <Bed size={22} />
+            </div>
+            <span className="stat-pill-trend" style={{ background: '#f3e8ff', color: '#7e22ce', borderColor: '#e9d5ff' }}>
+              ₹{facilityStats.facilityRevenue.toLocaleString()}
+            </span>
+          </div>
+          <div className="stat-box-body">
+            <span className="stat-label-text">Inpatient &amp; Facility Stays</span>
+            <div className="stat-number-text">{facilityStats.facilityCount}</div>
+          </div>
+          <div className="stat-footer-bar">
+            <div className="stat-progress-bg">
+              <div className="stat-progress-fill purple-fill" style={{ width: `${Math.min(100, facilityStats.facilityCount * 15)}%` }} />
+            </div>
+            <span className="stat-subtext">Room, oxygen &amp; daycare admissions</span>
+          </div>
+        </div>
+
+        {/* Card 4: Total Receipts & Bills */}
+        <div className="stat-box stat-blue" onClick={() => onNavigate('history')} style={{ cursor: 'pointer' }}>
           <div className="stat-box-top">
             <div className="stat-icon-wrapper blue-icon">
               <ReceiptIcon size={22} />
@@ -195,18 +275,18 @@ const Dashboard: React.FC<DashboardProps> = ({
             <span className="stat-pill-trend info">Invoices</span>
           </div>
           <div className="stat-box-body">
-            <span className="stat-label-text">Total Receipts</span>
+            <span className="stat-label-text">Total Receipts &amp; Bills</span>
             <div className="stat-number-text">{dashboardMetrics.totalReceipts.toLocaleString()}</div>
           </div>
           <div className="stat-footer-bar">
             <div className="stat-progress-bg">
               <div className="stat-progress-fill blue-fill" style={{ width: '70%' }} />
             </div>
-            <span className="stat-subtext">Issued &amp; printed records</span>
+            <span className="stat-subtext">{facilityStats.opdCount} OPD • {facilityStats.facilityCount} Inpatient</span>
           </div>
         </div>
 
-        {/* Card 3: Avg Ticket Size */}
+        {/* Card 5: Avg Ticket Size */}
         <div className="stat-box stat-indigo">
           <div className="stat-box-top">
             <div className="stat-icon-wrapper indigo-icon">
@@ -397,6 +477,20 @@ const Dashboard: React.FC<DashboardProps> = ({
                 </div>
               </div>
             </div>
+
+            {/* Department Collections Breakdown */}
+            <div style={{ marginTop: '0.85rem', paddingTop: '0.85rem', borderTop: '1px solid var(--border)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              <div style={{ background: '#f8fafc', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600, display: 'block' }}>OPD CONSULTATIONS</span>
+                <strong style={{ fontSize: '1rem', color: '#0284c7' }}>₹{facilityStats.opdRevenue.toLocaleString()}</strong>
+                <span style={{ fontSize: '0.7rem', color: '#64748b', display: 'block' }}>{facilityStats.opdCount} visits</span>
+              </div>
+              <div style={{ background: '#faf5ff', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #e9d5ff' }}>
+                <span style={{ fontSize: '0.72rem', color: '#7e22ce', fontWeight: 600, display: 'block' }}>INPATIENT &amp; FACILITY</span>
+                <strong style={{ fontSize: '1rem', color: '#7e22ce' }}>₹{facilityStats.facilityRevenue.toLocaleString()}</strong>
+                <span style={{ fontSize: '0.7rem', color: '#64748b', display: 'block' }}>{facilityStats.facilityCount} stays / care</span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -429,13 +523,23 @@ const Dashboard: React.FC<DashboardProps> = ({
             ) : (
               recentReceipts.map((rec) => (
                 <div key={rec.id} className="activity-item">
-                  <div className="activity-left">
-                    <div className="activity-avatar">
+                  <div className="activity-left" onClick={() => onNavigate('history')} style={{ cursor: 'pointer' }}>
+                    <div className="activity-avatar" style={{ background: rec.billType === 'FACILITY' ? '#7e22ce' : undefined }}>
                       {rec.patientName ? rec.patientName.charAt(0).toUpperCase() : 'P'}
                     </div>
                     <div>
-                      <div className="activity-main-line">
+                      <div className="activity-main-line" style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                         <span className="activity-patient-name">{rec.patientName}</span>
+                        {rec.patientId && (
+                          <span style={{ fontSize: '0.68rem', background: '#e0f2fe', color: '#0369a1', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>
+                            {rec.patientId}
+                          </span>
+                        )}
+                        {rec.billType === 'FACILITY' && (
+                          <span style={{ fontSize: '0.65rem', background: '#f3e8ff', color: '#7e22ce', border: '1px solid #e9d5ff', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>
+                            FACILITY {rec.roomNumber ? `• ${rec.roomNumber}` : ''}
+                          </span>
+                        )}
                         <span className="activity-meta-tag">
                           {rec.patientAge ? `${rec.patientAge}y` : ''} {rec.patientGender ? `• ${rec.patientGender}` : ''}
                         </span>

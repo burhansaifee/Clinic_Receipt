@@ -22,6 +22,8 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
   
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
+  const [queueSearchQuery, setQueueSearchQuery] = useState('');
+  const [queueFilter, setQueueFilter] = useState<'WAITING' | 'PRESCRIBED' | 'ALL'>('WAITING');
   
   // Prescription Writer State
   const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
@@ -91,6 +93,36 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
     const isToday = r.date.startsWith(todayStr);
     const matchesDoctor = currentUserDoctorId ? r.doctorId === currentUserDoctorId : false;
     return isToday && matchesDoctor;
+  });
+
+  const isReceiptPrescribed = (r: Receipt) => {
+    return prescriptions.some(p => 
+      p.receiptId === r.id || 
+      (Boolean(p.patientId && r.patientId) && p.patientId === r.patientId && (p.date || '').startsWith(todayStr))
+    );
+  };
+
+  const waitingReceipts = todayReceipts.filter(r => !isReceiptPrescribed(r));
+  const prescribedReceipts = todayReceipts.filter(r => isReceiptPrescribed(r));
+
+  // Queue to display based on active filter
+  const baseQueueList = queueFilter === 'WAITING'
+    ? waitingReceipts
+    : queueFilter === 'PRESCRIBED'
+    ? prescribedReceipts
+    : todayReceipts;
+
+  // Filtered queue with live search
+  const filteredQueue = baseQueueList.filter(r => {
+    if (!queueSearchQuery.trim()) return true;
+    const q = queueSearchQuery.toLowerCase().trim();
+    return (
+      (r.patientName || '').toLowerCase().includes(q) ||
+      (r.patientPhone || '').includes(q) ||
+      (r.patientId || '').toLowerCase().includes(q) ||
+      (r.receiptNumber || '').toLowerCase().includes(q) ||
+      (r.items || []).some(item => (item.description || '').toLowerCase().includes(q))
+    );
   });
 
   // Prescription History filtered
@@ -324,8 +356,8 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
           >
             <ClipboardList size={20} />
             <span>Patient Queue</span>
-            {todayReceipts.length > 0 && (
-              <span className="queue-count">{todayReceipts.length}</span>
+            {waitingReceipts.length > 0 && (
+              <span className="queue-count">{waitingReceipts.length}</span>
             )}
           </button>
 
@@ -357,9 +389,135 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
         <main className="doctor-workspace-panel">
           {activeTab === 'queue' && (
             <div className="tab-pane">
-              <div className="panel-header">
-                <h3>Today's Patient Queue</h3>
-                <span className="date-badge">{format(new Date(), 'dd MMMM yyyy')}</span>
+              <div className="panel-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <h3 style={{ margin: 0 }}>Today's Patient Queue</h3>
+                  <span className="date-badge">{format(new Date(), 'dd MMMM yyyy')}</span>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  {/* Search Bar for Queue */}
+                  <div className="search-bar" style={{ width: '280px', position: 'relative' }}>
+                    <Search size={16} className="search-icon" />
+                    <input 
+                      type="text" 
+                      placeholder="Search queue (Name, Phone, PID)..." 
+                      value={queueSearchQuery}
+                      onChange={e => setQueueSearchQuery(e.target.value)}
+                    />
+                    {queueSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setQueueSearchQuery('')}
+                        style={{
+                          position: 'absolute',
+                          right: '10px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          background: 'none',
+                          border: 'none',
+                          color: '#94a3b8',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          padding: '2px'
+                        }}
+                        title="Clear Search"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Filter Pills: Waiting Only vs Prescribed vs All */}
+                  <div style={{ display: 'flex', background: '#f1f5f9', padding: '3px', borderRadius: '8px', border: '1px solid #e2e8f0', gap: '2px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setQueueFilter('WAITING')}
+                      style={{
+                        background: queueFilter === 'WAITING' ? '#0284c7' : 'transparent',
+                        color: queueFilter === 'WAITING' ? 'white' : '#64748b',
+                        border: 'none',
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        fontSize: '0.78rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px'
+                      }}
+                    >
+                      <span>Waiting Only</span>
+                      <span style={{
+                        background: queueFilter === 'WAITING' ? 'rgba(255,255,255,0.25)' : '#e2e8f0',
+                        color: queueFilter === 'WAITING' ? 'white' : '#475569',
+                        padding: '1px 6px',
+                        borderRadius: '9999px',
+                        fontSize: '0.7rem'
+                      }}>
+                        {waitingReceipts.length}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setQueueFilter('PRESCRIBED')}
+                      style={{
+                        background: queueFilter === 'PRESCRIBED' ? '#16a34a' : 'transparent',
+                        color: queueFilter === 'PRESCRIBED' ? 'white' : '#64748b',
+                        border: 'none',
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        fontSize: '0.78rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px'
+                      }}
+                    >
+                      <span>Prescribed</span>
+                      <span style={{
+                        background: queueFilter === 'PRESCRIBED' ? 'rgba(255,255,255,0.25)' : '#e2e8f0',
+                        color: queueFilter === 'PRESCRIBED' ? 'white' : '#475569',
+                        padding: '1px 6px',
+                        borderRadius: '9999px',
+                        fontSize: '0.7rem'
+                      }}>
+                        {prescribedReceipts.length}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setQueueFilter('ALL')}
+                      style={{
+                        background: queueFilter === 'ALL' ? '#475569' : 'transparent',
+                        color: queueFilter === 'ALL' ? 'white' : '#64748b',
+                        border: 'none',
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        fontSize: '0.78rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px'
+                      }}
+                    >
+                      <span>All</span>
+                      <span style={{
+                        background: queueFilter === 'ALL' ? 'rgba(255,255,255,0.25)' : '#e2e8f0',
+                        color: queueFilter === 'ALL' ? 'white' : '#475569',
+                        padding: '1px 6px',
+                        borderRadius: '9999px',
+                        fontSize: '0.7rem'
+                      }}>
+                        {todayReceipts.length}
+                      </span>
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {!currentUserDoctorId ? (
@@ -376,10 +534,40 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
                   <h4>Queue Cleared!</h4>
                   <p className="text-muted">No patient visits registered for this profile today.</p>
                 </div>
+              ) : queueFilter === 'WAITING' && waitingReceipts.length === 0 ? (
+                <div className="empty-slate">
+                  <CheckCircle size={48} className="text-success animate-pulse" />
+                  <h4>All Waiting Patients Prescribed!</h4>
+                  <p className="text-muted">
+                    All {prescribedReceipts.length} registered patient(s) for today have been attended to and prescribed.
+                  </p>
+                  {prescribedReceipts.length > 0 && (
+                    <button 
+                      className="btn-secondary" 
+                      onClick={() => setQueueFilter('PRESCRIBED')} 
+                      style={{ marginTop: '1rem' }}
+                    >
+                      View Prescribed Patients ({prescribedReceipts.length})
+                    </button>
+                  )}
+                </div>
+              ) : filteredQueue.length === 0 ? (
+                <div className="empty-slate">
+                  <Search size={44} className="text-muted" />
+                  <h4>No matching patients</h4>
+                  <p className="text-muted">No patients found matching "{queueSearchQuery}".</p>
+                  <button 
+                    className="btn-secondary" 
+                    onClick={() => setQueueSearchQuery('')} 
+                    style={{ marginTop: '0.75rem' }}
+                  >
+                    Clear Search
+                  </button>
+                </div>
               ) : (
                 <div className="queue-grid">
-                  {todayReceipts.map(r => {
-                    const isPrescribed = prescriptions.some(p => p.receiptId === r.id);
+                  {filteredQueue.map(r => {
+                    const isPrescribed = isReceiptPrescribed(r);
                     return (
                       <div key={r.id} className={`queue-card ${isPrescribed ? 'prescribed' : ''}`}>
                         <div className="card-top">

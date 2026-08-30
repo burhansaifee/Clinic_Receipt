@@ -2,11 +2,13 @@ import React from 'react';
 import { format } from 'date-fns';
 import {
   formatAgeGender,
+  storage,
   type Doctor,
   type Receipt,
   type Prescription,
   type ReceiptPaperType,
-  type PrescriptionPaperType
+  type PrescriptionPaperType,
+  type ClinicProfile
 } from '../../lib/storage';
 import QRCodeImage from '../ui/QRCodeImage';
 
@@ -59,6 +61,15 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
   receiptPaperType = 'A5',
   prescriptionPaperType = 'A4',
 }) => {
+  const [clinicProfile, setClinicProfile] = React.useState<ClinicProfile>({
+    clinicName: 'Buvora Clinic',
+    clinicUpiId: '',
+  });
+
+  React.useEffect(() => {
+    storage.getClinicProfile().then(setClinicProfile);
+  }, [receiptsToPrint]);
+
   const formatDate = (dateStr: string) => {
     try {
       return format(new Date(dateStr.split(' ')[0]), 'dd MMM yyyy');
@@ -384,9 +395,25 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
             const customTopMargin = doctorObj ? doctorObj.customTopMargin || 0 : 0;
             const customBottomMargin = doctorObj ? doctorObj.customBottomMargin || 0 : 0;
 
-            const qrPayload = r.qrCodeText || (r.showQrCode && doctorObj?.upiId ? `upi://pay?pa=${encodeURIComponent(doctorObj.upiId)}&pn=${encodeURIComponent(doctorObj.name)}&am=${(Number(r.total) || 0).toFixed(2)}&cu=INR` : (r.showQrCode ? doctorObj?.qrCodeText : ''));
+            const isFacility = r.billType === 'FACILITY';
+            let qrPayload = r.qrCodeText;
+            if (!qrPayload && r.showQrCode) {
+              if (isFacility) {
+                if (clinicProfile.clinicUpiId) {
+                  qrPayload = `upi://pay?pa=${encodeURIComponent(clinicProfile.clinicUpiId)}&pn=${encodeURIComponent(clinicProfile.clinicName || 'Hospital')}&am=${(Number(r.total) || 0).toFixed(2)}&cu=INR`;
+                } else if (clinicProfile.clinicQrText) {
+                  qrPayload = clinicProfile.clinicQrText;
+                }
+              } else {
+                if (doctorObj?.upiId) {
+                  qrPayload = `upi://pay?pa=${encodeURIComponent(doctorObj.upiId)}&pn=${encodeURIComponent(doctorObj.name)}&am=${(Number(r.total) || 0).toFixed(2)}&cu=INR`;
+                } else if (doctorObj?.qrCodeText) {
+                  qrPayload = doctorObj.qrCodeText;
+                }
+              }
+            }
 
-            let displayUpiId = doctorObj?.upiId || '';
+            let displayUpiId = isFacility ? (clinicProfile.clinicUpiId || '') : (doctorObj?.upiId || '');
             if (qrPayload && qrPayload.startsWith('upi://')) {
               try {
                 const match = qrPayload.match(/[?&]pa=([^&]+)/);
@@ -412,15 +439,29 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
                 {printHeader && (
                   <div className="print-header">
                     <div className="print-clinic-branding">
-                      <h2>{doctorObj?.name || r.doctorName}</h2>
+                      <h2>{isFacility ? (clinicProfile.clinicName || 'HOSPITAL & CLINIC CARE') : (doctorObj?.name || r.doctorName)}</h2>
                       <p className="clinic-tagline" style={{ marginTop: '5px', whiteSpace: 'pre-wrap' }}>
-                        {doctorObj?.address || ''}
+                        {isFacility ? (clinicProfile.clinicAddress || 'Inpatient & Specialized Facility Care') : (doctorObj?.address || '')}
                       </p>
                     </div>
                     <div className="print-clinic-address">
-                      <p style={{ fontWeight: 700 }}>{doctorObj?.qualifications || ''}</p>
-                      <p>{doctorObj?.specialization || ''}</p>
-                      <p>Ph: {doctorObj?.phone || ''}</p>
+                      {isFacility ? (
+                        <>
+                          <p style={{ fontWeight: 700 }}>IN-PATIENT &amp; FACILITY DEPARTMENT</p>
+                          <p>Attending: Dr. {doctorObj?.name || r.doctorName}</p>
+                          {clinicProfile.clinicPhone ? (
+                            <p>Ph: {clinicProfile.clinicPhone}</p>
+                          ) : doctorObj?.phone ? (
+                            <p>Ph: {doctorObj.phone}</p>
+                          ) : null}
+                        </>
+                      ) : (
+                        <>
+                          <p style={{ fontWeight: 700 }}>{doctorObj?.qualifications || ''}</p>
+                          <p>{doctorObj?.specialization || ''}</p>
+                          <p>Ph: {doctorObj?.phone || ''}</p>
+                        </>
+                      )}
                     </div>
                   </div>
                 )}
@@ -531,11 +572,13 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
                     <QRCodeImage text={qrPayload} size={receiptPaperType === 'Thermal58' ? 50 : receiptPaperType === 'Thermal80' ? 65 : 75} />
                     <div>
                       <p style={{ margin: 0, fontWeight: 700, fontSize: '0.85rem', color: '#0f172a' }}>
-                        {isUpi ? 'Scan to Pay via UPI' : 'Scan QR Code'}
+                        {isUpi
+                          ? (isFacility ? 'Scan to Pay Hospital / Clinic via UPI' : 'Scan to Pay via UPI')
+                          : 'Scan QR Code'}
                       </p>
                       {isUpi && displayUpiId && (
                         <p style={{ margin: '2px 0 0 0', fontSize: '0.75rem', color: '#334155' }}>
-                          UPI VPA: <strong>{displayUpiId}</strong>
+                          {isFacility ? 'Hospital / Clinic UPI: ' : 'UPI VPA: '}<strong>{displayUpiId}</strong>
                         </p>
                       )}
                       <p style={{ margin: '2px 0 0 0', fontSize: '0.7rem', color: '#64748b' }}>

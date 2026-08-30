@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import {
   DownloadCloud, UploadCloud, FileText, MessageSquare, Bot,
-  Server, ShieldCheck, FolderOpen, Copy, CheckCircle, Printer, Building2
+  Server, ShieldCheck, FolderOpen, Copy, CheckCircle, Printer, Building2,
+  QrCode,
 } from 'lucide-react';
 import { storage, type ReceiptPaperType, type PrescriptionPaperType } from '../../lib/storage';
 import { useConfirm } from '../ui/ConfirmDialog';
@@ -66,18 +67,30 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
   const [clientSecretInput, setClientSecretInput] = useState(networkSecret || '');
   const [secretSaved, setSecretSaved] = useState(false);
   const [globalClinicName, setGlobalClinicName] = useState('Buvora Clinic');
+  const [clinicUpiId, setClinicUpiId] = useState('');
+  const [clinicPhone, setClinicPhone] = useState('');
+  const [clinicAddress, setClinicAddress] = useState('');
+  const [showFacilityQr, setShowFacilityQr] = useState(true);
 
   React.useEffect(() => {
-    if (window.database) {
-      window.database.getMetadata('clinic_name').then((res: any) => {
-        if (res && res.value) setGlobalClinicName(res.value);
-      });
-    }
+    storage.getClinicProfile().then(profile => {
+      setGlobalClinicName(profile.clinicName || 'Buvora Clinic');
+      setClinicUpiId(profile.clinicUpiId || '');
+      setClinicPhone(profile.clinicPhone || '');
+      setClinicAddress(profile.clinicAddress || '');
+      setShowFacilityQr(profile.showFacilityQr ?? true);
+    });
   }, []);
 
-  const handleSaveClinicName = async () => {
-    await window.database.setMetadata('clinic_name', globalClinicName.trim());
-    toast('Global Clinic Identity saved successfully!', { type: 'success' });
+  const handleSaveClinicProfile = async () => {
+    await storage.saveClinicProfile({
+      clinicName: globalClinicName.trim(),
+      clinicUpiId: clinicUpiId.trim(),
+      clinicPhone: clinicPhone.trim(),
+      clinicAddress: clinicAddress.trim(),
+      showFacilityQr
+    });
+    toast('Clinic & Hospital Profile saved successfully!', { type: 'success' });
   };
   const confirm = useConfirm();
   const toast = useToast();
@@ -192,7 +205,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
             {botStatus?.status === 'QR_READY' && botStatus?.qrCodeDataUrl && (
               <div style={{ textAlign: 'center', background: '#f0f9ff', padding: '0.85rem', borderRadius: '12px', border: '1px solid #bae6fd' }}>
                 <p style={{ fontSize: '0.78rem', color: '#0369a1', fontWeight: 700, marginBottom: '0.4rem' }}>
-                  📱 Scan with WhatsApp (Settings → Linked Devices)
+                  Scan with WhatsApp (Settings → Linked Devices)
                 </p>
                 <img src={botStatus.qrCodeDataUrl} alt="WhatsApp QR Code" style={{ width: '160px', height: '160px', margin: '0 auto', display: 'block', borderRadius: '8px', border: '2px solid white', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }} />
                 <p style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '0.4rem', margin: 0 }}>
@@ -274,26 +287,88 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
           </div>
         </div>
 
-        {/* ROW 1 — CARD 2: Global Clinic Identity */}
+        {/* ROW 1 — CARD 2: Global Clinic & Hospital Identity */}
         <div className="card control-card" style={{ padding: '1.6rem', gap: '0.85rem', height: '100%' }}>
           <div className="card-icon-header inline">
             <div className="header-icon" style={{ background: 'linear-gradient(135deg, #0ea5e9, #0284c7)', color: 'white', boxShadow: '0 4px 10px rgba(14,165,233,0.3)' }}>
               <Building2 size={18} />
             </div>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>Global Clinic Identity</h3>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>Global Clinic & Hospital Identity</h3>
           </div>
-          <p className="card-description">Set the clinic name used in automated WhatsApp messages and receipts.</p>
+          <p className="card-description">Configure your Clinic/Hospital branding and dedicated payment UPI QR for Inpatient & Facility bills.</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', marginTop: 'auto', paddingTop: '0.5rem' }}>
-            <input
-              type="text"
-              value={globalClinicName}
-              onChange={e => setGlobalClinicName(e.target.value)}
-              placeholder="e.g. LifeCare Medical Center"
-              className="sync-input-line"
-              style={{ margin: 0, padding: '0.6rem 0.85rem', fontSize: '0.9rem', fontWeight: 600, background: '#f8fafc' }}
-            />
-            <button type="button" className="btn-primary-sm" onClick={handleSaveClinicName} style={{ alignSelf: 'flex-start', padding: '0.5rem 1.25rem', fontSize: '0.85rem' }}>
-              Save Clinic Name
+            <div>
+              <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: '3px' }}>
+                Clinic / Hospital Name
+              </label>
+              <input
+                type="text"
+                value={globalClinicName}
+                onChange={e => setGlobalClinicName(e.target.value)}
+                placeholder="e.g. LifeCare Hospital & Medical Center"
+                className="sync-input-line"
+                style={{ margin: 0, padding: '0.5rem 0.75rem', fontSize: '0.85rem', fontWeight: 600, background: '#f8fafc', width: '100%' }}
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#0284c7', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '3px' }}>
+                <QrCode size={13} /> Hospital UPI ID (For Inpatient / Facility Bills)
+              </label>
+              <input
+                type="text"
+                value={clinicUpiId}
+                onChange={e => setClinicUpiId(e.target.value)}
+                placeholder="e.g. lifecarehospital@upi or 9876543210@paytm"
+                className="sync-input-line"
+                style={{ margin: 0, padding: '0.5rem 0.75rem', fontSize: '0.85rem', fontWeight: 600, background: '#f0f9ff', borderColor: '#bae6fd', width: '100%' }}
+              />
+              <span style={{ fontSize: '0.68rem', color: '#64748b', marginTop: '2px', display: 'block' }}>
+                Used on Facility & Room billing QR codes so payments go directly to hospital account.
+              </span>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              <div>
+                <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: '3px' }}>
+                  Hospital Phone
+                </label>
+                <input
+                  type="text"
+                  value={clinicPhone}
+                  onChange={e => setClinicPhone(e.target.value)}
+                  placeholder="e.g. +91 9876543210"
+                  className="sync-input-line"
+                  style={{ margin: 0, padding: '0.5rem 0.75rem', fontSize: '0.82rem', background: '#f8fafc', width: '100%' }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: '3px' }}>
+                  Hospital City / Address
+                </label>
+                <input
+                  type="text"
+                  value={clinicAddress}
+                  onChange={e => setClinicAddress(e.target.value)}
+                  placeholder="e.g. Civil Lines, Main Road"
+                  className="sync-input-line"
+                  style={{ margin: 0, padding: '0.5rem 0.75rem', fontSize: '0.82rem', background: '#f8fafc', width: '100%' }}
+                />
+              </div>
+            </div>
+
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.8rem', color: '#334155', fontWeight: 600, marginTop: '2px' }}>
+              <input
+                type="checkbox"
+                checked={showFacilityQr}
+                onChange={e => setShowFacilityQr(e.target.checked)}
+                style={{ width: '16px', height: '16px', accentColor: 'var(--primary)' }}
+              />
+              Auto-enable Hospital UPI QR code on Facility bills
+            </label>
+
+            <button type="button" className="btn-primary-sm" onClick={handleSaveClinicProfile} style={{ alignSelf: 'flex-start', padding: '0.5rem 1.25rem', fontSize: '0.85rem', marginTop: '4px' }}>
+              Save Clinic &amp; Hospital Profile
             </button>
           </div>
         </div>

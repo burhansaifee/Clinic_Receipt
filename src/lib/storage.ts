@@ -217,6 +217,15 @@ export interface PrintPaperSettings {
   prescriptionPaper: PrescriptionPaperType;
 }
 
+export interface ClinicProfile {
+  clinicName: string;
+  clinicPhone?: string;
+  clinicAddress?: string;
+  clinicUpiId?: string;
+  clinicQrText?: string;
+  showFacilityQr?: boolean;
+}
+
 const STORAGE_KEYS = {
   DOCTORS: 'clinic_doctors',
   SERVICES: 'clinic_services',
@@ -225,7 +234,13 @@ const STORAGE_KEYS = {
   LAST_FREE_RECEIPT_NUM: 'clinic_last_free_receipt_num',
   SQLITE_MIGRATED: 'clinic_sqlite_migrated',
   RECEIPT_PAPER: 'clinic_receipt_paper_type',
-  PRESCRIPTION_PAPER: 'clinic_prescription_paper_type'
+  PRESCRIPTION_PAPER: 'clinic_prescription_paper_type',
+  CLINIC_NAME: 'clinic_profile_name',
+  CLINIC_PHONE: 'clinic_profile_phone',
+  CLINIC_ADDRESS: 'clinic_profile_address',
+  CLINIC_UPI_ID: 'clinic_profile_upi_id',
+  CLINIC_QR_TEXT: 'clinic_profile_qr_text',
+  CLINIC_FACILITY_SHOW_QR: 'clinic_facility_show_qr',
 };
 
 export const storage = {
@@ -297,8 +312,25 @@ export const storage = {
     await window.database.deleteDoctor(id);
   },
 
-  getServices: async (): Promise<Service[]> => {
-    return window.database.getServices();
+  getServices: async (type?: 'OPD' | 'FACILITY' | 'ALL'): Promise<Service[]> => {
+    const all: Service[] = (await window.database.getServices()) || [];
+    if (!type || type === 'ALL') return all;
+    const facilityCategories = ['Room Rent', 'Oxygen', 'Nursing', 'Doctor Rounds', 'Equipment'];
+    if (type === 'OPD') {
+      return all.filter(s =>
+        s.serviceType !== 'FACILITY' &&
+        (!s.category || !facilityCategories.includes(s.category)) &&
+        !s.id?.startsWith('fac_')
+      );
+    }
+    if (type === 'FACILITY') {
+      return all.filter(s =>
+        s.serviceType === 'FACILITY' ||
+        (s.category && facilityCategories.includes(s.category)) ||
+        s.id?.startsWith('fac_')
+      );
+    }
+    return all;
   },
 
   saveService: async (service: Service) => {
@@ -683,6 +715,102 @@ export const storage = {
         } catch (err) {
           console.warn('Failed to save prescription paper metadata:', err);
         }
+      }
+    }
+  },
+
+  getClinicProfile: async (): Promise<ClinicProfile> => {
+    let clinicName = localStorage.getItem(STORAGE_KEYS.CLINIC_NAME) || 'Buvora Clinic';
+    let clinicPhone = localStorage.getItem(STORAGE_KEYS.CLINIC_PHONE) || '';
+    let clinicAddress = localStorage.getItem(STORAGE_KEYS.CLINIC_ADDRESS) || '';
+    let clinicUpiId = localStorage.getItem(STORAGE_KEYS.CLINIC_UPI_ID) || '';
+    let clinicQrText = localStorage.getItem(STORAGE_KEYS.CLINIC_QR_TEXT) || '';
+    let showFacilityQr = localStorage.getItem(STORAGE_KEYS.CLINIC_FACILITY_SHOW_QR) !== 'false';
+
+    if (window.database?.getMetadata) {
+      try {
+        const [nameMeta, phoneMeta, addrMeta, upiMeta, qrMeta, showQrMeta] = await Promise.all([
+          window.database.getMetadata('clinic_name'),
+          window.database.getMetadata('clinic_phone'),
+          window.database.getMetadata('clinic_address'),
+          window.database.getMetadata('clinic_upi_id'),
+          window.database.getMetadata('clinic_qr_text'),
+          window.database.getMetadata('clinic_facility_show_qr'),
+        ]);
+        if (nameMeta?.value) {
+          clinicName = nameMeta.value;
+          localStorage.setItem(STORAGE_KEYS.CLINIC_NAME, clinicName);
+        }
+        if (phoneMeta?.value) {
+          clinicPhone = phoneMeta.value;
+          localStorage.setItem(STORAGE_KEYS.CLINIC_PHONE, clinicPhone);
+        }
+        if (addrMeta?.value) {
+          clinicAddress = addrMeta.value;
+          localStorage.setItem(STORAGE_KEYS.CLINIC_ADDRESS, clinicAddress);
+        }
+        if (upiMeta?.value) {
+          clinicUpiId = upiMeta.value;
+          localStorage.setItem(STORAGE_KEYS.CLINIC_UPI_ID, clinicUpiId);
+        }
+        if (qrMeta?.value) {
+          clinicQrText = qrMeta.value;
+          localStorage.setItem(STORAGE_KEYS.CLINIC_QR_TEXT, clinicQrText);
+        }
+        if (showQrMeta?.value !== undefined && showQrMeta?.value !== null) {
+          showFacilityQr = showQrMeta.value === 'true';
+          localStorage.setItem(STORAGE_KEYS.CLINIC_FACILITY_SHOW_QR, String(showFacilityQr));
+        }
+      } catch (err) {
+        console.warn('Failed to fetch clinic profile metadata:', err);
+      }
+    }
+
+    return {
+      clinicName,
+      clinicPhone,
+      clinicAddress,
+      clinicUpiId,
+      clinicQrText,
+      showFacilityQr
+    };
+  },
+
+  saveClinicProfile: async (profile: Partial<ClinicProfile>): Promise<void> => {
+    if (profile.clinicName !== undefined) {
+      localStorage.setItem(STORAGE_KEYS.CLINIC_NAME, profile.clinicName);
+      if (window.database?.setMetadata) {
+        try { await window.database.setMetadata('clinic_name', profile.clinicName); } catch (e) { console.warn(e); }
+      }
+    }
+    if (profile.clinicPhone !== undefined) {
+      localStorage.setItem(STORAGE_KEYS.CLINIC_PHONE, profile.clinicPhone);
+      if (window.database?.setMetadata) {
+        try { await window.database.setMetadata('clinic_phone', profile.clinicPhone); } catch (e) { console.warn(e); }
+      }
+    }
+    if (profile.clinicAddress !== undefined) {
+      localStorage.setItem(STORAGE_KEYS.CLINIC_ADDRESS, profile.clinicAddress);
+      if (window.database?.setMetadata) {
+        try { await window.database.setMetadata('clinic_address', profile.clinicAddress); } catch (e) { console.warn(e); }
+      }
+    }
+    if (profile.clinicUpiId !== undefined) {
+      localStorage.setItem(STORAGE_KEYS.CLINIC_UPI_ID, profile.clinicUpiId);
+      if (window.database?.setMetadata) {
+        try { await window.database.setMetadata('clinic_upi_id', profile.clinicUpiId); } catch (e) { console.warn(e); }
+      }
+    }
+    if (profile.clinicQrText !== undefined) {
+      localStorage.setItem(STORAGE_KEYS.CLINIC_QR_TEXT, profile.clinicQrText);
+      if (window.database?.setMetadata) {
+        try { await window.database.setMetadata('clinic_qr_text', profile.clinicQrText); } catch (e) { console.warn(e); }
+      }
+    }
+    if (profile.showFacilityQr !== undefined) {
+      localStorage.setItem(STORAGE_KEYS.CLINIC_FACILITY_SHOW_QR, String(profile.showFacilityQr));
+      if (window.database?.setMetadata) {
+        try { await window.database.setMetadata('clinic_facility_show_qr', String(profile.showFacilityQr)); } catch (e) { console.warn(e); }
       }
     }
   },

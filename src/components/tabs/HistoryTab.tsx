@@ -761,7 +761,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
                       <span>• Gender: <strong>{selectedPatientForHistory.patientGender}</strong></span>
                     )}
                     {selectedPatientForHistory.patientPhone && (
-                      <span>• Phone: <strong>📱 {selectedPatientForHistory.patientPhone}</strong></span>
+                      <span>• Phone: <strong> {selectedPatientForHistory.patientPhone}</strong></span>
                     )}
                   </div>
                 </div>

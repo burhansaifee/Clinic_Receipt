@@ -899,7 +899,7 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
               )}
 
               <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b', background: '#f1f5f9', padding: '0.6rem 0.8rem', borderRadius: '8px' }}>
-                📱 <strong>WhatsApp Notice:</strong> Upon confirmation, a WhatsApp message containing this rejection reason will automatically be sent to <strong>{rejectingApt.patientPhone || 'the patient'}</strong>.
+                <strong>WhatsApp Notice:</strong> Upon confirmation, a WhatsApp message containing this rejection reason will automatically be sent to <strong>{rejectingApt.patientPhone || 'the patient'}</strong>.
               </p>
             </div>
 

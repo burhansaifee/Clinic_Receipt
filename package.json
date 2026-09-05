@@ -7,8 +7,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build && electron-builder",
-    "build:mac": "xattr -cr public src 2>/dev/null || true && tsc -b && vite build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --dir && hdiutil create -volname \"Buvora\" -srcfolder release/3.0.4/mac-arm64 -ov -format UDZO release/3.0.4/Buvora-3.0.4-mac.dmg",
-    "build:win": "tsc -b && vite build && electron-builder --windows",
+    "build:mac": "node scripts/prepare-native.js mac && (xattr -cr public src 2>/dev/null || true) && tsc -b && vite build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --dir && hdiutil create -volname \"Buvora\" -srcfolder release/3.0.4/mac-arm64 -ov -format UDZO release/3.0.4/Buvora-3.0.4-mac.dmg",
+    "build:win": "node scripts/prepare-native.js win && tsc -b && vite build && electron-builder --windows ; node scripts/prepare-native.js mac",
     "postinstall": "npx @electron/rebuild -f -w better-sqlite3",
     "key": "node scripts/generate-key.js",
     "test": "ELECTRON_RUN_AS_NODE=1 electron --experimental-test-module-mocks --test tests/*.test.js",

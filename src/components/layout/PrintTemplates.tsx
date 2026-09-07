@@ -11,6 +11,7 @@ import {
   type ClinicProfile
 } from '../../lib/storage';
 import QRCodeImage from '../ui/QRCodeImage';
+import '../../styles/components/PrintTemplates.css';
 
 interface PrintTemplatesProps {
   receiptsToPrint: Receipt[];
@@ -101,291 +102,6 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
         ` }} />
       )}
 
-      {/* Specific CSS overrides for thermal and compact paper types */}
-      <style>{`
-        /* Thermal 80mm Layout */
-        #receipt-print-template.paper-thermal80 .print-container {
-          max-width: 76mm !important;
-          margin: 0 auto !important;
-          padding: 4px 6px !important;
-          font-size: 8.5pt !important;
-          line-height: 1.25 !important;
-        }
-        #receipt-print-template.paper-thermal80 .print-header {
-          display: flex !important;
-          flex-direction: column !important;
-          align-items: center !important;
-          text-align: center !important;
-          gap: 4px !important;
-          padding-bottom: 6px !important;
-          margin-bottom: 8px !important;
-          border-bottom: 1px dashed black !important;
-        }
-        #receipt-print-template.paper-thermal80 .print-clinic-branding h2 {
-          font-size: 13pt !important;
-          text-align: center !important;
-        }
-        #receipt-print-template.paper-thermal80 .clinic-tagline {
-          font-size: 8pt !important;
-          text-align: center !important;
-        }
-        #receipt-print-template.paper-thermal80 .print-clinic-address {
-          text-align: center !important;
-          font-size: 8pt !important;
-        }
-        #receipt-print-template.paper-thermal80 .print-title-bar {
-          padding: 3px 6px !important;
-          margin-bottom: 8px !important;
-        }
-        #receipt-print-template.paper-thermal80 .print-title-bar h1 {
-          font-size: 9pt !important;
-          letter-spacing: 1px !important;
-        }
-        #receipt-print-template.paper-thermal80 .print-info-grid {
-          grid-template-columns: 1fr !important;
-          gap: 6px !important;
-          margin-bottom: 8px !important;
-        }
-        #receipt-print-template.paper-thermal80 .info-section h3 {
-          font-size: 8pt !important;
-          margin-bottom: 2px !important;
-        }
-        #receipt-print-template.paper-thermal80 .info-section p {
-          font-size: 8pt !important;
-          margin: 1px 0 !important;
-        }
-        #receipt-print-template.paper-thermal80 .print-table {
-          margin-bottom: 8px !important;
-        }
-        #receipt-print-template.paper-thermal80 .print-table th,
-        #receipt-print-template.paper-thermal80 .print-table td {
-          padding: 3px 4px !important;
-          font-size: 8pt !important;
-        }
-        #receipt-print-template.paper-thermal80 .print-table tfoot th {
-          padding: 4px !important;
-          font-size: 8.5pt !important;
-        }
-        #receipt-print-template.paper-thermal80 .print-amount-words {
-          font-size: 7.5pt !important;
-          margin-bottom: 10px !important;
-        }
-        #receipt-print-template.paper-thermal80 .print-qr-section {
-          padding: 6px 8px !important;
-          margin-top: 8px !important;
-        }
-        #receipt-print-template.paper-thermal80 .print-footer {
-          display: flex !important;
-          flex-direction: column !important;
-          align-items: center !important;
-          gap: 10px !important;
-          text-align: center !important;
-          margin-top: 8px !important;
-        }
-        #receipt-print-template.paper-thermal80 .terms {
-          text-align: center !important;
-          font-size: 7.5pt !important;
-        }
-        #receipt-print-template.paper-thermal80 .signature-box {
-          margin: 0 auto !important;
-        }
-        #receipt-print-template.paper-thermal80 .signature-line {
-          width: 110px !important;
-        }
-        #receipt-print-template.paper-thermal80 .software-branding {
-          font-size: 6.5pt !important;
-          margin-top: 8px !important;
-        }
-
-        /* Thermal 58mm Layout */
-        #receipt-print-template.paper-thermal58 .print-container {
-          max-width: 52mm !important;
-          margin: 0 auto !important;
-          padding: 2px 4px !important;
-          font-size: 7.5pt !important;
-          line-height: 1.2 !important;
-        }
-        #receipt-print-template.paper-thermal58 .print-header {
-          display: flex !important;
-          flex-direction: column !important;
-          align-items: center !important;
-          text-align: center !important;
-          gap: 2px !important;
-          padding-bottom: 4px !important;
-          margin-bottom: 6px !important;
-          border-bottom: 1px dashed black !important;
-        }
-        #receipt-print-template.paper-thermal58 .print-clinic-branding h2 {
-          font-size: 11pt !important;
-          text-align: center !important;
-        }
-        #receipt-print-template.paper-thermal58 .clinic-tagline {
-          font-size: 7pt !important;
-          text-align: center !important;
-        }
-        #receipt-print-template.paper-thermal58 .print-clinic-address {
-          text-align: center !important;
-          font-size: 7pt !important;
-        }
-        #receipt-print-template.paper-thermal58 .print-title-bar {
-          padding: 2px 4px !important;
-          margin-bottom: 6px !important;
-        }
-        #receipt-print-template.paper-thermal58 .print-title-bar h1 {
-          font-size: 8pt !important;
-          letter-spacing: 0.5px !important;
-        }
-        #receipt-print-template.paper-thermal58 .print-info-grid {
-          grid-template-columns: 1fr !important;
-          gap: 4px !important;
-          margin-bottom: 6px !important;
-        }
-        #receipt-print-template.paper-thermal58 .info-section h3 {
-          font-size: 7.5pt !important;
-          margin-bottom: 2px !important;
-        }
-        #receipt-print-template.paper-thermal58 .info-section p {
-          font-size: 7.5pt !important;
-          margin: 1px 0 !important;
-        }
-        #receipt-print-template.paper-thermal58 .print-table {
-          margin-bottom: 6px !important;
-        }
-        #receipt-print-template.paper-thermal58 .print-table th,
-        #receipt-print-template.paper-thermal58 .print-table td {
-          padding: 2px 3px !important;
-          font-size: 7pt !important;
-        }
-        #receipt-print-template.paper-thermal58 .print-table tfoot th {
-          padding: 3px !important;
-          font-size: 7.5pt !important;
-        }
-        #receipt-print-template.paper-thermal58 .print-amount-words {
-          font-size: 7pt !important;
-          margin-bottom: 6px !important;
-        }
-        #receipt-print-template.paper-thermal58 .print-qr-section {
-          padding: 4px 6px !important;
-          margin-top: 6px !important;
-        }
-        #receipt-print-template.paper-thermal58 .print-footer {
-          display: flex !important;
-          flex-direction: column !important;
-          align-items: center !important;
-          gap: 8px !important;
-          text-align: center !important;
-          margin-top: 6px !important;
-        }
-        #receipt-print-template.paper-thermal58 .terms {
-          text-align: center !important;
-          font-size: 6.5pt !important;
-        }
-        #receipt-print-template.paper-thermal58 .signature-box {
-          margin: 0 auto !important;
-        }
-        #receipt-print-template.paper-thermal58 .signature-line {
-          width: 90px !important;
-        }
-        #receipt-print-template.paper-thermal58 .software-branding {
-          font-size: 6pt !important;
-          margin-top: 6px !important;
-        }
-
-        /* A6 Receipt Layout */
-        #receipt-print-template.paper-a6 .print-container {
-          padding: 10px 14px !important;
-          font-size: 8.5pt !important;
-          line-height: 1.3 !important;
-        }
-        #receipt-print-template.paper-a6 .print-header {
-          padding-bottom: 6px !important;
-          margin-bottom: 8px !important;
-        }
-        #receipt-print-template.paper-a6 .print-clinic-branding h2 {
-          font-size: 13pt !important;
-        }
-        #receipt-print-template.paper-a6 .print-info-grid {
-          gap: 8px !important;
-          margin-bottom: 8px !important;
-        }
-        #receipt-print-template.paper-a6 .print-table th,
-        #receipt-print-template.paper-a6 .print-table td {
-          padding: 3px 5px !important;
-          font-size: 8.5pt !important;
-        }
-        #receipt-print-template.paper-a6 .print-table tfoot th {
-          padding: 4px 6px !important;
-          font-size: 9pt !important;
-        }
-
-        /* Prescription A5 Layout */
-        #prescription-print-template.paper-a5 .print-container {
-          padding: 1rem 1.25rem !important;
-          font-size: 9pt !important;
-        }
-        #prescription-print-template.paper-a5 .print-header {
-          margin-bottom: 0.5rem !important;
-          padding-bottom: 0.4rem !important;
-        }
-        #prescription-print-template.paper-a5 .print-clinic-branding h2 {
-          font-size: 1.25rem !important;
-        }
-        #prescription-print-template.paper-a5 .print-patient-meta-grid {
-          padding: 0.5rem 0.75rem !important;
-          margin-bottom: 0.5rem !important;
-          gap: 0.4rem !important;
-        }
-        #prescription-print-template.paper-a5 .print-clinical-grid {
-          display: flex !important;
-          flex-direction: row !important;
-          gap: 0.75rem !important;
-          margin-bottom: 0.5rem !important;
-          padding-bottom: 0.5rem !important;
-        }
-        #prescription-print-template.paper-a5 .print-meds-table th,
-        #prescription-print-template.paper-a5 .print-meds-table td {
-          padding: 3px 6px !important;
-          font-size: 8pt !important;
-        }
-        #prescription-print-template.paper-a5 .print-rx-section {
-          margin-bottom: 0.5rem !important;
-        }
-
-        /* Prescription A6 Layout */
-        #prescription-print-template.paper-a6 .print-container {
-          padding: 0.6rem !important;
-          font-size: 8pt !important;
-        }
-        #prescription-print-template.paper-a6 .print-header {
-          margin-bottom: 0.4rem !important;
-          padding-bottom: 0.3rem !important;
-        }
-        #prescription-print-template.paper-a6 .print-clinic-branding h2 {
-          font-size: 1rem !important;
-        }
-        #prescription-print-template.paper-a6 .print-patient-meta-grid {
-          grid-template-columns: 1fr 1fr !important;
-          padding: 0.35rem 0.5rem !important;
-          margin-bottom: 0.4rem !important;
-          gap: 0.35rem !important;
-        }
-        #prescription-print-template.paper-a6 .print-clinical-grid {
-          display: flex !important;
-          flex-direction: row !important;
-          gap: 0.5rem !important;
-          margin-bottom: 0.4rem !important;
-          padding-bottom: 0.4rem !important;
-        }
-        #prescription-print-template.paper-a6 .print-meds-table th,
-        #prescription-print-template.paper-a6 .print-meds-table td {
-          padding: 2px 4px !important;
-          font-size: 7pt !important;
-        }
-        #prescription-print-template.paper-a6 .print-rx-section {
-          margin-bottom: 0.4rem !important;
-        }
-      `}</style>
-
       {/* Receipt print template — supports multi-receipt bulk print */}
       {receiptsToPrint.length > 0 && (
         <div id="receipt-print-template" className={`print-only ${receiptPaperClass}`}>
@@ -448,7 +164,7 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
                       {isFacility ? (
                         <>
                           <p style={{ fontWeight: 700 }}>IN-PATIENT &amp; FACILITY DEPARTMENT</p>
-                          <p>Attending: Dr. {doctorObj?.name || r.doctorName}</p>
+                          <p>Attending: {doctorObj?.name || r.doctorName}</p>
                           {clinicProfile.clinicPhone ? (
                             <p>Ph: {clinicProfile.clinicPhone}</p>
                           ) : doctorObj?.phone ? (
@@ -498,7 +214,7 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
                 <table className="print-table">
                   <thead>
                     <tr>
-                      <th style={{ width: '35px' }}>Sr.</th>
+                      <th style={{ width: '35px', textAlign: 'center' }}>Sr.</th>
                       <th>Description of Services</th>
                       {r.billType === 'FACILITY' && <th style={{ width: '80px', textAlign: 'right' }}>Rate</th>}
                       {r.billType === 'FACILITY' && <th style={{ width: '70px', textAlign: 'center' }}>Qty</th>}
@@ -508,7 +224,7 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
                   <tbody>
                     {r.items.map((item, index) => (
                       <tr key={item.id || index}>
-                        <td>{index + 1}</td>
+                        <td style={{ textAlign: 'center' }}>{index + 1}</td>
                         <td>
                           {item.category && item.category !== 'Other' && (
                             <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600, marginRight: '5px' }}>
@@ -689,26 +405,53 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
                 <table className="print-meds-table">
                   <thead>
                     <tr>
-                      <th style={{ width: '40px' }}>Sr.</th>
+                      <th style={{ width: '40px', textAlign: 'center' }}>Sr.</th>
                       <th>Medicine Description</th>
-                      <th style={{ width: '120px' }}>Dosage</th>
-                      <th style={{ width: '100px' }}>Duration</th>
+                      <th style={{ width: '120px', textAlign: 'center' }}>Dosage</th>
+                      <th style={{ width: '100px', textAlign: 'center' }}>Duration</th>
                       <th>Instructions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {(activePrintPrescription.medicines || []).map((m, idx) => (
                       <tr key={idx}>
-                        <td>{idx + 1}</td>
+                        <td style={{ textAlign: 'center' }}>{idx + 1}</td>
                         <td><strong>{m.name}</strong></td>
-                        <td>{m.dosage}</td>
-                        <td>{m.duration}</td>
+                        <td style={{ textAlign: 'center' }}>{m.dosage}</td>
+                        <td style={{ textAlign: 'center' }}>{m.duration}</td>
                         <td>{m.instructions}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+
+              {activePrintPrescription.labInvestigations && activePrintPrescription.labInvestigations.length > 0 && (
+                <div className="print-investigations-section" style={{ marginBottom: '0.6rem', padding: '0.45rem 0.75rem', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#f8fafc' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '0.3rem' }}>
+                    <span style={{ fontSize: '0.74rem', fontWeight: 800, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Diagnostic Laboratory Investigations Advised:
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {activePrintPrescription.labInvestigations.map((testName, idx) => (
+                      <span key={idx} style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        padding: '2px 8px',
+                        background: 'white',
+                        border: '1px solid #94a3b8',
+                        borderRadius: '4px',
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        color: '#0f172a'
+                      }}>
+                        {idx + 1}. {testName}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {activePrintPrescription.notes && (
                 <div className="print-notes-section" style={{ marginBottom: '0.5rem', padding: '0.5rem 0.75rem' }}>

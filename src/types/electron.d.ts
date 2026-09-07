@@ -13,6 +13,21 @@ import type {
   FollowUp,
   FollowUpStatus,
   Expense,
+  Medicine,
+  MedicineBatch,
+  PharmacySale,
+  PharmacyDashboardMetrics,
+  Ward,
+  HospitalBed,
+  BedAdmission,
+  AdmissionVital,
+  IpdDashboardMetrics,
+  LabTest,
+  LabTestParameter,
+  LabParameterResult,
+  LabOrderItem,
+  LabOrder,
+  LabDashboardMetrics,
 } from '../lib/storage';
 
 interface DatabaseBridge {
@@ -50,6 +65,44 @@ interface DatabaseBridge {
   getExpenses(options?: { limit?: number; offset?: number; search?: string; category?: string; startDate?: string; endDate?: string }): Promise<Expense[]>;
   saveExpense(expense: Expense): Promise<Expense>;
   deleteExpense(id: string): Promise<void>;
+  getMedicines(search?: string, category?: string): Promise<Medicine[]>;
+  saveMedicine(medicine: Medicine): Promise<Medicine>;
+  deleteMedicine(id: string): Promise<void>;
+  getMedicineBatches(medicineId?: string): Promise<MedicineBatch[]>;
+  saveMedicineBatch(batch: MedicineBatch): Promise<MedicineBatch>;
+  deleteMedicineBatch(id: string): Promise<void>;
+  adjustMedicineStock(batchId: string, quantityDiff: number): Promise<void>;
+  getPharmacySales(options?: { limit?: number; offset?: number; search?: string; startDate?: string; endDate?: string }): Promise<PharmacySale[]>;
+  savePharmacySale(sale: PharmacySale): Promise<PharmacySale>;
+  deletePharmacySale(id: string): Promise<void>;
+  getPharmacyMetrics(): Promise<PharmacyDashboardMetrics>;
+  getWards(): Promise<Ward[]>;
+  saveWard(ward: Partial<Ward>): Promise<Ward>;
+  deleteWard(id: string): Promise<void>;
+  getBeds(wardId?: string): Promise<HospitalBed[]>;
+  saveBed(bed: Partial<HospitalBed>): Promise<HospitalBed>;
+  deleteBed(id: string): Promise<void>;
+  updateBedStatus(bedId: string, status: string): Promise<void>;
+  getBedAdmissions(options?: { status?: string; billingStatus?: string; patientId?: string; limit?: number }): Promise<BedAdmission[]>;
+  admitPatientToBed(data: any): Promise<BedAdmission>;
+  transferPatientBed(admissionId: string, newBedId: string, reason?: string): Promise<any>;
+  updateAdmissionBillingStatus(admissionId: string, billingStatus: string, notes?: string): Promise<any>;
+  dischargePatientAdmission(admissionId: string, data?: any): Promise<any>;
+  addAdmissionVital(admissionId: string, vital: any): Promise<any>;
+  addAdmissionCharge(admissionId: string, charge: any): Promise<any>;
+  deleteAdmissionCharge(admissionId: string, chargeId: string): Promise<any>;
+  getIpdDashboardMetrics(): Promise<IpdDashboardMetrics>;
+  getLabTests(category?: string): Promise<LabTest[]>;
+  saveLabTest(test: Partial<LabTest>): Promise<{ success: boolean; id: string }>;
+  deleteLabTest(id: string): Promise<{ success: boolean }>;
+  getNextLabOrderNumber(): Promise<string>;
+  getLabOrders(): Promise<LabOrder[]>;
+  getLabOrderById(id: string): Promise<LabOrder | null>;
+  saveLabOrder(order: Partial<LabOrder>): Promise<{ success: boolean; id: string; orderNumber: string }>;
+  updateLabOrderStatus(id: string, status: string, details?: any): Promise<{ success: boolean }>;
+  saveLabOrderResults(id: string, testsWithResults: any[], pathologistRemarks?: string): Promise<{ success: boolean; status: string }>;
+  deleteLabOrder(id: string): Promise<{ success: boolean }>;
+  getLabDashboardMetrics(): Promise<LabDashboardMetrics>;
 }
 
 interface LicensingBridge {
@@ -173,6 +226,7 @@ declare global {
     users: UsersBridge;
     connection: ConnectionBridge;
     whatsappBot: WhatsAppBotBridge;
+    callBot?: any;
     system?: SystemBridge;
     excelStorage?: ExcelStorageBridge;
     ipcRenderer: IpcRendererBridge;

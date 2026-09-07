@@ -193,14 +193,27 @@ function startHostServer() {
 
           if (method.startsWith('db-')) {
             const dbMethod = method.substring(3);
-            const camelMethod = dbMethod.replace(/-([a-z])/g, (g: string) => g[1].toUpperCase());
+            let camelMethod = dbMethod.replace(/-([a-z])/g, (g: string) => g[1].toUpperCase());
+            if (camelMethod === 'getPharmacyMetrics') {
+              camelMethod = 'getPharmacyDashboardMetrics';
+            }
             const allowedMethods = [
               'getDoctors', 'saveDoctor', 'deleteDoctor', 'getServices', 'saveService', 'deleteService',
               'getReceipts', 'getDashboardMetrics', 'saveReceipt', 'saveReceiptAtomic', 'updateReceipt',
               'deleteReceipt', 'getMetadata', 'setMetadata', 'batchImportDoctors', 'getPrescriptions',
               'savePrescription', 'deletePrescription', 'getAppointments', 'saveAppointment',
               'updateAppointmentStatus', 'deleteAppointment', 'getFollowUps', 'saveFollowUp',
-              'updateFollowUpStatus', 'deleteFollowUp', 'getExpenses', 'saveExpense', 'deleteExpense'
+              'updateFollowUpStatus', 'deleteFollowUp', 'getExpenses', 'saveExpense', 'deleteExpense',
+              'getMedicines', 'saveMedicine', 'deleteMedicine', 'getMedicineBatches', 'saveMedicineBatch',
+              'deleteMedicineBatch', 'adjustMedicineStock', 'getPharmacySales', 'savePharmacySale',
+              'deletePharmacySale', 'getPharmacyDashboardMetrics', 'getPharmacyMetrics',
+              'getWards', 'saveWard', 'deleteWard',
+              'getBeds', 'saveBed', 'deleteBed', 'updateBedStatus',
+              'getBedAdmissions', 'admitPatientToBed', 'transferPatientBed',
+              'updateAdmissionBillingStatus', 'dischargePatientAdmission', 'addAdmissionVital', 'addAdmissionCharge', 'deleteAdmissionCharge', 'getIpdDashboardMetrics',
+              'getLabTests', 'saveLabTest', 'deleteLabTest', 'getNextLabOrderNumber',
+              'getLabOrders', 'getLabOrderById', 'saveLabOrder', 'updateLabOrderStatus',
+              'saveLabOrderResults', 'deleteLabOrder', 'getLabDashboardMetrics'
             ];
             if (allowedMethods.includes(camelMethod) && typeof (database as any)[camelMethod] === 'function') {
               result = await (database as any)[camelMethod](...args);
@@ -747,6 +760,164 @@ ipcMain.handle('db-delete-expense', (_, id) => {
   return database.deleteExpense(id);
 })
 
+// SQLite Database Hospital Pharmacy IPCs
+ipcMain.handle('db-get-medicines', (_, search, category) => {
+  if (workstationMode === 'client') return clientRequest('db-get-medicines', search, category);
+  return database.getMedicines(search, category);
+})
+ipcMain.handle('db-save-medicine', (_, medicine) => {
+  if (workstationMode === 'client') return clientRequest('db-save-medicine', medicine);
+  return database.saveMedicine(medicine);
+})
+ipcMain.handle('db-delete-medicine', (_, id) => {
+  if (workstationMode === 'client') return clientRequest('db-delete-medicine', id);
+  return database.deleteMedicine(id);
+})
+ipcMain.handle('db-get-medicine-batches', (_, medicineId) => {
+  if (workstationMode === 'client') return clientRequest('db-get-medicine-batches', medicineId);
+  return database.getMedicineBatches(medicineId);
+})
+ipcMain.handle('db-save-medicine-batch', (_, batch) => {
+  if (workstationMode === 'client') return clientRequest('db-save-medicine-batch', batch);
+  return database.saveMedicineBatch(batch);
+})
+ipcMain.handle('db-delete-medicine-batch', (_, id) => {
+  if (workstationMode === 'client') return clientRequest('db-delete-medicine-batch', id);
+  return database.deleteMedicineBatch(id);
+})
+ipcMain.handle('db-adjust-medicine-stock', (_, batchId, quantityDiff) => {
+  if (workstationMode === 'client') return clientRequest('db-adjust-medicine-stock', batchId, quantityDiff);
+  return database.adjustMedicineStock(batchId, quantityDiff);
+})
+ipcMain.handle('db-get-pharmacy-sales', (_, options) => {
+  if (workstationMode === 'client') return clientRequest('db-get-pharmacy-sales', options);
+  return database.getPharmacySales(options);
+})
+ipcMain.handle('db-save-pharmacy-sale', (_, sale) => {
+  if (workstationMode === 'client') return clientRequest('db-save-pharmacy-sale', sale);
+  return database.savePharmacySale(sale);
+})
+ipcMain.handle('db-delete-pharmacy-sale', (_, id) => {
+  if (workstationMode === 'client') return clientRequest('db-delete-pharmacy-sale', id);
+  return database.deletePharmacySale(id);
+})
+ipcMain.handle('db-get-pharmacy-metrics', () => {
+  if (workstationMode === 'client') return clientRequest('db-get-pharmacy-metrics');
+  return database.getPharmacyDashboardMetrics();
+})
+
+// SQLite Database Hospital IPD (Wards, Beds, Admissions) IPCs
+ipcMain.handle('db-get-wards', () => {
+  if (workstationMode === 'client') return clientRequest('db-get-wards');
+  return database.getWards();
+})
+ipcMain.handle('db-save-ward', (_, ward) => {
+  if (workstationMode === 'client') return clientRequest('db-save-ward', ward);
+  return database.saveWard(ward);
+})
+ipcMain.handle('db-delete-ward', (_, id) => {
+  if (workstationMode === 'client') return clientRequest('db-delete-ward', id);
+  return database.deleteWard(id);
+})
+ipcMain.handle('db-get-beds', (_, wardId) => {
+  if (workstationMode === 'client') return clientRequest('db-get-beds', wardId);
+  return database.getBeds(wardId);
+})
+ipcMain.handle('db-save-bed', (_, bed) => {
+  if (workstationMode === 'client') return clientRequest('db-save-bed', bed);
+  return database.saveBed(bed);
+})
+ipcMain.handle('db-delete-bed', (_, id) => {
+  if (workstationMode === 'client') return clientRequest('db-delete-bed', id);
+  return database.deleteBed(id);
+})
+ipcMain.handle('db-update-bed-status', (_, bedId, status) => {
+  if (workstationMode === 'client') return clientRequest('db-update-bed-status', bedId, status);
+  return database.updateBedStatus(bedId, status);
+})
+ipcMain.handle('db-get-bed-admissions', (_, options) => {
+  if (workstationMode === 'client') return clientRequest('db-get-bed-admissions', options);
+  return database.getBedAdmissions(options);
+})
+ipcMain.handle('db-admit-patient-to-bed', (_, data) => {
+  if (workstationMode === 'client') return clientRequest('db-admit-patient-to-bed', data);
+  return database.admitPatientToBed(data);
+})
+ipcMain.handle('db-transfer-patient-bed', (_, admissionId, newBedId, reason) => {
+  if (workstationMode === 'client') return clientRequest('db-transfer-patient-bed', admissionId, newBedId, reason);
+  return database.transferPatientBed(admissionId, newBedId, reason);
+})
+ipcMain.handle('db-update-admission-billing-status', (_, admissionId, billingStatus, notes) => {
+  if (workstationMode === 'client') return clientRequest('db-update-admission-billing-status', admissionId, billingStatus, notes);
+  return database.updateAdmissionBillingStatus(admissionId, billingStatus, notes);
+})
+ipcMain.handle('db-discharge-patient-admission', (_, admissionId, data) => {
+  if (workstationMode === 'client') return clientRequest('db-discharge-patient-admission', admissionId, data);
+  return database.dischargePatientAdmission(admissionId, data);
+})
+ipcMain.handle('db-add-admission-vital', (_, admissionId, vital) => {
+  if (workstationMode === 'client') return clientRequest('db-add-admission-vital', admissionId, vital);
+  return database.addAdmissionVital(admissionId, vital);
+})
+ipcMain.handle('db-add-admission-charge', (_, admissionId, charge) => {
+  if (workstationMode === 'client') return clientRequest('db-add-admission-charge', admissionId, charge);
+  return database.addAdmissionCharge(admissionId, charge);
+})
+ipcMain.handle('db-delete-admission-charge', (_, admissionId, chargeId) => {
+  if (workstationMode === 'client') return clientRequest('db-delete-admission-charge', admissionId, chargeId);
+  return database.deleteAdmissionCharge(admissionId, chargeId);
+})
+ipcMain.handle('db-get-ipd-dashboard-metrics', () => {
+  if (workstationMode === 'client') return clientRequest('db-get-ipd-dashboard-metrics');
+  return database.getIpdDashboardMetrics();
+})
+
+// SQLite Database Laboratory & Diagnostics IPCs
+ipcMain.handle('db-get-lab-tests', (_, category) => {
+  if (workstationMode === 'client') return clientRequest('db-get-lab-tests', category);
+  return database.getLabTests(category);
+})
+ipcMain.handle('db-save-lab-test', (_, test) => {
+  if (workstationMode === 'client') return clientRequest('db-save-lab-test', test);
+  return database.saveLabTest(test);
+})
+ipcMain.handle('db-delete-lab-test', (_, id) => {
+  if (workstationMode === 'client') return clientRequest('db-delete-lab-test', id);
+  return database.deleteLabTest(id);
+})
+ipcMain.handle('db-get-next-lab-order-number', () => {
+  if (workstationMode === 'client') return clientRequest('db-get-next-lab-order-number');
+  return database.getNextLabOrderNumber();
+})
+ipcMain.handle('db-get-lab-orders', () => {
+  if (workstationMode === 'client') return clientRequest('db-get-lab-orders');
+  return database.getLabOrders();
+})
+ipcMain.handle('db-get-lab-order-by-id', (_, id) => {
+  if (workstationMode === 'client') return clientRequest('db-get-lab-order-by-id', id);
+  return database.getLabOrderById(id);
+})
+ipcMain.handle('db-save-lab-order', (_, order) => {
+  if (workstationMode === 'client') return clientRequest('db-save-lab-order', order);
+  return database.saveLabOrder(order);
+})
+ipcMain.handle('db-update-lab-order-status', (_, id, status, details) => {
+  if (workstationMode === 'client') return clientRequest('db-update-lab-order-status', id, status, details);
+  return database.updateLabOrderStatus(id, status, details);
+})
+ipcMain.handle('db-save-lab-order-results', (_, id, testsWithResults, pathologistRemarks) => {
+  if (workstationMode === 'client') return clientRequest('db-save-lab-order-results', id, testsWithResults, pathologistRemarks);
+  return database.saveLabOrderResults(id, testsWithResults, pathologistRemarks);
+})
+ipcMain.handle('db-delete-lab-order', (_, id) => {
+  if (workstationMode === 'client') return clientRequest('db-delete-lab-order', id);
+  return database.deleteLabOrder(id);
+})
+ipcMain.handle('db-get-lab-dashboard-metrics', () => {
+  if (workstationMode === 'client') return clientRequest('db-get-lab-dashboard-metrics');
+  return database.getLabDashboardMetrics();
+})
+
 // WhatsApp Bot IPCs
 whatsappBot.setOnAppointmentSavedCallback(() => {
   if (win) win.webContents.send('appointment-updated');
@@ -777,6 +948,32 @@ ipcMain.handle('whatsapp-send-message', (_, phone: string, message: string) => {
 
 async function generateAndSendPrescriptionPdf(phone: string, rxData: any) {
   const cleanDoctorName = 'Dr. ' + (rxData.doctorName || '').replace(/^(Dr\.?\s*)+/gi, '').trim();
+
+  // Resolve PID (UHID / Patient ID / Receipt Number)
+  let pid = rxData.patientId || rxData.pid || rxData.receiptNumber || '';
+  if (!pid && rxData.receiptId) {
+    try {
+      const receipt = (database as any).getReceiptById ? (database as any).getReceiptById(rxData.receiptId) : null;
+      if (receipt && (receipt.patientId || receipt.receiptNumber)) {
+        pid = receipt.patientId || receipt.receiptNumber;
+      }
+    } catch (e) {
+      console.error('Error resolving PID from database by receiptId:', e);
+    }
+  }
+  if (!pid && rxData.patientPhone) {
+    try {
+      const receipts = database.getReceipts ? database.getReceipts({ search: rxData.patientPhone, limit: 1 }) : [];
+      if (receipts && receipts.length > 0 && (receipts[0].patientId || receipts[0].receiptNumber)) {
+        pid = receipts[0].patientId || receipts[0].receiptNumber;
+      }
+    } catch (e) {}
+  }
+  const cleanPid = pid ? String(pid).trim() : '';
+  const displayPid = cleanPid 
+    ? (cleanPid.startsWith('#') || cleanPid.startsWith('PID-') ? cleanPid : '#' + cleanPid)
+    : (rxData.id ? '#' + String(rxData.id).replace(/^rx_/, '').slice(-6).toUpperCase() : 'N/A');
+
   const html = `
     <!DOCTYPE html>
     <html lang="en">
@@ -822,7 +1019,7 @@ async function generateAndSendPrescriptionPdf(phone: string, rxData: any) {
         </div>
         <div style="text-align: right;">
           <strong>Date:</strong> ${new Date(rxData.date).toLocaleDateString()}<br/>
-          <strong style="margin-top: 4px; display: inline-block;">Rx ID:</strong> #${(rxData.id || '').slice(-6).toUpperCase()}
+          <strong style="margin-top: 4px; display: inline-block;">PID:</strong> ${displayPid}
         </div>
       </div>
 
@@ -862,9 +1059,9 @@ async function generateAndSendPrescriptionPdf(phone: string, rxData: any) {
       </table>
       ` : ''}
 
-      ${rxData.labTests ? `
-      <div class="section-title">Lab Tests & Investigations</div>
-      <div class="text-block">${rxData.labTests}</div>
+      ${((rxData.labInvestigations && rxData.labInvestigations.length > 0) || rxData.labTests) ? `
+      <div class="section-title">Diagnostic Laboratory Investigations</div>
+      <div class="text-block">${Array.isArray(rxData.labInvestigations) ? rxData.labInvestigations.join(', ') : (Array.isArray(rxData.labTests) ? rxData.labTests.join(', ') : (rxData.labInvestigations || rxData.labTests))}</div>
       ` : ''}
 
       ${rxData.advice ? `

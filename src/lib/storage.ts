@@ -115,6 +115,8 @@ export interface Prescription {
   id: string;
   receiptId?: string;
   patientId?: string;
+  receiptNumber?: string;
+  pid?: string;
   date: string;
   patientName: string;
   patientAge: string;
@@ -125,6 +127,7 @@ export interface Prescription {
   symptoms: string;
   diagnosis: string;
   medicines: PrescribedMedicine[];
+  labInvestigations?: string[];
   notes: string;
   followUpDate?: string;
   followUpNotes?: string;
@@ -207,6 +210,290 @@ export interface Expense {
   notes?: string;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface Medicine {
+  id: string;
+  name: string;
+  genericName?: string;
+  category: 'Tablet' | 'Capsule' | 'Syrup' | 'Injection' | 'IV Fluid' | 'Ointment' | 'Drops' | 'Inhaler' | 'Surgical' | string;
+  manufacturer?: string;
+  unit: string;
+  hsnCode?: string;
+  minStockAlert: number;
+  locationRack?: string;
+  notes?: string;
+  createdAt?: string;
+  currentStock?: number;
+  minPrice?: number;
+  maxPrice?: number;
+}
+
+export interface MedicineBatch {
+  id: string;
+  medicineId: string;
+  batchNumber: string;
+  expiryDate: string; // YYYY-MM
+  purchaseRate: number;
+  salePrice: number;
+  quantity: number;
+  createdAt?: string;
+  medicineName?: string;
+  genericName?: string;
+  category?: string;
+  unit?: string;
+  minStockAlert?: number;
+}
+
+export interface PharmacySaleItem {
+  medicineId: string;
+  batchId?: string;
+  batchNumber?: string;
+  name: string;
+  genericName?: string;
+  quantity: number;
+  salePrice: number;
+  amount: number;
+}
+
+export interface PharmacySale {
+  id: string;
+  saleNumber: string;
+  patientId?: string;
+  patientName: string;
+  patientPhone?: string;
+  prescriptionId?: string;
+  date: string;
+  items: PharmacySaleItem[];
+  subtotal: number;
+  discount?: number;
+  tax?: number;
+  total: number;
+  paymentMethod: 'CASH' | 'ONLINE' | 'FREE';
+  dispensedBy?: string;
+  notes?: string;
+}
+
+export interface PharmacyDashboardMetrics {
+  totalInventoryValue: number;
+  totalCostValue: number;
+  totalUnits: number;
+  totalMedicines: number;
+  lowStockCount: number;
+  expiringCount: number;
+  todaySales: number;
+  todaySalesCount: number;
+}
+
+export interface Ward {
+  id: string;
+  name: string;
+  code: string;
+  floor: string;
+  dailyRate: number;
+  nursingRate: number;
+  totalBeds: number;
+  description?: string;
+  isActive?: boolean | number;
+  createdAt?: string;
+  updatedAt?: string;
+  totalBedsCount?: number;
+  occupiedBedsCount?: number;
+  availableBedsCount?: number;
+}
+
+export interface HospitalBed {
+  id: string;
+  wardId: string;
+  bedNumber: string;
+  bedType: string;
+  dailyRate: number;
+  status: 'available' | 'occupied' | 'cleaning' | 'maintenance';
+  currentAdmissionId?: string | null;
+  notes?: string;
+  updatedAt?: string;
+  wardName?: string;
+  wardCode?: string;
+  wardFloor?: string;
+  // Attached admission particulars if occupied
+  admissionNumber?: string;
+  patientId?: string;
+  patientUhid?: string;
+  patientName?: string;
+  patientPhone?: string;
+  patientGender?: string;
+  patientAge?: string;
+  doctorId?: string;
+  doctorName?: string;
+  admittedAt?: string;
+  diagnosis?: string;
+  advancePaid?: number;
+  initialVitals?: string;
+  vitalsLog?: string;
+  wardChargesLog?: string;
+}
+
+export interface AdmissionVital {
+  id?: string;
+  recordedAt?: string;
+  bpSystolic?: string | number;
+  bpDiastolic?: string | number;
+  pulse?: string | number;
+  temp?: string | number;
+  spo2?: string | number;
+  respiratoryRate?: string | number;
+  bloodSugar?: string | number;
+  urineOutput?: string | number;
+  fluidIntake?: string | number;
+  recordedBy?: string;
+  notes?: string;
+}
+
+export interface AdmissionCharge {
+  id: string;
+  recordedAt: string;
+  category: 'Nursing' | 'Consumable' | 'Procedure' | 'Doctor Round' | 'Equipment / Oxygen' | 'Other';
+  description: string;
+  quantity: number;
+  rate: number;
+  amount: number;
+  recordedBy?: string;
+  notes?: string;
+}
+
+export interface BedTransferRecord {
+  fromBedId: string;
+  fromBedNumber: string;
+  fromWardName: string;
+  toBedId: string;
+  toBedNumber: string;
+  toWardName: string;
+  transferredAt: string;
+  reason?: string;
+}
+
+export interface BedAdmission {
+  id: string;
+  admissionNumber: string;
+  patientId?: string;
+  patientUhid?: string;
+  patientName: string;
+  patientPhone?: string;
+  patientGender?: string;
+  patientAge?: string;
+  wardId: string;
+  wardName: string;
+  bedId: string;
+  bedNumber: string;
+  doctorId: string;
+  doctorName: string;
+  admittedAt: string;
+  dischargedAt?: string;
+  expectedDischargeAt?: string;
+  diagnosis?: string;
+  initialVitals?: string;
+  vitalsLog?: string;
+  wardChargesLog?: string;
+  advancePaid: number;
+  paymentMode?: 'CASH' | 'ONLINE' | 'UPI' | 'CARD';
+  status: 'admitted' | 'discharged' | 'transferred';
+  billingStatus?: 'NONE' | 'QUEUED' | 'BILLED';
+  dischargeSummary?: string;
+  totalBillId?: string;
+  notes?: string;
+  transfersLog?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface IpdDashboardMetrics {
+  totalBeds: number;
+  occupiedBeds: number;
+  availableBeds: number;
+  cleaningBeds: number;
+  maintenanceBeds: number;
+  occupancyRate: number;
+  admissionsTodayCount: number;
+  dischargesTodayCount: number;
+}
+
+export interface LabTestParameter {
+  id: string;
+  name: string;
+  unit: string;
+  maleRange?: string;
+  femaleRange?: string;
+  defaultRange: string;
+}
+
+export interface LabTest {
+  id: string;
+  name: string;
+  code: string;
+  category: 'Hematology' | 'Biochemistry' | 'Serology' | 'Clinical Pathology' | 'Microbiology' | 'Radiology / Imaging' | string;
+  rate: number;
+  sampleType: string;
+  turnaroundTime: string;
+  parameters: LabTestParameter[];
+  description?: string;
+  isActive?: boolean | number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface LabParameterResult {
+  parameterId: string;
+  parameterName: string;
+  value: string | number;
+  unit: string;
+  referenceRange: string;
+  isAbnormal?: boolean;
+  flag?: 'NORMAL' | 'HIGH' | 'LOW' | 'CRITICAL' | string;
+  notes?: string;
+}
+
+export interface LabOrderItem {
+  testId: string;
+  testName: string;
+  category?: string;
+  sampleType?: string;
+  rate: number;
+  status?: 'PENDING' | 'COLLECTED' | 'IN_ANALYSIS' | 'COMPLETED';
+  results?: LabParameterResult[];
+}
+
+export interface LabOrder {
+  id: string;
+  orderNumber: string;
+  patientId?: string;
+  patientName: string;
+  patientPhone?: string;
+  patientGender?: string;
+  patientAge?: string;
+  doctorId?: string;
+  doctorName?: string;
+  prescriptionId?: string;
+  tests: LabOrderItem[];
+  totalAmount: number;
+  discount?: number;
+  paidAmount?: number;
+  paymentMode?: 'CASH' | 'UPI' | 'CARD' | 'FREE' | string;
+  status: 'ORDERED' | 'SAMPLE_COLLECTED' | 'IN_ANALYSIS' | 'COMPLETED' | 'CANCELLED';
+  sampleCollectedAt?: string;
+  sampleCollectedBy?: string;
+  completedAt?: string;
+  technicianNotes?: string;
+  pathologistRemarks?: string;
+  orderDate: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface LabDashboardMetrics {
+  ordersTodayCount: number;
+  samplesPendingCount: number;
+  inAnalysisCount: number;
+  completedTodayCount: number;
 }
 
 export type ReceiptPaperType = 'A5' | 'A4' | 'A6' | 'Letter' | 'Thermal80' | 'Thermal58';
@@ -896,6 +1183,653 @@ export const storage = {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  },
+
+  // ── Hospital Pharmacy Methods ─────────────────────────────────────────────
+  getMedicines: async (search?: string, category?: string): Promise<Medicine[]> => {
+    if (window.database?.getMedicines) {
+      try {
+        return await window.database.getMedicines(search, category);
+      } catch (err) {
+        console.warn('Failed to fetch medicines from SQLite:', err);
+      }
+    }
+    const raw = localStorage.getItem('hospital_medicines');
+    let list: Medicine[] = raw ? JSON.parse(raw) : [];
+    if (search && search.trim()) {
+      const s = search.toLowerCase();
+      list = list.filter(m => m.name.toLowerCase().includes(s) || m.genericName?.toLowerCase().includes(s));
+    }
+    if (category && category !== 'All') {
+      list = list.filter(m => m.category === category);
+    }
+    return list;
+  },
+
+  saveMedicine: async (medicine: Medicine): Promise<Medicine> => {
+    if (window.database?.saveMedicine) {
+      try {
+        return await window.database.saveMedicine(medicine);
+      } catch (err) {
+        console.warn('Failed to save medicine in SQLite:', err);
+      }
+    }
+    const raw = localStorage.getItem('hospital_medicines');
+    const list: Medicine[] = raw ? JSON.parse(raw) : [];
+    const id = medicine.id || ('MED-' + Date.now());
+    const item = { ...medicine, id };
+    const idx = list.findIndex(m => m.id === id);
+    if (idx >= 0) list[idx] = item; else list.unshift(item);
+    localStorage.setItem('hospital_medicines', JSON.stringify(list));
+    return item;
+  },
+
+  deleteMedicine: async (id: string): Promise<void> => {
+    if (window.database?.deleteMedicine) {
+      try {
+        await window.database.deleteMedicine(id);
+        return;
+      } catch (err) {
+        console.warn('Failed to delete medicine in SQLite:', err);
+      }
+    }
+    const raw = localStorage.getItem('hospital_medicines');
+    if (raw) {
+      const list: Medicine[] = JSON.parse(raw);
+      localStorage.setItem('hospital_medicines', JSON.stringify(list.filter(m => m.id !== id)));
+    }
+  },
+
+  getMedicineBatches: async (medicineId?: string): Promise<MedicineBatch[]> => {
+    if (window.database?.getMedicineBatches) {
+      try {
+        return await window.database.getMedicineBatches(medicineId);
+      } catch (err) {
+        console.warn('Failed to fetch batches from SQLite:', err);
+      }
+    }
+    const raw = localStorage.getItem('hospital_medicine_batches');
+    const list: MedicineBatch[] = raw ? JSON.parse(raw) : [];
+    return medicineId ? list.filter(b => b.medicineId === medicineId) : list;
+  },
+
+  saveMedicineBatch: async (batch: MedicineBatch): Promise<MedicineBatch> => {
+    if (window.database?.saveMedicineBatch) {
+      try {
+        return await window.database.saveMedicineBatch(batch);
+      } catch (err) {
+        console.warn('Failed to save batch in SQLite:', err);
+      }
+    }
+    const raw = localStorage.getItem('hospital_medicine_batches');
+    const list: MedicineBatch[] = raw ? JSON.parse(raw) : [];
+    const id = batch.id || ('BATCH-' + Date.now());
+    const item = { ...batch, id };
+    const idx = list.findIndex(b => b.id === id);
+    if (idx >= 0) list[idx] = item; else list.unshift(item);
+    localStorage.setItem('hospital_medicine_batches', JSON.stringify(list));
+    return item;
+  },
+
+  deleteMedicineBatch: async (id: string): Promise<void> => {
+    if (window.database?.deleteMedicineBatch) {
+      try {
+        await window.database.deleteMedicineBatch(id);
+        return;
+      } catch (err) {
+        console.warn('Failed to delete batch in SQLite:', err);
+      }
+    }
+    const raw = localStorage.getItem('hospital_medicine_batches');
+    if (raw) {
+      const list: MedicineBatch[] = JSON.parse(raw);
+      localStorage.setItem('hospital_medicine_batches', JSON.stringify(list.filter(b => b.id !== id)));
+    }
+  },
+
+  adjustMedicineStock: async (batchId: string, quantityDiff: number): Promise<void> => {
+    if (window.database?.adjustMedicineStock) {
+      try {
+        await window.database.adjustMedicineStock(batchId, quantityDiff);
+        return;
+      } catch (err) {
+        console.warn('Failed to adjust stock in SQLite:', err);
+      }
+    }
+  },
+
+  getPharmacySales: async (options?: any): Promise<PharmacySale[]> => {
+    if (window.database?.getPharmacySales) {
+      try {
+        return await window.database.getPharmacySales(options);
+      } catch (err) {
+        console.warn('Failed to fetch pharmacy sales from SQLite:', err);
+      }
+    }
+    const raw = localStorage.getItem('hospital_pharmacy_sales');
+    return raw ? JSON.parse(raw) : [];
+  },
+
+  savePharmacySale: async (sale: PharmacySale): Promise<PharmacySale> => {
+    if (window.database?.savePharmacySale) {
+      try {
+        return await window.database.savePharmacySale(sale);
+      } catch (err) {
+        console.warn('Failed to save pharmacy sale in SQLite:', err);
+      }
+    }
+    const raw = localStorage.getItem('hospital_pharmacy_sales');
+    const list: PharmacySale[] = raw ? JSON.parse(raw) : [];
+    const id = sale.id || ('PSALE-' + Date.now());
+    const saleNumber = sale.saleNumber || ('PH-' + (1001 + list.length));
+    const item = { ...sale, id, saleNumber };
+    list.unshift(item);
+    localStorage.setItem('hospital_pharmacy_sales', JSON.stringify(list));
+    return item;
+  },
+
+  deletePharmacySale: async (id: string): Promise<void> => {
+    if (window.database?.deletePharmacySale) {
+      try {
+        await window.database.deletePharmacySale(id);
+        return;
+      } catch (err) {
+        console.warn('Failed to delete pharmacy sale in SQLite:', err);
+      }
+    }
+    const raw = localStorage.getItem('hospital_pharmacy_sales');
+    if (raw) {
+      const list: PharmacySale[] = JSON.parse(raw);
+      localStorage.setItem('hospital_pharmacy_sales', JSON.stringify(list.filter(s => s.id !== id)));
+    }
+  },
+
+  getPharmacyMetrics: async (): Promise<PharmacyDashboardMetrics> => {
+    if (window.database?.getPharmacyMetrics) {
+      try {
+        return await window.database.getPharmacyMetrics();
+      } catch (err) {
+        console.warn('Failed to fetch pharmacy metrics from SQLite:', err);
+      }
+    }
+    return {
+      totalInventoryValue: 0,
+      totalCostValue: 0,
+      totalUnits: 0,
+      totalMedicines: 0,
+      lowStockCount: 0,
+      expiringCount: 0,
+      todaySales: 0,
+      todaySalesCount: 0
+    };
+  },
+
+  exportPharmacyToCSV: (medicines: Medicine[]) => {
+    const headers = ['ID', 'Medicine Name', 'Generic Formulation', 'Category', 'Manufacturer', 'Unit', 'Location / Rack', 'Min Stock Alert', 'Current Stock'];
+    const rows = medicines.map(m => [
+      `"${m.id}"`,
+      `"${(m.name || '').replace(/"/g, '""')}"`,
+      `"${(m.genericName || '').replace(/"/g, '""')}"`,
+      `"${m.category}"`,
+      `"${(m.manufacturer || '').replace(/"/g, '""')}"`,
+      `"${m.unit}"`,
+      `"${m.locationRack || 'General'}"`,
+      m.minStockAlert,
+      m.currentStock || 0
+    ]);
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `pharmacy_inventory_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  },
+
+  // ==================== HOSPITAL IPD (WARDS & BEDS) ====================
+  getWards: async (): Promise<Ward[]> => {
+    if (window.database?.getWards) {
+      return window.database.getWards();
+    }
+    const raw = localStorage.getItem('hospital_wards');
+    return raw ? JSON.parse(raw) : [];
+  },
+
+  saveWard: async (ward: Partial<Ward>): Promise<Ward> => {
+    if (window.database?.saveWard) {
+      return window.database.saveWard(ward);
+    }
+    const wards = await storage.getWards();
+    const id = ward.id || `WARD-${Date.now().toString(36).toUpperCase()}`;
+    const newWard: Ward = {
+      id,
+      name: ward.name || 'General Ward',
+      code: ward.code || 'GW',
+      floor: ward.floor || 'Ground Floor',
+      dailyRate: ward.dailyRate || 0,
+      nursingRate: ward.nursingRate || 0,
+      totalBeds: ward.totalBeds || 0,
+      description: ward.description || '',
+      isActive: ward.isActive !== undefined ? ward.isActive : 1,
+      createdAt: ward.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    const index = wards.findIndex(w => w.id === id);
+    if (index !== -1) wards[index] = newWard;
+    else wards.push(newWard);
+    localStorage.setItem('hospital_wards', JSON.stringify(wards));
+    return newWard;
+  },
+
+  deleteWard: async (id: string): Promise<void> => {
+    if (window.database?.deleteWard) {
+      return window.database.deleteWard(id);
+    }
+    const wards = (await storage.getWards()).filter(w => w.id !== id);
+    localStorage.setItem('hospital_wards', JSON.stringify(wards));
+  },
+
+  getBeds: async (wardId?: string): Promise<HospitalBed[]> => {
+    if (window.database?.getBeds) {
+      return window.database.getBeds(wardId);
+    }
+    const raw = localStorage.getItem('hospital_beds');
+    const beds: HospitalBed[] = raw ? JSON.parse(raw) : [];
+    if (wardId) return beds.filter(b => b.wardId === wardId);
+    return beds;
+  },
+
+  saveBed: async (bed: Partial<HospitalBed>): Promise<HospitalBed> => {
+    if (window.database?.saveBed) {
+      return window.database.saveBed(bed);
+    }
+    const beds = await storage.getBeds();
+    const id = bed.id || `BED-${bed.bedNumber || Date.now().toString(36).toUpperCase()}`;
+    const newBed: HospitalBed = {
+      id,
+      wardId: bed.wardId || '',
+      bedNumber: bed.bedNumber || '',
+      bedType: bed.bedType || 'Standard',
+      dailyRate: bed.dailyRate || 0,
+      status: bed.status || 'available',
+      currentAdmissionId: bed.currentAdmissionId || null,
+      notes: bed.notes || '',
+      updatedAt: new Date().toISOString()
+    };
+    const index = beds.findIndex(b => b.id === id);
+    if (index !== -1) beds[index] = newBed;
+    else beds.push(newBed);
+    localStorage.setItem('hospital_beds', JSON.stringify(beds));
+    return newBed;
+  },
+
+  deleteBed: async (id: string): Promise<void> => {
+    if (window.database?.deleteBed) {
+      return window.database.deleteBed(id);
+    }
+    const beds = (await storage.getBeds()).filter(b => b.id !== id);
+    localStorage.setItem('hospital_beds', JSON.stringify(beds));
+  },
+
+  updateBedStatus: async (bedId: string, status: 'available' | 'occupied' | 'cleaning' | 'maintenance'): Promise<void> => {
+    if (window.database?.updateBedStatus) {
+      return window.database.updateBedStatus(bedId, status);
+    }
+    const beds = await storage.getBeds();
+    const bed = beds.find(b => b.id === bedId);
+    if (bed) {
+      bed.status = status;
+      if (status === 'available') bed.currentAdmissionId = null;
+      bed.updatedAt = new Date().toISOString();
+      localStorage.setItem('hospital_beds', JSON.stringify(beds));
+    }
+  },
+
+  getBedAdmissions: async (options?: { status?: string; billingStatus?: string; patientId?: string; limit?: number }): Promise<BedAdmission[]> => {
+    if (window.database?.getBedAdmissions) {
+      return window.database.getBedAdmissions(options);
+    }
+    const raw = localStorage.getItem('hospital_admissions');
+    let admissions: BedAdmission[] = raw ? JSON.parse(raw) : [];
+    if (options?.status) admissions = admissions.filter(a => a.status === options.status);
+    if (options?.billingStatus) admissions = admissions.filter(a => a.billingStatus === options.billingStatus);
+    if (options?.patientId) admissions = admissions.filter(a => a.patientId === options.patientId || a.patientUhid === options.patientId);
+    return admissions;
+  },
+
+  admitPatientToBed: async (data: any): Promise<BedAdmission> => {
+    if (window.database?.admitPatientToBed) {
+      return window.database.admitPatientToBed(data);
+    }
+    const admissions = await storage.getBedAdmissions();
+    const nextNum = 1000 + admissions.length + 1;
+    const admissionId = `ADM-${nextNum}`;
+    const newAdmission: BedAdmission = {
+      id: admissionId,
+      admissionNumber: admissionId,
+      patientId: data.patientId || '',
+      patientUhid: data.patientUhid || data.patientId || '',
+      patientName: data.patientName || '',
+      patientPhone: data.patientPhone || '',
+      patientGender: data.patientGender || '',
+      patientAge: data.patientAge || '',
+      wardId: data.wardId || '',
+      wardName: data.wardName || '',
+      bedId: data.bedId || '',
+      bedNumber: data.bedNumber || '',
+      doctorId: data.doctorId || '',
+      doctorName: data.doctorName || '',
+      admittedAt: data.admittedAt || new Date().toISOString(),
+      expectedDischargeAt: data.expectedDischargeAt || '',
+      diagnosis: data.diagnosis || '',
+      initialVitals: typeof data.initialVitals === 'object' ? JSON.stringify(data.initialVitals) : (data.initialVitals || '{}'),
+      vitalsLog: typeof data.vitalsLog === 'object' ? JSON.stringify(data.vitalsLog) : (data.vitalsLog || '[]'),
+      wardChargesLog: typeof data.wardChargesLog === 'object' ? JSON.stringify(data.wardChargesLog) : (data.wardChargesLog || '[]'),
+      advancePaid: Number(data.advancePaid) || 0,
+      paymentMode: data.paymentMode || 'CASH',
+      status: 'admitted',
+      notes: data.notes || '',
+      transfersLog: '[]',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    admissions.unshift(newAdmission);
+    localStorage.setItem('hospital_admissions', JSON.stringify(admissions));
+    await storage.updateBedStatus(data.bedId, 'occupied');
+    return newAdmission;
+  },
+
+  transferPatientBed: async (admissionId: string, newBedId: string, reason?: string): Promise<any> => {
+    if (window.database?.transferPatientBed) {
+      return window.database.transferPatientBed(admissionId, newBedId, reason);
+    }
+    return { success: true };
+  },
+
+  updateAdmissionBillingStatus: async (admissionId: string, billingStatus: string, notes?: string): Promise<any> => {
+    if (window.database?.updateAdmissionBillingStatus) {
+      return window.database.updateAdmissionBillingStatus(admissionId, billingStatus, notes);
+    }
+    const admissions = JSON.parse(localStorage.getItem('hospital_admissions') || '[]');
+    const idx = admissions.findIndex((a: any) => a.id === admissionId);
+    if (idx !== -1) {
+      admissions[idx].billingStatus = billingStatus;
+      if (notes) admissions[idx].dischargeSummary = notes;
+      admissions[idx].updatedAt = new Date().toISOString();
+      localStorage.setItem('hospital_admissions', JSON.stringify(admissions));
+    }
+    return { success: true };
+  },
+
+  dischargePatientAdmission: async (admissionId: string, data?: any): Promise<any> => {
+    if (window.database?.dischargePatientAdmission) {
+      return window.database.dischargePatientAdmission(admissionId, data);
+    }
+    const admissions = JSON.parse(localStorage.getItem('hospital_admissions') || '[]');
+    const idx = admissions.findIndex((a: any) => a.id === admissionId);
+    if (idx !== -1) {
+      admissions[idx].status = 'discharged';
+      admissions[idx].billingStatus = data?.billingStatus || (data?.receiptId ? 'BILLED' : 'NONE');
+      admissions[idx].dischargedAt = new Date().toISOString();
+      if (data?.dischargeSummary) admissions[idx].dischargeSummary = data.dischargeSummary;
+      if (data?.receiptId) admissions[idx].totalBillId = data.receiptId;
+      admissions[idx].updatedAt = new Date().toISOString();
+      localStorage.setItem('hospital_admissions', JSON.stringify(admissions));
+    }
+    return { success: true };
+  },
+
+  addAdmissionVital: async (admissionId: string, vital: any): Promise<any> => {
+    if (window.database?.addAdmissionVital) {
+      return window.database.addAdmissionVital(admissionId, vital);
+    }
+    return { success: true };
+  },
+
+  addAdmissionCharge: async (admissionId: string, charge: any): Promise<any> => {
+    if (window.database?.addAdmissionCharge) {
+      return window.database.addAdmissionCharge(admissionId, charge);
+    }
+    const admissions = JSON.parse(localStorage.getItem('hospital_admissions') || '[]');
+    const idx = admissions.findIndex((a: any) => a.id === admissionId);
+    if (idx !== -1) {
+      let log: any[] = [];
+      try {
+        log = JSON.parse(admissions[idx].wardChargesLog || '[]');
+      } catch (_) {}
+      const newCharge = {
+        id: `CHG-${Date.now()}`,
+        recordedAt: new Date().toISOString(),
+        ...charge
+      };
+      log.unshift(newCharge);
+      admissions[idx].wardChargesLog = JSON.stringify(log);
+      localStorage.setItem('hospital_admissions', JSON.stringify(admissions));
+      return { success: true, charge: newCharge };
+    }
+    return { success: true };
+  },
+
+  deleteAdmissionCharge: async (admissionId: string, chargeId: string): Promise<any> => {
+    if (window.database?.deleteAdmissionCharge) {
+      return window.database.deleteAdmissionCharge(admissionId, chargeId);
+    }
+    const admissions = JSON.parse(localStorage.getItem('hospital_admissions') || '[]');
+    const idx = admissions.findIndex((a: any) => a.id === admissionId);
+    if (idx !== -1) {
+      let log: any[] = [];
+      try {
+        log = JSON.parse(admissions[idx].wardChargesLog || '[]');
+      } catch (_) {}
+      log = log.filter(c => c.id !== chargeId);
+      admissions[idx].wardChargesLog = JSON.stringify(log);
+      localStorage.setItem('hospital_admissions', JSON.stringify(admissions));
+      return { success: true };
+    }
+    return { success: true };
+  },
+
+  getIpdDashboardMetrics: async (): Promise<IpdDashboardMetrics> => {
+    if (window.database?.getIpdDashboardMetrics) {
+      return window.database.getIpdDashboardMetrics();
+    }
+    const beds = await storage.getBeds();
+    const totalBeds = beds.length;
+    const occupiedBeds = beds.filter(b => b.status === 'occupied').length;
+    const availableBeds = beds.filter(b => b.status === 'available').length;
+    const cleaningBeds = beds.filter(b => b.status === 'cleaning').length;
+    const maintenanceBeds = beds.filter(b => b.status === 'maintenance').length;
+    return {
+      totalBeds,
+      occupiedBeds,
+      availableBeds,
+      cleaningBeds,
+      maintenanceBeds,
+      occupancyRate: totalBeds > 0 ? Math.round((occupiedBeds / totalBeds) * 100) : 0,
+      admissionsTodayCount: 0,
+      dischargesTodayCount: 0
+    };
+  },
+
+  // ==========================================
+  // LABORATORY & DIAGNOSTICS MODULE
+  // ==========================================
+  getLabTests: async (category?: string): Promise<LabTest[]> => {
+    if (window.database?.getLabTests) {
+      return window.database.getLabTests(category);
+    }
+    const raw = localStorage.getItem('clinic_lab_tests');
+    const tests: LabTest[] = raw ? JSON.parse(raw) : [];
+    if (category && category !== 'ALL') {
+      return tests.filter(t => t.category === category && (t.isActive !== false && t.isActive !== 0));
+    }
+    return tests.filter(t => t.isActive !== false && t.isActive !== 0);
+  },
+
+  saveLabTest: async (test: Partial<LabTest>): Promise<any> => {
+    if (window.database?.saveLabTest) {
+      return window.database.saveLabTest(test);
+    }
+    const tests = await storage.getLabTests();
+    const id = test.id || `TEST-${Date.now()}`;
+    const newTest: LabTest = {
+      id,
+      name: test.name || 'Unnamed Test',
+      code: test.code || id,
+      category: test.category || 'General',
+      rate: Number(test.rate) || 0,
+      sampleType: test.sampleType || 'Blood (EDTA)',
+      turnaroundTime: test.turnaroundTime || '2-4 Hours',
+      parameters: test.parameters || [],
+      description: test.description || '',
+      isActive: test.isActive !== false ? 1 : 0,
+      createdAt: test.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    const idx = tests.findIndex(t => t.id === id);
+    if (idx >= 0) tests[idx] = newTest;
+    else tests.push(newTest);
+    localStorage.setItem('clinic_lab_tests', JSON.stringify(tests));
+    return { success: true, id };
+  },
+
+  deleteLabTest: async (id: string): Promise<any> => {
+    if (window.database?.deleteLabTest) {
+      return window.database.deleteLabTest(id);
+    }
+    const tests = (await storage.getLabTests()).filter(t => t.id !== id);
+    localStorage.setItem('clinic_lab_tests', JSON.stringify(tests));
+    return { success: true };
+  },
+
+  getNextLabOrderNumber: async (): Promise<string> => {
+    if (window.database?.getNextLabOrderNumber) {
+      return window.database.getNextLabOrderNumber();
+    }
+    const raw = localStorage.getItem('last_lab_order_num') || '1000';
+    const next = parseInt(raw, 10) + 1;
+    localStorage.setItem('last_lab_order_num', next.toString());
+    return `LAB-${next}`;
+  },
+
+  getLabOrders: async (): Promise<LabOrder[]> => {
+    if (window.database?.getLabOrders) {
+      return window.database.getLabOrders();
+    }
+    const raw = localStorage.getItem('clinic_lab_orders');
+    return raw ? JSON.parse(raw) : [];
+  },
+
+  getLabOrderById: async (id: string): Promise<LabOrder | null> => {
+    if (window.database?.getLabOrderById) {
+      return window.database.getLabOrderById(id);
+    }
+    const orders = await storage.getLabOrders();
+    return orders.find(o => o.id === id) || null;
+  },
+
+  saveLabOrder: async (order: Partial<LabOrder>): Promise<any> => {
+    if (window.database?.saveLabOrder) {
+      return window.database.saveLabOrder(order);
+    }
+    const orders = await storage.getLabOrders();
+    const id = order.id || `LABORD-${Date.now()}`;
+    const orderNumber = order.orderNumber || (await storage.getNextLabOrderNumber());
+    const newOrder: LabOrder = {
+      id,
+      orderNumber,
+      patientId: order.patientId || '',
+      patientName: order.patientName || 'Patient',
+      patientPhone: order.patientPhone || '',
+      patientGender: order.patientGender || '',
+      patientAge: order.patientAge || '',
+      doctorId: order.doctorId || '',
+      doctorName: order.doctorName || 'Self / Walk-in',
+      prescriptionId: order.prescriptionId || '',
+      tests: order.tests || [],
+      totalAmount: Number(order.totalAmount) || 0,
+      discount: Number(order.discount) || 0,
+      paidAmount: Number(order.paidAmount) || 0,
+      paymentMode: order.paymentMode || 'CASH',
+      status: order.status || 'ORDERED',
+      sampleCollectedAt: order.sampleCollectedAt,
+      sampleCollectedBy: order.sampleCollectedBy,
+      completedAt: order.completedAt,
+      technicianNotes: order.technicianNotes || '',
+      pathologistRemarks: order.pathologistRemarks || '',
+      orderDate: order.orderDate || new Date().toISOString().split('T')[0],
+      createdAt: order.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    const idx = orders.findIndex(o => o.id === id);
+    if (idx >= 0) orders[idx] = newOrder;
+    else orders.unshift(newOrder);
+    localStorage.setItem('clinic_lab_orders', JSON.stringify(orders));
+    return { success: true, id, orderNumber };
+  },
+
+  updateLabOrderStatus: async (id: string, status: string, details?: any): Promise<any> => {
+    if (window.database?.updateLabOrderStatus) {
+      return window.database.updateLabOrderStatus(id, status, details);
+    }
+    const orders = await storage.getLabOrders();
+    const order = orders.find(o => o.id === id);
+    if (order) {
+      order.status = status as any;
+      if (status === 'SAMPLE_COLLECTED') {
+        order.sampleCollectedAt = details?.sampleCollectedAt || new Date().toISOString();
+        order.sampleCollectedBy = details?.sampleCollectedBy || 'Lab Desk';
+      }
+      if (status === 'COMPLETED') {
+        order.completedAt = new Date().toISOString();
+      }
+      order.updatedAt = new Date().toISOString();
+      localStorage.setItem('clinic_lab_orders', JSON.stringify(orders));
+    }
+    return { success: true };
+  },
+
+  saveLabOrderResults: async (id: string, testsWithResults: any[], pathologistRemarks?: string): Promise<any> => {
+    if (window.database?.saveLabOrderResults) {
+      return window.database.saveLabOrderResults(id, testsWithResults, pathologistRemarks);
+    }
+    const orders = await storage.getLabOrders();
+    const order = orders.find(o => o.id === id);
+    if (order) {
+      order.tests = testsWithResults;
+      if (pathologistRemarks !== undefined) order.pathologistRemarks = pathologistRemarks;
+      const allDone = testsWithResults.every((t: any) => t.results && t.results.length > 0 && t.results.some((r: any) => r.value !== undefined && r.value !== ''));
+      order.status = allDone ? 'COMPLETED' : 'IN_ANALYSIS';
+      if (order.status === 'COMPLETED') order.completedAt = new Date().toISOString();
+      order.updatedAt = new Date().toISOString();
+      localStorage.setItem('clinic_lab_orders', JSON.stringify(orders));
+    }
+    return { success: true };
+  },
+
+  deleteLabOrder: async (id: string): Promise<any> => {
+    if (window.database?.deleteLabOrder) {
+      return window.database.deleteLabOrder(id);
+    }
+    const orders = (await storage.getLabOrders()).filter(o => o.id !== id);
+    localStorage.setItem('clinic_lab_orders', JSON.stringify(orders));
+    return { success: true };
+  },
+
+  getLabDashboardMetrics: async (): Promise<LabDashboardMetrics> => {
+    if (window.database?.getLabDashboardMetrics) {
+      return window.database.getLabDashboardMetrics();
+    }
+    const orders = await storage.getLabOrders();
+    const today = new Date().toISOString().split('T')[0];
+    return {
+      ordersTodayCount: orders.filter(o => o.orderDate?.startsWith(today)).length,
+      samplesPendingCount: orders.filter(o => o.status === 'ORDERED').length,
+      inAnalysisCount: orders.filter(o => o.status === 'SAMPLE_COLLECTED' || o.status === 'IN_ANALYSIS').length,
+      completedTodayCount: orders.filter(o => o.status === 'COMPLETED' && o.completedAt?.startsWith(today)).length
+    };
   }
 };
 

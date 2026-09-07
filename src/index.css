@@ -1,20 +1,71 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap');
 
 :root {
+  /* Brand & Core Palettes */
   --primary: #0284c7;
   --primary-hover: #0369a1;
   --primary-light: #f0f9ff;
+  --primary-50: #f0f9ff;
+  --primary-100: #e0f2fe;
+  --primary-600: #0284c7;
+  --primary-700: #0369a1;
+
   --secondary: #0d9488;
+  --secondary-hover: #0f766e;
+  --secondary-light: #f0fdfa;
+
   --accent: #f59e0b;
+  --accent-light: #fef3c7;
+
+  /* Semantic Feedback Tokens */
+  --success: #16a34a;
+  --success-hover: #15803d;
+  --success-light: #dcfce7;
+  --success-border: #bbf7d0;
+
+  --warning: #d97706;
+  --warning-hover: #b45309;
+  --warning-light: #fef3c7;
+  --warning-border: #fde68a;
+
+  --danger: #dc2626;
+  --danger-hover: #b91c1c;
+  --danger-light: #fee2e2;
+  --danger-border: #fecaca;
+
+  --info: #0284c7;
+  --info-light: #e0f2fe;
+  --info-border: #bae6fd;
+
+  /* Surfaces & Neutrals */
   --background: #f8fafc;
   --surface: #ffffff;
+  --surface-hover: #f1f5f9;
   --text-main: #0f172a;
   --text-muted: #64748b;
+  --text-dim: #94a3b8;
   --border: #e2e8f0;
   --border-focus: #38bdf8;
+
+  /* Shadows & Elevations */
+  --shadow-sm: 0 1px 2px 0 rgb(15 23 42 / 0.05);
   --shadow: 0 4px 6px -1px rgb(15 23 42 / 0.05), 0 2px 4px -2px rgb(15 23 42 / 0.05);
+  --shadow-md: 0 4px 12px -2px rgb(15 23 42 / 0.08);
   --shadow-lg: 0 10px 25px -3px rgb(15 23 42 / 0.08), 0 4px 6px -4px rgb(15 23 42 / 0.04);
+  --shadow-xl: 0 20px 25px -5px rgb(15 23 42 / 0.1), 0 8px 10px -6px rgb(15 23 42 / 0.1);
+
+  /* Spacing & Radii Scale */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+
+  --radius-sm: 0.375rem;
   --radius: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-full: 9999px;
 }
 
 * {
@@ -55,6 +106,12 @@ input, select, textarea {
   transition: border-color 0.2s;
 }
 
+.input-field {
+  padding: 0.45rem 0.75rem;
+  font-size: 0.85rem;
+  line-height: normal;
+}
+
 input:focus, select:focus {
   outline: none;
   border-color: var(--primary);
@@ -72,7 +129,7 @@ input:focus, select:focus {
     margin: 0 !important;
     box-shadow: none !important;
   }
-  .no-print {
+  .no-print, .modal-overlay {
     display: none !important;
   }
   .print-only {
@@ -146,4 +203,50 @@ input:focus, select:focus {
 @keyframes slideInRight {
   from { transform: translateX(100%); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
+}
+
+/* Modal Overlay & Backdrop Styles */
+.modal-backdrop,
+.modal-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background: rgba(15, 23, 42, 0.65) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 9999 !important;
+  padding: 1rem !important;
+  overflow-y: auto !important;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+  max-height: 92vh;
+  overflow-y: auto;
+  position: relative;
+  z-index: 10000;
+}
+
+/* Universal Table Alignment & Utility Classes */
+.text-left, th.text-left, td.text-left {
+  text-align: left !important;
+}
+
+.text-center, th.text-center, td.text-center {
+  text-align: center !important;
+}
+
+.text-right, th.text-right, td.text-right {
+  text-align: right !important;
 }

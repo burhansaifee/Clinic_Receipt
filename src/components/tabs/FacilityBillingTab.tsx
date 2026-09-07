@@ -1,18 +1,23 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Bed, Plus, Trash2, Printer, Share2, Save, RotateCcw,
-  User, Activity, Sparkles, PlusCircle, X, QrCode
+  User, Activity, Sparkles, PlusCircle, X, QrCode,
+  Clock, FileText, CheckCircle, AlertCircle, Search
 } from 'lucide-react';
 import { format, differenceInCalendarDays } from 'date-fns';
-import type { Doctor, Receipt, ReceiptItem, Service, ClinicProfile } from '../../lib/storage';
+import type { Doctor, Receipt, ReceiptItem, Service, ClinicProfile, BedAdmission } from '../../lib/storage';
 import { storage } from '../../lib/storage';
 import { sendReceiptViaWhatsApp } from '../../lib/whatsappReceipt';
 import { useToast } from '../ui/Toast';
+import { useConfirm } from '../ui/ConfirmDialog';
+import '../../styles/tabs/FacilityBillingTab.css';
 
 interface FacilityBillingTabProps {
   doctors: Doctor[];
   onSave?: () => void;
   onPrintRequest: (receipt: Receipt) => void;
+  initialAdmission?: BedAdmission | null;
+  onClearInitialAdmission?: () => void;
 }
 
 const CATEGORY_OPTIONS = [
@@ -41,9 +46,34 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
   doctors,
   onSave,
   onPrintRequest,
+  initialAdmission,
+  onClearInitialAdmission,
 }) => {
   const toast = useToast();
+  const confirm = useConfirm();
   const formRef = useRef<HTMLDivElement>(null);
+
+  // Inpatient Bed Admission linkage & Billing Queue
+  const [activeLinkedAdmission, setActiveLinkedAdmission] = useState<BedAdmission | null>(null);
+  const [showInpatientSelector, setShowInpatientSelector] = useState(false);
+  const [activeInpatientsList, setActiveInpatientsList] = useState<BedAdmission[]>([]);
+  const [queuedInpatients, setQueuedInpatients] = useState<BedAdmission[]>([]);
+  const [queueSearchQuery, setQueueSearchQuery] = useState('');
+  const [isLoadingQueue, setIsLoadingQueue] = useState(false);
+
+  const filteredQueuedInpatients = useMemo(() => {
+    if (!queueSearchQuery.trim()) return queuedInpatients;
+    const q = queueSearchQuery.toLowerCase().trim();
+    return queuedInpatients.filter(adm =>
+      (adm.patientName && adm.patientName.toLowerCase().includes(q)) ||
+      (adm.patientUhid && adm.patientUhid.toLowerCase().includes(q)) ||
+      (adm.patientId && adm.patientId.toLowerCase().includes(q)) ||
+      (adm.patientPhone && adm.patientPhone.includes(q)) ||
+      (adm.bedNumber && adm.bedNumber.toLowerCase().includes(q)) ||
+      (adm.wardName && adm.wardName.toLowerCase().includes(q)) ||
+      (adm.doctorName && adm.doctorName.toLowerCase().includes(q))
+    );
+  }, [queuedInpatients, queueSearchQuery]);
 
   // Dynamic Clinic Services loaded from database
   const [facilityServices, setFacilityServices] = useState<Service[]>([]);
@@ -104,7 +134,21 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
     }
   };
 
-  // Initialize next IDs, doctor defaults, and load dynamic clinic services
+  // Load queued inpatients awaiting discharge billing settlement
+  const loadQueuedInpatients = async () => {
+    setIsLoadingQueue(true);
+    try {
+      const list = await storage.getBedAdmissions();
+      const queued = list.filter((a: BedAdmission) => a.billingStatus === 'QUEUED');
+      setQueuedInpatients(queued);
+    } catch (err) {
+      console.error('Failed to load queued inpatients:', err);
+    } finally {
+      setIsLoadingQueue(false);
+    }
+  };
+
+  // Initialize next IDs, doctor defaults, dynamic clinic services, and pending IPD queue
   useEffect(() => {
     const init = async () => {
       try {
@@ -113,6 +157,7 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
         const nextRec = await storage.getNextReceiptNumber(false);
         setReceiptNumber(nextRec);
         await loadFacilityServices();
+        await loadQueuedInpatients();
 
         // Load Clinic / Hospital profile & payment UPI QR
         const profile = await storage.getClinicProfile();
@@ -137,6 +182,115 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
       setSelectedDoctorId(doctors[0].id);
     }
   }, [doctors, selectedDoctorId]);
+
+  // Load Inpatient Bed Admission into Facility Billing
+  const loadAdmissionData = async (adm: BedAdmission) => {
+    setActiveLinkedAdmission(adm);
+    if (adm.patientUhid || adm.patientId) setPatientId(adm.patientUhid || adm.patientId || '');
+    setPatientName(adm.patientName);
+    if (adm.patientPhone) setPatientPhone(adm.patientPhone);
+    if (adm.patientAge) {
+      setPatientAge(adm.patientAge);
+      const y = adm.patientAge.match(/(\d+)\s*Y/i);
+      const m = adm.patientAge.match(/(\d+)\s*M/i);
+      if (y) setAgeYears(y[1]);
+      if (m) setAgeMonths(m[1]);
+      else if (!y && !m && /^\d+$/.test(adm.patientAge)) setAgeYears(adm.patientAge);
+    }
+    if (adm.patientGender) setPatientGender(adm.patientGender);
+    if (adm.doctorId) setSelectedDoctorId(adm.doctorId);
+    setRoomNumber(`${adm.wardName} - Bed ${adm.bedNumber}`);
+
+    const admDate = adm.admittedAt ? adm.admittedAt.split('T')[0] : format(new Date(), 'yyyy-MM-dd');
+    const admTime = adm.admittedAt && adm.admittedAt.includes('T') ? adm.admittedAt.split('T')[1].slice(0, 5) : '09:00';
+    setAdmissionDate(admDate);
+    setAdmissionTime(admTime);
+    setDischargeDate(format(new Date(), 'yyyy-MM-dd'));
+    setDischargeTime(format(new Date(), 'HH:mm'));
+
+    if (adm.advancePaid) {
+      setAdvancePaid(adm.advancePaid);
+    }
+
+    let days = 1;
+    try {
+      const d1 = new Date(admDate);
+      const d2 = new Date();
+      const diff = differenceInCalendarDays(d2, d1);
+      days = diff > 0 ? diff : 1;
+    } catch (_) {}
+
+    let dailyRate = 1000;
+    try {
+      const wardsList = await storage.getWards();
+      const matchedWard = wardsList.find(w => w.id === adm.wardId);
+      if (matchedWard) dailyRate = matchedWard.dailyRate;
+    } catch (_) {}
+
+    const roomRentItem: ReceiptItem = {
+      id: crypto.randomUUID(),
+      description: `Room Rent: ${adm.wardName} (Bed ${adm.bedNumber}) [${days} Day${days > 1 ? 's' : ''} @ ₹${dailyRate}/day]`,
+      amount: days * dailyRate,
+      rate: dailyRate,
+      quantity: days,
+      unit: 'Days'
+    };
+
+    const billedItems: ReceiptItem[] = [roomRentItem];
+
+    // Auto-load Ward Consumables, Procedures, and Care items logged by Ward In-Charge
+    try {
+      const wardCharges: any[] = JSON.parse(adm.wardChargesLog || '[]');
+      if (Array.isArray(wardCharges) && wardCharges.length > 0) {
+        wardCharges.forEach((c: any) => {
+          billedItems.push({
+            id: crypto.randomUUID(),
+            description: `${c.description}${c.category ? ` (${c.category})` : ''}`,
+            amount: Number(c.amount) || ((Number(c.quantity) || 1) * (Number(c.rate) || 0)),
+            rate: Number(c.rate) || 0,
+            quantity: Number(c.quantity) || 1,
+            unit: c.unit || 'Nos'
+          });
+        });
+      }
+    } catch (_) {}
+
+    setItems(billedItems);
+    toast(`Loaded stay for ${adm.patientName} with ${billedItems.length} bill item${billedItems.length > 1 ? 's' : ''}`, { type: 'success' });
+  };
+
+  useEffect(() => {
+    if (initialAdmission) {
+      loadAdmissionData(initialAdmission);
+    }
+  }, [initialAdmission]);
+
+  const handleLoadQueuedPatient = (admission: BedAdmission) => {
+    loadAdmissionData(admission);
+    formRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const handleDismissFromQueue = async (admission: BedAdmission) => {
+    if (await confirm(`Remove patient ${admission.patientName} (Bed ${admission.bedNumber}) from Facility Billing Queue?`)) {
+      try {
+        await storage.updateAdmissionBillingStatus(admission.id, 'NONE');
+        toast(`Removed ${admission.patientName} from billing queue`, { type: 'info' });
+        await loadQueuedInpatients();
+      } catch (err) {
+        console.error('Failed to dismiss admission from queue', err);
+      }
+    }
+  };
+
+  const openInpatientPicker = async () => {
+    try {
+      const list = await storage.getBedAdmissions({ status: 'admitted' });
+      setActiveInpatientsList(list);
+      setShowInpatientSelector(true);
+    } catch (e) {
+      console.error('Failed to load inpatients:', e);
+    }
+  };
 
   // Calculate calculated stay duration
   const stayDurationDays = React.useMemo(() => {
@@ -311,11 +465,14 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
     setItems([]);
     setDiscount(0);
     setAdvancePaid(0);
-        setRemarks('');
+    setRemarks('');
+    setActiveLinkedAdmission(null);
+    if (onClearInitialAdmission) onClearInitialAdmission();
     const nextPid = await storage.getNextPatientId();
     setPatientId(nextPid);
     const nextRec = await storage.getNextReceiptNumber(false);
     setReceiptNumber(nextRec);
+    await loadQueuedInpatients();
   };
 
   // Build receipt payload
@@ -339,9 +496,9 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
       date: `${admissionDate} ${admissionTime}`,
       patientId: patientId.trim() || undefined,
       patientName: patientName.trim(),
-      patientAge: patientAge.trim() || undefined,
-      patientGender: patientGender || undefined,
-      patientPhone: patientPhone.trim() || undefined,
+      patientAge: patientAge.trim(),
+      patientGender: patientGender || '',
+      patientPhone: patientPhone.trim(),
       doctorId: selectedDoctorId,
       doctorName: doctor?.name || 'Attending Physician',
       items,
@@ -373,6 +530,22 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
     try {
       const receipt = buildReceiptData();
       await storage.saveReceipt(receipt);
+
+      // If this bill settles an active inpatient admission stay, link receipt and discharge patient
+      if (activeLinkedAdmission) {
+        try {
+          await storage.dischargePatientAdmission(activeLinkedAdmission.id, {
+            receiptId: receipt.id,
+            dischargeSummary: remarks || `Facility billing invoice #${receipt.receiptNumber} settled`,
+            billingStatus: 'BILLED'
+          });
+          await storage.updateAdmissionBillingStatus(activeLinkedAdmission.id, 'BILLED');
+        } catch (admErr) {
+          console.warn('Could not auto-close bed admission:', admErr);
+        }
+        await loadQueuedInpatients();
+      }
+
       toast(`Facility Bill #${receipt.receiptNumber} saved successfully!`, { type: 'success' });
 
       if (andPrint) {
@@ -453,6 +626,14 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
             </div>
             <button
               className="btn-secondary"
+              onClick={openInpatientPicker}
+              style={{ background: 'rgba(255, 255, 255, 0.25)', color: 'white', border: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '0.45rem 0.85rem', fontSize: '0.825rem', fontWeight: 700 }}
+              title="Import Active Inpatient Stay"
+            >
+              <Bed size={15} /> Import Inpatient Stay
+            </button>
+            <button
+              className="btn-secondary"
               onClick={handleReset}
               style={{ background: 'rgba(255, 255, 255, 0.2)', color: 'white', border: 'none', display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '0.45rem 0.85rem', fontSize: '0.825rem' }}
               title="Reset Form"
@@ -462,6 +643,363 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
           </div>
         </div>
       </div>
+
+      {/* ── Pending IPD Billing Queue Section ─────────────────────────────── */}
+      <div
+        style={{
+          background: queuedInpatients.length > 0
+            ? 'linear-gradient(135deg, #f0fdfa 0%, #eff6ff 100%)'
+            : '#f8fafc',
+          border: queuedInpatients.length > 0
+            ? '1.5px solid #0284c7'
+            : '1px solid var(--border)',
+          borderRadius: '12px',
+          padding: '0.85rem 1.25rem',
+          marginBottom: '1.25rem',
+          boxShadow: queuedInpatients.length > 0
+            ? '0 4px 12px rgba(2, 132, 199, 0.08)'
+            : 'none'
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{
+              background: queuedInpatients.length > 0 ? '#0284c7' : '#94a3b8',
+              color: 'white',
+              borderRadius: '8px',
+              padding: '6px 8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <Clock size={18} />
+            </div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <strong style={{ fontSize: '0.92rem', color: '#0f172a' }}>
+                  IPD Discharge Billing Queue
+                </strong>
+                {queuedInpatients.length > 0 ? (
+                  <span style={{
+                    background: '#ef4444',
+                    color: 'white',
+                    borderRadius: '20px',
+                    padding: '2px 8px',
+                    fontSize: '0.7rem',
+                    fontWeight: 800,
+                    letterSpacing: '0.3px'
+                  }}>
+                    ⚡ {queueSearchQuery ? `${filteredQueuedInpatients.length} of ${queuedInpatients.length}` : queuedInpatients.length} Awaiting Settlement
+                  </span>
+                ) : (
+                  <span style={{
+                    background: '#e2e8f0',
+                    color: '#64748b',
+                    borderRadius: '20px',
+                    padding: '2px 8px',
+                    fontSize: '0.7rem',
+                    fontWeight: 700
+                  }}>
+                    Queue Empty
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '1px' }}>
+                {queuedInpatients.length > 0
+                  ? 'Patients queued from Inpatient Census / Beds. Click "Load & Settle Bill" to populate folio.'
+                  : 'No pending discharge settlements from the ward.'}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            {queuedInpatients.length > 0 && (
+              <div style={{ position: 'relative', width: '220px' }}>
+                <Search size={13} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                <input
+                  type="text"
+                  placeholder="Search queue (Name, UHID, Bed)..."
+                  value={queueSearchQuery}
+                  onChange={e => setQueueSearchQuery(e.target.value)}
+                  className="input-field"
+                  style={{
+                    height: '30px',
+                    paddingLeft: '26px',
+                    paddingRight: queueSearchQuery ? '24px' : '8px',
+                    fontSize: '0.75rem',
+                    margin: 0,
+                    borderRadius: '6px',
+                    background: 'white',
+                    border: '1px solid #bae6fd'
+                  }}
+                />
+                {queueSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setQueueSearchQuery('')}
+                    style={{
+                      position: 'absolute',
+                      right: '6px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: '#94a3b8',
+                      padding: '2px',
+                      display: 'flex'
+                    }}
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+            )}
+
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={loadQueuedInpatients}
+              disabled={isLoadingQueue}
+              style={{
+                fontSize: '0.75rem',
+                padding: '0.3rem 0.6rem',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                height: '30px'
+              }}
+              title="Check for new admissions sent from ward"
+            >
+              <RotateCcw size={13} className={isLoadingQueue ? 'spin' : ''} />
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        {queuedInpatients.length > 0 && (
+          <>
+            {filteredQueuedInpatients.length === 0 ? (
+              <div style={{
+                textAlign: 'center',
+                padding: '0.85rem',
+                fontSize: '0.78rem',
+                color: '#64748b',
+                marginTop: '0.65rem',
+                borderTop: '1px solid rgba(2, 132, 199, 0.15)'
+              }}>
+                No queued discharges match "<strong>{queueSearchQuery}</strong>".
+                <button
+                  type="button"
+                  onClick={() => setQueueSearchQuery('')}
+                  style={{ marginLeft: '8px', background: 'none', border: 'none', color: '#0284c7', cursor: 'pointer', fontWeight: 700, textDecoration: 'underline' }}
+                >
+                  Clear search
+                </button>
+              </div>
+            ) : (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                gap: '0.55rem',
+                marginTop: '0.65rem',
+                paddingTop: '0.65rem',
+                borderTop: '1px solid rgba(2, 132, 199, 0.15)',
+                maxHeight: '270px',
+                overflowY: 'auto',
+                paddingRight: '4px'
+              }}>
+                {filteredQueuedInpatients.map(adm => {
+                  const isCurrentlyActive = activeLinkedAdmission?.id === adm.id;
+                  let days = 1;
+                  try {
+                    const d1 = new Date(adm.admittedAt ? adm.admittedAt.split('T')[0] : '');
+                    const d2 = new Date();
+                    const diff = differenceInCalendarDays(d2, d1);
+                    days = diff > 0 ? diff : 1;
+                  } catch (_) {}
+
+                  let consumablesCount = 0;
+                  try {
+                    const wardCharges = JSON.parse(adm.wardChargesLog || '[]');
+                    if (Array.isArray(wardCharges)) consumablesCount = wardCharges.length;
+                  } catch (_) {}
+
+                  return (
+                    <div
+                      key={adm.id}
+                      style={{
+                        background: isCurrentlyActive ? '#f0fdf4' : 'white',
+                        border: isCurrentlyActive ? '1.5px solid #22c55e' : '1px solid #bae6fd',
+                        borderRadius: '8px',
+                        padding: '0.55rem 0.75rem',
+                        boxShadow: isCurrentlyActive ? '0 2px 6px rgba(34, 197, 94, 0.12)' : '0 1px 2px rgba(0,0,0,0.02)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        gap: '0.45rem'
+                      }}
+                    >
+                      <div>
+                        {/* Top: Name + Ward Bed */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px' }}>
+                          <div style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <strong style={{ fontSize: '0.86rem', color: '#0f172a' }}>
+                              {adm.patientName}
+                            </strong>
+                            <span style={{ fontSize: '0.7rem', color: '#64748b', marginLeft: '6px' }}>
+                              {adm.patientUhid || adm.patientId || ''}
+                            </span>
+                          </div>
+                          <span style={{
+                            background: '#e0f2fe',
+                            color: '#0369a1',
+                            border: '1px solid #bae6fd',
+                            padding: '1px 6px',
+                            borderRadius: '4px',
+                            fontSize: '0.68rem',
+                            fontWeight: 700,
+                            whiteSpace: 'nowrap',
+                            flexShrink: 0
+                          }}>
+                            {adm.wardName} - Bed {adm.bedNumber}
+                          </span>
+                        </div>
+
+                        {/* Mid: Compact Inline Details */}
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          flexWrap: 'wrap',
+                          fontSize: '0.7rem',
+                          color: '#475569',
+                          marginTop: '4px',
+                          background: '#f8fafc',
+                          padding: '3px 6px',
+                          borderRadius: '4px'
+                        }}>
+                          <span><strong>{days}d</strong> stay</span>
+                          <span>•</span>
+                          <span style={{ color: Number(adm.advancePaid) > 0 ? '#15803d' : '#64748b', fontWeight: Number(adm.advancePaid) > 0 ? 700 : 500 }}>
+                            Adv: ₹{(Number(adm.advancePaid) || 0).toLocaleString('en-IN')}
+                          </span>
+                          <span>•</span>
+                          <span><strong>{consumablesCount}</strong> items</span>
+                          {adm.doctorName && (
+                            <>
+                              <span>•</span>
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100px' }} title={adm.doctorName}>
+                                {adm.doctorName}
+                              </span>
+                            </>
+                          )}
+                        </div>
+
+                        {adm.dischargeSummary && (
+                          <div style={{ fontSize: '0.68rem', color: '#64748b', fontStyle: 'italic', marginTop: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={adm.dischargeSummary}>
+                            Advice: "{adm.dischargeSummary}"
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Bottom Actions */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', paddingTop: '4px', borderTop: '1px dashed #e2e8f0' }}>
+                        <button
+                          type="button"
+                          onClick={() => handleLoadQueuedPatient(adm)}
+                          style={{
+                            flex: 1,
+                            padding: '0.35rem 0.6rem',
+                            background: isCurrentlyActive ? '#15803d' : '#0284c7',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '5px',
+                            fontSize: '0.74rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '5px',
+                            height: '28px'
+                          }}
+                        >
+                          {isCurrentlyActive ? (
+                            <>
+                              <CheckCircle size={12} /> Loaded
+                            </>
+                          ) : (
+                            <>
+                              <FileText size={12} /> Load &amp; Settle
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDismissFromQueue(adm)}
+                          title="Dismiss from queue"
+                          style={{
+                            padding: '0.35rem 0.5rem',
+                            background: '#f1f5f9',
+                            color: '#64748b',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '5px',
+                            fontSize: '0.72rem',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            height: '28px'
+                          }}
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Linked Inpatient Stay Banner */}
+      {activeLinkedAdmission && (
+        <div
+          style={{
+            background: '#eff6ff',
+            border: '1px solid #bfdbfe',
+            color: '#1e40af',
+            padding: '0.75rem 1.25rem',
+            borderRadius: '10px',
+            marginBottom: '1.25rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            boxShadow: '0 2px 4px rgba(30,64,175,0.05)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '1.25rem' }}>🛏️</span>
+            <div>
+              <strong style={{ fontSize: '0.95rem' }}>Active Inpatient Stay Linked:</strong> {activeLinkedAdmission.patientName} ({activeLinkedAdmission.patientUhid || activeLinkedAdmission.patientId}) • Bed {activeLinkedAdmission.bedNumber} ({activeLinkedAdmission.wardName})
+              <div style={{ fontSize: '0.78rem', color: '#2563eb', marginTop: '2px' }}>
+                Admission Number: {activeLinkedAdmission.admissionNumber} • Advance Paid: ₹{activeLinkedAdmission.advancePaid || 0} (Settlement will close admission stay)
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setActiveLinkedAdmission(null);
+              if (onClearInitialAdmission) onClearInitialAdmission();
+            }}
+            style={{ background: '#dbeafe', border: 'none', color: '#1e40af', padding: '0.35rem 0.75rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700 }}
+          >
+            ✕ Unlink
+          </button>
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1.25rem', marginBottom: '1.25rem' }}>
         {/* Left Card: Patient Particulars */}
@@ -1196,6 +1734,110 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal for Picking Active Inpatient Stay */}
+      {showInpatientSelector && (
+        <div
+          className="modal-backdrop"
+          onClick={() => setShowInpatientSelector(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            background: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(4px)',
+            WebkitBackdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '1rem',
+            overflowY: 'auto'
+          }}
+        >
+          <div
+            className="modal-content"
+            onClick={e => e.stopPropagation()}
+            style={{
+              maxWidth: '650px',
+              width: '95%',
+              background: 'white',
+              borderRadius: '16px',
+              border: '1px solid var(--border)',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+              padding: '1.5rem',
+              maxHeight: '90vh',
+              overflowY: 'auto'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem', marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Bed size={20} color="#0284c7" />
+                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800 }}>Import Active Inpatient Stay</h3>
+              </div>
+              <button className="btn-secondary" onClick={() => setShowInpatientSelector(false)} style={{ padding: '0.35rem 0.6rem' }}>✕</button>
+            </div>
+
+            {activeInpatientsList.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '2.5rem 1rem', color: 'var(--text-muted)' }}>
+                No patients currently admitted in inpatient beds.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '380px', overflowY: 'auto' }}>
+                {activeInpatientsList.map(adm => (
+                  <div
+                    key={adm.id}
+                    onClick={() => {
+                      loadAdmissionData(adm);
+                      setShowInpatientSelector(false);
+                    }}
+                    style={{
+                      border: '1px solid var(--border)',
+                      borderRadius: '10px',
+                      padding: '0.85rem 1rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      background: '#f8fafc'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#f0fdf4'}
+                    onMouseLeave={e => e.currentTarget.style.background = '#f8fafc'}
+                  >
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <strong style={{ fontSize: '0.95rem', color: '#0f172a' }}>{adm.patientName}</strong>
+                        <span style={{ fontSize: '0.75rem', background: '#e0f2fe', color: '#0284c7', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                          Bed {adm.bedNumber}
+                        </span>
+                        <span style={{ fontSize: '0.75rem', color: '#64748b' }}>({adm.wardName})</span>
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '3px' }}>
+                        UHID: {adm.patientUhid || adm.patientId} • {adm.doctorName ? (/^dr\.?\s*/i.test(adm.doctorName) ? adm.doctorName : `Dr. ${adm.doctorName}`) : 'Attending Physician'} • Admitted: {adm.admittedAt ? format(new Date(adm.admittedAt), 'dd MMM yyyy') : 'Recently'}
+                      </div>
+                    </div>
+
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '0.78rem', color: '#059669', fontWeight: 700 }}>
+                        Adv: ₹{adm.advancePaid || 0}
+                      </div>
+                      <span style={{ fontSize: '0.75rem', color: '#0284c7', fontWeight: 700 }}>
+                        Select &amp; Load →
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

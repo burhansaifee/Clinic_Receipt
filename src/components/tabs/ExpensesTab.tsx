@@ -7,6 +7,7 @@ import {
 import { storage, type Expense, type ExpenseCategory } from '../../lib/storage';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
+import '../../styles/tabs/ExpensesTab.css';
 
 const CATEGORIES: { label: string; value: ExpenseCategory; color: string; bg: string }[] = [
   { label: 'Utilities & Power', value: 'Utilities & Power', color: '#b45309', bg: '#fef3c7' },
@@ -579,7 +580,7 @@ export const ExpensesTab: React.FC = () => {
                   <th style={{ padding: '0.9rem 1rem', background: '#f8fafc', fontWeight: 600, color: '#475569', fontSize: '0.85rem', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap', width: '110px' }}>
                     Due Date
                   </th>
-                  <th style={{ padding: '0.9rem 1rem', background: '#f8fafc', fontWeight: 600, color: '#475569', fontSize: '0.85rem', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap', width: '120px' }}>
+                  <th style={{ padding: '0.9rem 1rem', background: '#f8fafc', fontWeight: 600, color: '#475569', fontSize: '0.85rem', borderBottom: '1px solid var(--border)', textAlign: 'center', whiteSpace: 'nowrap', width: '120px' }}>
                     Status
                   </th>
                   <th style={{ padding: '0.9rem 1rem', background: '#f8fafc', fontWeight: 600, color: '#475569', fontSize: '0.85rem', borderBottom: '1px solid var(--border)', textAlign: 'right', whiteSpace: 'nowrap', width: '120px' }}>
@@ -588,7 +589,7 @@ export const ExpensesTab: React.FC = () => {
                   <th style={{ padding: '0.9rem 1rem', background: '#f8fafc', fontWeight: 600, color: '#475569', fontSize: '0.85rem', borderBottom: '1px solid var(--border)', textAlign: 'right', whiteSpace: 'nowrap', width: '120px' }}>
                     Paid (₹)
                   </th>
-                  <th style={{ padding: '0.9rem 1rem', background: '#f8fafc', fontWeight: 600, color: '#475569', fontSize: '0.85rem', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap', width: '130px' }}>
+                  <th style={{ padding: '0.9rem 1rem', background: '#f8fafc', fontWeight: 600, color: '#475569', fontSize: '0.85rem', borderBottom: '1px solid var(--border)', textAlign: 'center', whiteSpace: 'nowrap', width: '130px' }}>
                     Payment Mode
                   </th>
                   <th style={{ padding: '0.9rem 1rem', background: '#f8fafc', fontWeight: 600, color: '#475569', fontSize: '0.85rem', borderBottom: '1px solid var(--border)', textAlign: 'center', width: '90px', whiteSpace: 'nowrap' }}>
@@ -660,7 +661,7 @@ export const ExpensesTab: React.FC = () => {
                       <td style={{ padding: '0.85rem 1rem', fontSize: '0.85rem', whiteSpace: 'nowrap', color: '#475569' }}>
                         {exp.dueDate || exp.date}
                       </td>
-                      <td style={{ padding: '0.85rem 1rem', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '0.85rem 1rem', fontSize: '0.85rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
                         <span
                           style={{
                             fontSize: '0.72rem',
@@ -687,7 +688,7 @@ export const ExpensesTab: React.FC = () => {
                       <td style={{ padding: '0.85rem 1rem', fontSize: '0.9rem', fontWeight: 600, textAlign: 'right', color: '#059669', fontFamily: 'Outfit, sans-serif', whiteSpace: 'nowrap' }}>
                         ₹{Number(exp.paidAmount !== undefined ? exp.paidAmount : exp.amount).toLocaleString('en-IN')}
                       </td>
-                      <td style={{ padding: '0.85rem 1rem', fontSize: '0.825rem', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '0.85rem 1rem', fontSize: '0.825rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
                         <span style={{ background: '#f1f5f9', color: '#334155', padding: '3px 9px', borderRadius: '6px', fontWeight: 600, fontSize: '0.75rem', border: '1px solid #e2e8f0', whiteSpace: 'nowrap', display: 'inline-block' }}>
                           {exp.paymentMode || 'CASH'}
                         </span>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { storage, type Service } from '../lib/storage';
 import { Trash2, Edit2, PlusCircle, Activity, Bed, Stethoscope, Layers } from 'lucide-react';
+import '../styles/components/ServiceManagement.css';
 
 interface ServiceManagementProps {
   services: Service[];
@@ -314,120 +315,6 @@ const ServiceManagement: React.FC<ServiceManagementProps> = ({ services, onUpdat
           })
         )}
       </div>
-
-      <style>{`
-        .header-title {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-        }
-
-        .section-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 1.5rem;
-        }
-
-        .form-card {
-          margin-bottom: 2rem;
-        }
-
-        .service-form {
-          display: grid;
-          gap: 1.25rem;
-          margin-top: 1rem;
-        }
-
-        .form-group label {
-          display: block;
-          font-size: 0.85rem;
-          font-weight: 600;
-          margin-bottom: 0.35rem;
-          color: var(--text-main);
-        }
-
-        .form-actions {
-          display: flex;
-          justify-content: flex-end;
-          gap: 0.75rem;
-          margin-top: 0.5rem;
-        }
-
-        .service-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-          gap: 1.25rem;
-        }
-
-        .service-card {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 1.15rem 1.25rem;
-          border-radius: 10px;
-          transition: all 0.2s;
-        }
-
-        .service-card:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 16px -4px rgba(0, 0, 0, 0.08);
-        }
-
-        .service-main {
-          display: flex;
-          flex-direction: column;
-          gap: 0.25rem;
-          margin-top: 4px;
-        }
-
-        .service-price {
-          font-weight: 700;
-          color: var(--primary);
-        }
-
-        .service-actions {
-          display: flex;
-          gap: 0.35rem;
-        }
-
-        .btn-ghost {
-          background: transparent;
-          color: var(--text-muted);
-          padding: 0.6rem 1.2rem;
-          border: 1px solid var(--border);
-          border-radius: 8px;
-          cursor: pointer;
-        }
-
-        .btn-icon {
-          background: transparent;
-          color: var(--text-muted);
-          padding: 0.45rem;
-          border-radius: 6px;
-          border: none;
-          cursor: pointer;
-        }
-
-        .btn-icon:hover {
-          color: var(--primary);
-          background: #f1f5f9;
-        }
-
-        .text-danger {
-          color: #ef4444 !important;
-        }
-
-        .text-danger:hover {
-          background: #fef2f2 !important;
-        }
-
-        .empty-state {
-          grid-column: 1 / -1;
-          text-align: center;
-          padding: 3rem;
-        }
-      `}</style>
     </div>
   );
 };

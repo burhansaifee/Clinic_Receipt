@@ -8,6 +8,7 @@ import type { Receipt, PatientHistorySummary } from '../../lib/storage';
 import { storage } from '../../lib/storage';
 import { useToast } from '../ui/Toast';
 import { sendReceiptViaWhatsApp, formatReceiptWhatsAppMessage } from '../../lib/whatsappReceipt';
+import '../../styles/tabs/HistoryTab.css';
 
 interface HistoryTabProps {
   onPrint: (receipts: Receipt[]) => void;
@@ -439,12 +440,12 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
                     <table className="history-table">
                       <thead>
                         <tr>
-                          <th style={{ width: '40px' }}></th>
-                          <th>Receipt</th>
-                          <th>Patient</th>
-                          <th>Doctor &amp; Method</th>
-                          <th className="text-right">Amount</th>
-                          <th className="text-right">Action</th>
+                          <th style={{ width: '40px', textAlign: 'center' }}></th>
+                          <th style={{ textAlign: 'left' }}>Receipt</th>
+                          <th style={{ textAlign: 'left' }}>Patient</th>
+                          <th style={{ textAlign: 'left' }}>Doctor &amp; Method</th>
+                          <th className="text-right" style={{ textAlign: 'right' }}>Amount</th>
+                          <th className="text-center" style={{ textAlign: 'center' }}>Action</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -452,7 +453,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
                           const totalNum = typeof r.total === 'number' ? r.total : parseFloat(r.total as any) || 0;
                           return (
                             <tr key={r.id} className={`receipt-table-row ${selectedIds.has(r.id) ? 'selected' : ''}`}>
-                              <td className="center-cell">
+                              <td className="center-cell" style={{ textAlign: 'center' }}>
                                 <input
                                   type="checkbox"
                                   checked={selectedIds.has(r.id)}
@@ -464,8 +465,11 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
                                 <span className="r-num">#{r.receiptNumber}</span>
                                 {r.billType === 'FACILITY' && (
                                   <div style={{ marginTop: '2px' }}>
-                                    <span style={{ fontSize: '0.65rem', background: '#f3e8ff', color: '#7e22ce', border: '1px solid #e9d5ff', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>
-                                      FACILITY {r.roomNumber ? `• ${r.roomNumber}` : ''}
+                                    <span
+                                      title={r.roomNumber ? `Room/Bed: ${r.roomNumber}` : 'Facility & Inpatient Bill'}
+                                      style={{ fontSize: '0.65rem', background: '#f3e8ff', color: '#7e22ce', border: '1px solid #e9d5ff', padding: '1px 5px', borderRadius: '4px', fontWeight: 700, display: 'inline-block' }}
+                                    >
+                                      FACILITY
                                     </span>
                                   </div>
                                 )}
@@ -502,11 +506,11 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
                                   {r.paymentMethod || 'CASH'}
                                 </span>
                               </td>
-                              <td className="text-right">
+                              <td className="text-right" style={{ textAlign: 'right' }}>
                                 <span className="r-amt">₹{totalNum.toFixed(2)}</span>
                               </td>
-                              <td className="text-right">
-                                <div className="action-buttons">
+                              <td className="text-center" style={{ textAlign: 'center' }}>
+                                <div className="action-buttons" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
                                   <button
                                     className="btn-icon-xs history-btn"
                                     onClick={(e) => {
@@ -610,7 +614,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                   <span style={{ color: 'var(--text-muted)' }}>Doctor:</span>
-                  <span style={{ color: 'var(--text-main)', fontWeight: 500 }}>Dr. {whatsAppModalReceipt.doctorName}</span>
+                  <span style={{ color: 'var(--text-main)', fontWeight: 500 }}> {whatsAppModalReceipt.doctorName}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                   <span style={{ color: 'var(--text-muted)' }}>Date:</span>
@@ -1008,7 +1012,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
 
                               {event.doctorName && (
                                 <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '2px' }}>
-                                  Attending Doctor: <strong>Dr. {event.doctorName}</strong>
+                                  Attending Doctor: <strong> {event.doctorName}</strong>
                                 </div>
                               )}
 
@@ -1094,14 +1098,14 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
                                   background: r.billType === 'FACILITY' ? '#f3e8ff' : '#e0f2fe',
                                   color: r.billType === 'FACILITY' ? '#7e22ce' : '#0284c7'
                                 }}>
-                                  {r.billType === 'FACILITY' ? `FACILITY ${r.roomNumber ? `• ${r.roomNumber}` : ''}` : 'OPD CONSULTATION'}
+                                  {r.billType === 'FACILITY' ? 'FACILITY' : 'OPD CONSULTATION'}
                                 </span>
                               </div>
                               <span style={{ fontSize: '0.8rem', color: '#64748b' }}>📅 {r.date}</span>
                             </div>
 
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', fontSize: '0.82rem' }}>
-                              <span style={{ color: '#64748b' }}>Doctor: <strong>Dr. {r.doctorName}</strong></span>
+                              <span style={{ color: '#64748b' }}>Doctor: <strong> {r.doctorName}</strong></span>
                               <span className={`payment-badge ${(r.paymentMethod || 'CASH').toLowerCase()}`}>
                                 {r.paymentMethod || 'CASH'}
                               </span>
@@ -1179,7 +1183,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.65rem', marginBottom: '0.75rem' }}>
                               <div>
                                 <span style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>Clinical Prescription</span>
-                                <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '2px' }}>Attending Physician: <strong>Dr. {p.doctorName}</strong></div>
+                                <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '2px' }}>Attending Physician: <strong> {p.doctorName}</strong></div>
                               </div>
                               <span style={{ fontSize: '0.8rem', color: '#64748b' }}>📅 {p.date}</span>
                             </div>
@@ -1346,7 +1350,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
                                     {a.appointmentDate} at {a.appointmentTime}
                                   </div>
                                   <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
-                                    Doctor: Dr. {a.doctorName} {a.notes ? `• ${a.notes}` : ''}
+                                    Doctor: {a.doctorName} {a.notes ? `• ${a.notes}` : ''}
                                   </div>
                                 </div>
                                 <span style={{
@@ -1381,7 +1385,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
                                     Revisit Date: {f.scheduledDate}
                                   </div>
                                   <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
-                                    Dr. {f.doctorName} {f.notes ? `• ${f.notes}` : ''}
+                                    {f.doctorName} {f.notes ? `• ${f.notes}` : ''}
                                   </div>
                                 </div>
                                 <span style={{

@@ -19,10 +19,11 @@ import {
   CalendarClock,
   Bed,
   Wallet,
-  Building2
+  Pill
 } from 'lucide-react';
 import { storage, type Doctor, type Receipt as ReceiptType, type Prescription, type ReceiptPaperType, type PrescriptionPaperType, type FollowUp } from '../lib/storage';
 import type { Tab } from './layout/Sidebar';
+import '../styles/components/Dashboard.css';
 import { useToast } from './ui/Toast';
 import { sendReceiptViaWhatsApp } from '../lib/whatsappReceipt';
 
@@ -78,21 +79,49 @@ const Dashboard: React.FC<DashboardProps> = ({
     totalExpenses: 0,
     expenseCount: 0,
   });
+  const [pharmacyStats, setPharmacyStats] = useState({
+    totalMedicines: 0,
+    todaySales: 0,
+    lowStockCount: 0
+  });
+  const [ipdStats, setIpdStats] = useState({
+    totalBeds: 0,
+    occupiedBeds: 0,
+    availableBeds: 0,
+    occupancyRate: 0
+  });
 
   useEffect(() => {
     let active = true;
     const loadDashboardData = async () => {
       try {
-        const [receipts, appointments, allReceipts, expenses] = await Promise.all([
+        const [receipts, appointments, allReceipts, expenses, pMetrics, ipdMetrics] = await Promise.all([
           storage.getReceipts({ limit: 6 }),
           storage.getAppointments(),
           storage.getReceipts(),
           storage.getExpenses(),
+          storage.getPharmacyMetrics().catch(() => ({ totalMedicines: 0, todaySales: 0, lowStockCount: 0 })),
+          storage.getIpdDashboardMetrics().catch(() => ({ totalBeds: 0, occupiedBeds: 0, availableBeds: 0, occupancyRate: 0 }))
         ]);
 
         if (!active) return;
 
         setRecentReceipts(receipts || []);
+        if (pMetrics) {
+          setPharmacyStats({
+            totalMedicines: pMetrics.totalMedicines || 0,
+            todaySales: pMetrics.todaySales || 0,
+            lowStockCount: pMetrics.lowStockCount || 0
+          });
+        }
+        if (ipdMetrics) {
+          setIpdStats({
+            totalBeds: ipdMetrics.totalBeds || 0,
+            occupiedBeds: ipdMetrics.occupiedBeds || 0,
+            availableBeds: ipdMetrics.availableBeds || 0,
+            occupancyRate: ipdMetrics.occupancyRate || 0
+          });
+        }
         
         // Filter today or pending/confirmed appointments sorted by date/time
         const sortedApts = [...(appointments || [])].sort((a, b) => {
@@ -162,6 +191,46 @@ const Dashboard: React.FC<DashboardProps> = ({
       {/* ── 1. Modern Clinical Hero Banner ─────────────────────────────────── */}
       <div className="dashboard-hero-card">
         <div className="hero-ambient-glow" />
+
+        {/* Quick Action Navigation Buttons - Horizontal On Top */}
+        <div className="hero-actions">
+          <button className="btn-hero-primary" onClick={onNewReceipt}>
+            <PlusCircle size={18} />
+            <span>Generate OPD Receipt</span>
+          </button>
+          <button
+            className="btn-hero-secondary"
+            onClick={() => onNavigate('beds')}
+            style={{ background: 'rgba(2, 132, 199, 0.25)', borderColor: 'rgba(56, 189, 248, 0.4)', color: '#e0f2fe' }}
+          >
+            <Bed size={18} style={{ color: '#38bdf8' }} />
+            <span>IPD Beds ({ipdStats.occupiedBeds}/{ipdStats.totalBeds})</span>
+          </button>
+          <button
+            className="btn-hero-secondary"
+            onClick={() => onNavigate('facility-billing')}
+            style={{ background: 'rgba(126, 34, 206, 0.25)', borderColor: 'rgba(192, 132, 252, 0.4)', color: '#f3e8ff' }}
+          >
+            <Bed size={18} style={{ color: '#c084fc' }} />
+            <span>Inpatient &amp; Facility Bill</span>
+          </button>
+          <button
+            className="btn-hero-secondary"
+            onClick={() => onNavigate('pharmacy')}
+            style={{ background: 'rgba(16, 185, 129, 0.25)', borderColor: 'rgba(52, 211, 153, 0.4)', color: '#ecfdf5' }}
+          >
+            <Pill size={18} style={{ color: '#34d399' }} />
+            <span>Pharmacy &amp; POS</span>
+          </button>
+          <button className="btn-hero-secondary" onClick={() => onNavigate('appointments')}>
+            <Calendar size={18} />
+            <span>Appointments</span>
+            {pendingAppointmentsCount > 0 && (
+              <span className="hero-alert-pill">{pendingAppointmentsCount}</span>
+            )}
+          </button>
+        </div>
+
         <div className="hero-content">
           <div className="hero-badge">
             <span className="hero-status-dot" />
@@ -175,28 +244,6 @@ const Dashboard: React.FC<DashboardProps> = ({
           <p className="hero-subtitle" style={{ margin: 0 }}>
             Clinic operational summary: {dashboardMetrics.totalReceipts} invoices ({facilityStats.opdCount} OPD • {facilityStats.facilityCount} Inpatient), {prescriptions.length} prescriptions issued, and {doctors.length} consulting doctors active.
           </p>
-        </div>
-
-        <div className="hero-actions" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-          <button className="btn-hero-primary" onClick={onNewReceipt}>
-            <PlusCircle size={18} />
-            <span>Generate OPD Receipt</span>
-          </button>
-          <button
-            className="btn-hero-secondary"
-            onClick={() => onNavigate('facility-billing')}
-            style={{ background: 'rgba(126, 34, 206, 0.25)', borderColor: 'rgba(192, 132, 252, 0.4)', color: '#f3e8ff' }}
-          >
-            <Bed size={18} style={{ color: '#c084fc' }} />
-            <span>Inpatient &amp; Facility Bill</span>
-          </button>
-          <button className="btn-hero-secondary" onClick={() => onNavigate('appointments')}>
-            <Calendar size={18} />
-            <span>Appointments</span>
-            {pendingAppointmentsCount > 0 && (
-              <span className="hero-alert-pill">{pendingAppointmentsCount}</span>
-            )}
-          </button>
         </div>
       </div>
 
@@ -391,6 +438,63 @@ const Dashboard: React.FC<DashboardProps> = ({
               <div className="stat-progress-fill cyan-fill" style={{ width: '90%' }} />
             </div>
             <span className="stat-subtext">Active medical specialists</span>
+          </div>
+        </div>
+
+        {/* Card 8: Hospital Pharmacy & POS */}
+        <div className="stat-box stat-purple" onClick={() => onNavigate('pharmacy')} style={{ cursor: 'pointer' }}>
+          <div className="stat-box-top">
+            <div className="stat-icon-wrapper" style={{ background: '#f0fdf4', color: '#16a34a' }}>
+              <Pill size={22} />
+            </div>
+            <span className="stat-pill-trend" style={{ background: '#dcfce7', color: '#15803d' }}>
+              {pharmacyStats.lowStockCount > 0 ? `${pharmacyStats.lowStockCount} Low Stock` : 'Stock Healthy'}
+            </span>
+          </div>
+          <div className="stat-box-body">
+            <span className="stat-label-text">Hospital Pharmacy</span>
+            <div className="stat-number-text">{pharmacyStats.totalMedicines} Formulations</div>
+          </div>
+          <div className="stat-footer-bar">
+            <div className="stat-progress-bg">
+              <div className="stat-progress-fill" style={{ width: '88%', background: '#16a34a' }} />
+            </div>
+            <span className="stat-subtext">₹{pharmacyStats.todaySales.toLocaleString()} dispensed today • 1-click POS</span>
+          </div>
+        </div>
+
+        {/* Card 9: Hospital Inpatient Beds & Ward Occupancy */}
+        <div className="stat-box stat-cyan" onClick={() => onNavigate('beds')} style={{ cursor: 'pointer' }}>
+          <div className="stat-box-top">
+            <div className="stat-icon-wrapper" style={{ background: '#e0f2fe', color: '#0284c7' }}>
+              <Bed size={22} />
+            </div>
+            <span
+              className="stat-pill-trend"
+              style={{
+                background: ipdStats.occupancyRate > 80 ? '#fee2e2' : '#ecfdf5',
+                color: ipdStats.occupancyRate > 80 ? '#dc2626' : '#059669',
+                borderColor: ipdStats.occupancyRate > 80 ? '#fecaca' : '#a7f3d0'
+              }}
+            >
+              {ipdStats.occupancyRate}% Occupied
+            </span>
+          </div>
+          <div className="stat-box-body">
+            <span className="stat-label-text">Inpatient Bed Matrix</span>
+            <div className="stat-number-text">{ipdStats.occupiedBeds} / {ipdStats.totalBeds} Beds</div>
+          </div>
+          <div className="stat-footer-bar">
+            <div className="stat-progress-bg">
+              <div
+                className="stat-progress-fill"
+                style={{
+                  width: `${Math.min(100, ipdStats.occupancyRate || 10)}%`,
+                  background: ipdStats.occupancyRate > 80 ? '#ef4444' : '#0284c7'
+                }}
+              />
+            </div>
+            <span className="stat-subtext">{ipdStats.availableBeds} vacant beds ready for admission</span>
           </div>
         </div>
       </div>
@@ -748,708 +852,6 @@ const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
       </div>
-
-      <style>{`
-        .dashboard {
-          display: flex;
-          flex-direction: column;
-          gap: 1.75rem;
-          padding-bottom: 2rem;
-        }
-
-        /* Hero Card */
-        .dashboard-hero-card {
-          position: relative;
-          background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f233a 100%);
-          color: white;
-          padding: 2.25rem 2.5rem;
-          border-radius: 20px;
-          box-shadow: 0 20px 30px -10px rgba(15, 23, 42, 0.25);
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 2rem;
-          overflow: hidden;
-          border: 1px solid rgba(255, 255, 255, 0.08);
-        }
-
-        .hero-ambient-glow {
-          position: absolute;
-          right: -80px;
-          top: -80px;
-          width: 320px;
-          height: 320px;
-          background: radial-gradient(circle, rgba(14, 165, 233, 0.22) 0%, rgba(99, 102, 241, 0.12) 50%, transparent 70%);
-          border-radius: 50%;
-          pointer-events: none;
-        }
-
-        .hero-content {
-          position: relative;
-          z-index: 1;
-          max-width: 680px;
-        }
-
-        .hero-badge {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          background: rgba(14, 165, 233, 0.15);
-          border: 1px solid rgba(56, 189, 248, 0.3);
-          color: #38bdf8;
-          font-size: 0.72rem;
-          font-weight: 700;
-          padding: 0.3rem 0.85rem;
-          border-radius: 9999px;
-          letter-spacing: 0.06em;
-          text-transform: uppercase;
-          margin-bottom: 0.85rem;
-        }
-
-        .hero-status-dot {
-          width: 6px;
-          height: 6px;
-          border-radius: 50%;
-          background: #38bdf8;
-          box-shadow: 0 0 8px #38bdf8;
-        }
-
-        .hero-badge-divider {
-          opacity: 0.5;
-        }
-
-        .hero-title {
-          font-size: 1.85rem;
-          font-weight: 700;
-          color: white;
-          margin: 0 0 0.5rem 0;
-          letter-spacing: -0.02em;
-          font-family: 'Outfit', sans-serif;
-        }
-
-        .hero-user-highlight {
-          color: #38bdf8;
-          text-shadow: 0 0 20px rgba(56, 189, 248, 0.3);
-        }
-
-        .hero-subtitle {
-          color: #94a3b8;
-          font-size: 0.9rem;
-          line-height: 1.55;
-        }
-
-        .hero-actions {
-          position: relative;
-          z-index: 1;
-          display: flex;
-          flex-direction: column;
-          gap: 0.75rem;
-          min-width: 210px;
-        }
-
-        .btn-hero-primary {
-          background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
-          color: white;
-          border: none;
-          padding: 0.85rem 1.4rem;
-          border-radius: 12px;
-          font-weight: 700;
-          font-size: 0.9rem;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 0.65rem;
-          cursor: pointer;
-          box-shadow: 0 10px 20px -3px rgba(14, 165, 233, 0.4);
-          transition: all 0.25s ease;
-        }
-
-        .btn-hero-primary:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 15px 25px -4px rgba(14, 165, 233, 0.5);
-        }
-
-        .btn-hero-secondary {
-          background: rgba(255, 255, 255, 0.08);
-          color: #f8fafc;
-          border: 1px solid rgba(255, 255, 255, 0.18);
-          padding: 0.75rem 1.4rem;
-          border-radius: 12px;
-          font-weight: 600;
-          font-size: 0.875rem;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 0.65rem;
-          cursor: pointer;
-          position: relative;
-          transition: all 0.2s ease;
-        }
-
-        .btn-hero-secondary:hover {
-          background: rgba(255, 255, 255, 0.14);
-          border-color: rgba(255, 255, 255, 0.3);
-          transform: translateY(-1px);
-        }
-
-        .hero-alert-pill {
-          background: #ef4444;
-          color: white;
-          font-size: 0.72rem;
-          font-weight: 700;
-          padding: 2px 7px;
-          border-radius: 9999px;
-          margin-left: 4px;
-        }
-
-        /* ── Metric Cards Grid ────────────────────────────────────────────── */
-        .stats-metric-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-          gap: 1.25rem;
-        }
-
-        .stat-box {
-          background: white;
-          border: 1px solid var(--border);
-          border-radius: 16px;
-          padding: 1.35rem 1.4rem;
-          display: flex;
-          flex-direction: column;
-          gap: 0.85rem;
-          transition: all 0.25s ease;
-          box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.03);
-          position: relative;
-          overflow: hidden;
-        }
-
-        .stat-box:hover {
-          transform: translateY(-3px);
-          box-shadow: 0 12px 20px -4px rgba(15, 23, 42, 0.07);
-          border-color: #cbd5e1;
-        }
-
-        .stat-box-top {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-
-        .stat-icon-wrapper {
-          width: 44px;
-          height: 44px;
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .emerald-icon { background: #ecfdf5; color: #059669; }
-        .blue-icon { background: #eff6ff; color: #2563eb; }
-        .indigo-icon { background: #eef2ff; color: #4f46e5; }
-        .purple-icon { background: #f5f3ff; color: #7c3aed; }
-        .amber-icon { background: #fffbeb; color: #d97706; }
-        .cyan-icon { background: #ecfeff; color: #0891b2; }
-
-        .stat-pill-trend {
-          font-size: 0.72rem;
-          font-weight: 700;
-          padding: 3px 8px;
-          border-radius: 9999px;
-        }
-
-        .positive { background: #dcfce7; color: #15803d; }
-        .info { background: #e0f2fe; color: #0369a1; }
-        .neutral { background: #f1f5f9; color: #475569; }
-        .purple-pill { background: #ede9fe; color: #6d28d9; }
-        .alert-pulse { background: #fee2e2; color: #b91c1c; animation: pulse 2s infinite; }
-
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.7; }
-        }
-
-        .stat-label-text {
-          font-size: 0.82rem;
-          font-weight: 600;
-          color: var(--text-muted);
-          text-transform: uppercase;
-          letter-spacing: 0.03em;
-        }
-
-        .stat-number-text {
-          font-size: 1.75rem;
-          font-weight: 800;
-          color: var(--text-main);
-          font-family: 'Outfit', sans-serif;
-          line-height: 1.1;
-          margin-top: 2px;
-        }
-
-        .stat-footer-bar {
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-          margin-top: auto;
-          padding-top: 4px;
-        }
-
-        .stat-progress-bg {
-          height: 4px;
-          width: 100%;
-          background: #f1f5f9;
-          border-radius: 9999px;
-          overflow: hidden;
-        }
-
-        .stat-progress-fill {
-          height: 100%;
-          border-radius: 9999px;
-        }
-
-        .emerald-fill { background: linear-gradient(90deg, #10b981, #059669); }
-        .blue-fill { background: linear-gradient(90deg, #38bdf8, #0284c7); }
-        .indigo-fill { background: linear-gradient(90deg, #818cf8, #4f46e5); }
-        .purple-fill { background: linear-gradient(90deg, #c084fc, #9333ea); }
-        .amber-fill { background: linear-gradient(90deg, #fbbf24, #d97706); }
-        .cyan-fill { background: linear-gradient(90deg, #22d3ee, #0891b2); }
-
-        .stat-subtext {
-          font-size: 0.725rem;
-          color: #94a3b8;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        /* ── Two Column Sections ──────────────────────────────────────────── */
-        .dashboard-two-col {
-          display: grid;
-          grid-template-columns: repeat(2, 1fr);
-          gap: 1.5rem;
-        }
-
-        .dash-card {
-          background: white;
-          border: 1px solid var(--border);
-          border-radius: 16px;
-          padding: 1.6rem;
-          display: flex;
-          flex-direction: column;
-          gap: 1.25rem;
-          box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.03);
-        }
-
-        .dash-card-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          border-bottom: 1px solid var(--border);
-          padding-bottom: 1rem;
-        }
-
-        .dash-header-title {
-          display: flex;
-          align-items: center;
-          gap: 0.85rem;
-        }
-
-        .dash-header-title h3 {
-          margin: 0;
-          font-size: 1.05rem;
-          font-weight: 700;
-          color: var(--text-main);
-        }
-
-        .dash-header-title p {
-          margin: 0;
-          font-size: 0.78rem;
-          color: var(--text-muted);
-        }
-
-        .header-icon-mini {
-          width: 36px;
-          height: 36px;
-          border-radius: 10px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .header-icon-mini.green { background: #dcfce7; color: #059669; }
-        .header-icon-mini.cyan { background: #cffafe; color: #0891b2; }
-        .header-icon-mini.blue { background: #dbeafe; color: #2563eb; }
-        .header-icon-mini.amber { background: #fef3c7; color: #d97706; }
-
-        .dash-badge-sub {
-          background: #f1f5f9;
-          color: #334155;
-          font-size: 0.78rem;
-          font-weight: 700;
-          padding: 4px 10px;
-          border-radius: 8px;
-        }
-
-        .btn-dash-link {
-          background: transparent;
-          border: none;
-          color: var(--primary);
-          font-size: 0.82rem;
-          font-weight: 600;
-          display: inline-flex;
-          align-items: center;
-          gap: 3px;
-          cursor: pointer;
-          padding: 4px 8px;
-          border-radius: 6px;
-          transition: background 0.2s;
-        }
-
-        .btn-dash-link:hover {
-          background: #f0f9ff;
-        }
-
-        /* Payment Distribution */
-        .payment-distribution-container {
-          display: flex;
-          flex-direction: column;
-          gap: 1.25rem;
-        }
-
-        .payment-multi-bar {
-          height: 12px;
-          width: 100%;
-          background: #f1f5f9;
-          border-radius: 9999px;
-          display: flex;
-          overflow: hidden;
-        }
-
-        .payment-segment {
-          height: 100%;
-          transition: width 0.4s ease;
-        }
-
-        .seg-cash { background: #10b981; }
-        .seg-online { background: #0284c7; }
-
-        .payment-channel-list {
-          display: flex;
-          flex-direction: column;
-          gap: 0.75rem;
-        }
-
-        .payment-channel-item {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 0.75rem 1rem;
-          background: #f8fafc;
-          border: 1px solid var(--border);
-          border-radius: 12px;
-        }
-
-        .channel-info-left {
-          display: flex;
-          align-items: center;
-          gap: 0.85rem;
-        }
-
-        .channel-icon-pill {
-          width: 32px;
-          height: 32px;
-          border-radius: 8px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .cash-pill { background: #dcfce7; color: #15803d; }
-        .online-pill { background: #e0f2fe; color: #0369a1; }
-        .free-pill { background: #f1f5f9; color: #64748b; }
-
-        .channel-name {
-          display: block;
-          font-size: 0.85rem;
-          font-weight: 700;
-          color: var(--text-main);
-        }
-
-        .channel-count {
-          display: block;
-          font-size: 0.74rem;
-          color: var(--text-muted);
-        }
-
-        .channel-amount-right {
-          text-align: right;
-        }
-
-        .channel-val {
-          display: block;
-          font-size: 0.95rem;
-          font-weight: 800;
-          color: var(--text-main);
-        }
-
-        .channel-pct {
-          display: block;
-          font-size: 0.72rem;
-          color: #64748b;
-          font-weight: 600;
-        }
-
-        /* Health Tiles */
-        .system-health-grid {
-          display: flex;
-          flex-direction: column;
-          gap: 0.75rem;
-        }
-
-        .health-tile {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 0.75rem 1rem;
-          background: #f8fafc;
-          border: 1px solid var(--border);
-          border-radius: 12px;
-        }
-
-        .health-tile-left {
-          display: flex;
-          align-items: center;
-          gap: 0.85rem;
-        }
-
-        .health-icon {
-          width: 34px;
-          height: 34px;
-          border-radius: 8px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .health-icon.purple { background: #f3e8ff; color: #9333ea; }
-        .health-icon.green { background: #dcfce7; color: #16a34a; }
-        .health-icon.blue { background: #dbeafe; color: #2563eb; }
-        .health-icon.slate { background: #f1f5f9; color: #475569; }
-
-        .health-title {
-          display: block;
-          font-size: 0.84rem;
-          font-weight: 700;
-          color: var(--text-main);
-        }
-
-        .health-desc {
-          display: block;
-          font-size: 0.74rem;
-          color: var(--text-muted);
-        }
-
-        .health-status-badge {
-          font-size: 0.72rem;
-          font-weight: 700;
-          padding: 3px 8px;
-          border-radius: 6px;
-        }
-
-        .health-status-badge.active { background: #dcfce7; color: #15803d; }
-        .health-status-badge.pending { background: #fef3c7; color: #b45309; }
-        .health-status-badge.neutral { background: #f1f5f9; color: #64748b; }
-
-        /* Activity Lists */
-        .activity-list {
-          display: flex;
-          flex-direction: column;
-          gap: 0.65rem;
-        }
-
-        .activity-item {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 0.75rem 0.9rem;
-          background: #f8fafc;
-          border: 1px solid var(--border);
-          border-radius: 12px;
-          transition: background 0.15s;
-        }
-
-        .activity-item:hover {
-          background: #f1f5f9;
-        }
-
-        .activity-left {
-          display: flex;
-          align-items: center;
-          gap: 0.85rem;
-          min-width: 0;
-        }
-
-        .activity-avatar {
-          width: 36px;
-          height: 36px;
-          border-radius: 10px;
-          background: linear-gradient(135deg, #0ea5e9, #0284c7);
-          color: white;
-          font-weight: 700;
-          font-size: 0.85rem;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-        }
-
-        .activity-avatar.avatar-apt { background: linear-gradient(135deg, #6366f1, #4f46e5); }
-        .activity-avatar.avatar-pending { background: linear-gradient(135deg, #f59e0b, #d97706); }
-
-        .activity-main-line {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-        }
-
-        .activity-patient-name {
-          font-size: 0.875rem;
-          font-weight: 700;
-          color: var(--text-main);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        .activity-meta-tag {
-          font-size: 0.72rem;
-          color: #64748b;
-          background: #e2e8f0;
-          padding: 1px 6px;
-          border-radius: 4px;
-          font-weight: 600;
-        }
-
-        .activity-sub-line {
-          display: flex;
-          align-items: center;
-          gap: 5px;
-          font-size: 0.75rem;
-          color: var(--text-muted);
-          margin-top: 1px;
-        }
-
-        .activity-dot {
-          opacity: 0.4;
-        }
-
-        .activity-right {
-          text-align: right;
-          display: flex;
-          flex-direction: column;
-          align-items: flex-end;
-          gap: 3px;
-          flex-shrink: 0;
-        }
-
-        .activity-amount {
-          font-size: 0.95rem;
-          font-weight: 800;
-          color: var(--text-main);
-        }
-
-        .payment-badge-pill {
-          font-size: 0.68rem;
-          font-weight: 700;
-          padding: 2px 6px;
-          border-radius: 4px;
-          letter-spacing: 0.04em;
-        }
-
-        .badge-cash { background: #dcfce7; color: #15803d; }
-        .badge-online { background: #e0f2fe; color: #0284c7; }
-        .badge-free { background: #f1f5f9; color: #64748b; }
-
-        .btn-quick-wa {
-          width: 22px;
-          height: 22px;
-          border-radius: 6px;
-          border: 1px solid #bbf7d0;
-          background: #f0fdf4;
-          color: #16a34a;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          padding: 0;
-        }
-
-        .btn-quick-wa:hover {
-          background: #16a34a;
-          color: white;
-          border-color: #16a34a;
-          transform: scale(1.1);
-        }
-
-        .apt-badge-pill {
-          font-size: 0.68rem;
-          font-weight: 700;
-          padding: 2px 7px;
-          border-radius: 4px;
-          text-transform: uppercase;
-        }
-
-        .apt-confirmed { background: #dcfce7; color: #15803d; }
-        .apt-pending { background: #fef3c7; color: #b45309; }
-        .apt-cancelled { background: #fee2e2; color: #b91c1c; }
-
-        .btn-quick-review {
-          background: #0284c7;
-          color: white;
-          border: none;
-          font-size: 0.7rem;
-          font-weight: 600;
-          padding: 2px 7px;
-          border-radius: 4px;
-          cursor: pointer;
-          margin-top: 2px;
-        }
-
-        .empty-activity-state {
-          text-align: center;
-          padding: 2rem 1rem;
-          color: #94a3b8;
-          font-size: 0.85rem;
-        }
-
-        /* ── Responsive Rules ─────────────────────────────────────────────── */
-        @media (max-width: 1024px) {
-          .dashboard-hero-card {
-            flex-direction: column;
-            align-items: flex-start;
-          }
-          .hero-actions {
-            width: 100%;
-            flex-direction: row;
-          }
-          .btn-hero-primary, .btn-hero-secondary {
-            flex: 1;
-          }
-          .dashboard-two-col {
-            grid-template-columns: 1fr;
-          }
-        }
-
-        @media (max-width: 640px) {
-          .hero-actions {
-            flex-direction: column;
-          }
-          .stats-metric-grid {
-            grid-template-columns: 1fr;
-          }
-        }
-      `}</style>
     </div>
   );
 };

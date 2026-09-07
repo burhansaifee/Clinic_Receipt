@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { storage, type Doctor } from '../lib/storage';
 import { Trash2, Edit2, UserPlus } from 'lucide-react';
+import '../styles/components/DoctorManagement.css';
 
 interface DoctorManagementProps {
   doctors: Doctor[];
@@ -267,113 +268,6 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate }
           ))
         )}
       </div>
-
-      <style>{`
-        .section-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 2rem;
-        }
-
-        .form-card {
-          margin-bottom: 2rem;
-          max-width: 600px;
-        }
-
-        .doctor-form {
-          display: grid;
-          gap: 1.25rem;
-          margin-top: 1.5rem;
-        }
-
-        .form-group label {
-          display: block;
-          font-size: 0.875rem;
-          font-weight: 500;
-          margin-bottom: 0.5rem;
-          color: var(--text-main);
-        }
-
-        .form-actions {
-          display: flex;
-          justify-content: flex-end;
-          gap: 1rem;
-          margin-top: 0.5rem;
-        }
-
-        .doctor-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-          gap: 1.5rem;
-        }
-
-        .doctor-card {
-          display: flex;
-          justify-content: space-between;
-          padding: 1.5rem;
-        }
-
-        .doctor-badges {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 0.5rem;
-          margin-top: 0.5rem;
-        }
-
-        .badge {
-          display: inline-block;
-          background: #e0f2fe;
-          color: #0369a1;
-          padding: 0.25rem 0.75rem;
-          border-radius: 9999px;
-          font-size: 0.75rem;
-          font-weight: 600;
-        }
-
-        .badge.secondary {
-          background: #f1f5f9;
-          color: #475569;
-        }
-
-        .small-address {
-          font-size: 0.8rem;
-          margin-top: 0.5rem;
-          border-top: 1px solid var(--border);
-          padding-top: 0.5rem;
-        }
-
-        .btn-ghost {
-          background: transparent;
-          color: var(--text-muted);
-          padding: 0.75rem 1.5rem;
-        }
-
-        .btn-icon {
-          background: transparent;
-          color: var(--text-muted);
-          padding: 0.5rem;
-        }
-
-        .btn-icon:hover {
-          color: var(--primary);
-          background: #f1f5f9;
-        }
-
-        .text-danger {
-          color: #ef4444 !important;
-        }
-
-        .text-danger:hover {
-          background: #fef2f2 !important;
-        }
-
-        .empty-state {
-          grid-column: 1 / -1;
-          text-align: center;
-          padding: 3rem;
-        }
-      `}</style>
     </div>
   );
 };

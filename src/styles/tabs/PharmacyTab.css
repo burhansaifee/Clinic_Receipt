@@ -1,0 +1,197 @@
+/* ==========================================================================
+   PharmacyTab Stylesheet
+   ========================================================================== */
+
+/* ── Pharmacy Print Slip Styles ─────────────────────────────────────────── */
+@media print {
+  .no-print,
+  .modal-overlay,
+  .pharmacy-workstation {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  html, body, #root, .app-container, .main-content {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    background: white !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+  }
+  #pharmacy-print-slip {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  #pharmacy-print-slip .pharmacy-slip-container {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+}
+
+/* Thermal 80mm Layout */
+#pharmacy-print-slip.paper-thermal80 .pharmacy-slip-container {
+  max-width: 74mm;
+  margin: 0 auto;
+  padding: 3mm 4mm;
+  font-size: 8.5pt;
+  line-height: 1.25;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #000;
+}
+
+/* Thermal 58mm Layout */
+#pharmacy-print-slip.paper-thermal58 .pharmacy-slip-container {
+  max-width: 52mm;
+  margin: 0 auto;
+  padding: 2mm 3mm;
+  font-size: 7.5pt;
+  line-height: 1.2;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #000;
+}
+
+/* A5 Layout */
+#pharmacy-print-slip.paper-a5 .pharmacy-slip-container {
+  max-width: 138mm;
+  margin: 0 auto;
+  padding: 8mm 10mm;
+  font-size: 9pt;
+  line-height: 1.35;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #000;
+}
+
+/* A4 Layout */
+#pharmacy-print-slip.paper-a4 .pharmacy-slip-container {
+  max-width: 180mm;
+  margin: 0 auto;
+  padding: 12mm 15mm;
+  font-size: 10pt;
+  line-height: 1.4;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #000;
+}
+
+/* A6 Layout */
+#pharmacy-print-slip.paper-a6 .pharmacy-slip-container {
+  max-width: 95mm;
+  margin: 0 auto;
+  padding: 4mm 6mm;
+  font-size: 8pt;
+  line-height: 1.25;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #000;
+}
+
+#pharmacy-print-slip .pharmacy-slip-header {
+  text-align: center;
+  border-bottom: 1px dashed #000;
+  padding-bottom: 5px;
+  margin-bottom: 6px;
+}
+
+#pharmacy-print-slip .clinic-name {
+  margin: 0 0 2px 0;
+  font-size: 1.2em;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: #000;
+}
+
+#pharmacy-print-slip .clinic-address,
+#pharmacy-print-slip .clinic-phone {
+  margin: 1px 0;
+  font-size: 0.85em;
+  color: #222;
+}
+
+#pharmacy-print-slip .slip-title-bar {
+  margin-top: 5px;
+  font-weight: 800;
+  font-size: 0.95em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+#pharmacy-print-slip .pharmacy-slip-meta {
+  margin-bottom: 6px;
+  font-size: 0.88em;
+  border-bottom: 1px dashed #000;
+  padding-bottom: 5px;
+}
+
+#pharmacy-print-slip .meta-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+#pharmacy-print-slip .pharmacy-slip-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 6px;
+}
+
+#pharmacy-print-slip .pharmacy-slip-table th {
+  border-bottom: 1px dashed #000;
+  padding: 3px 2px;
+  font-size: 0.88em;
+  text-align: left;
+}
+
+#pharmacy-print-slip .pharmacy-slip-table td {
+  padding: 3px 2px;
+  vertical-align: top;
+  font-size: 0.92em;
+}
+
+#pharmacy-print-slip .item-name {
+  font-weight: 700;
+}
+
+#pharmacy-print-slip .item-batch {
+  font-size: 0.78em;
+  color: #444;
+}
+
+#pharmacy-print-slip .pharmacy-slip-table tfoot td {
+  border-top: 1px dashed #000;
+  padding: 3px 2px;
+  font-size: 0.9em;
+}
+
+#pharmacy-print-slip .pharmacy-slip-table tfoot .total-row td {
+  border-top: 1.5px solid #000;
+  border-bottom: 1.5px solid #000;
+  padding: 5px 2px;
+}
+
+#pharmacy-print-slip .pharmacy-slip-notes {
+  margin-top: 4px;
+  font-size: 0.82em;
+  font-style: italic;
+}
+
+#pharmacy-print-slip .pharmacy-slip-footer {
+  text-align: center;
+  margin-top: 8px;
+  border-top: 1px dashed #000;
+  padding-top: 5px;
+  font-size: 0.8em;
+}
+
+#pharmacy-print-slip .pharmacy-slip-footer p {
+  margin: 2px 0;
+}
+
+#pharmacy-print-slip .pharmacy-slip-footer .sub-foot {
+  font-size: 0.82em;
+  color: #333;
+}

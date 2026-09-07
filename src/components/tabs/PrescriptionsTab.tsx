@@ -3,6 +3,7 @@ import { FileText, Search, Printer, MessageCircle } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 import { storage, formatAgeGender, type Prescription } from '../../lib/storage';
 import { MedicinesDropdown } from '../ui/MedicinesDropdown';
+import '../../styles/tabs/PrescriptionsTab.css';
 
 interface PrescriptionsTabProps {
   prescriptions: Prescription[];
@@ -26,8 +27,20 @@ const PrescriptionsTab: React.FC<PrescriptionsTabProps> = ({ prescriptions, onPr
       
       const docs = await storage.getDoctors();
       const docObj = docs.find(d => d.id === p.doctorId);
+      let rxPid = p.patientId || p.pid || p.receiptNumber || '';
+      if (!rxPid && p.receiptId) {
+        try {
+          const allReceipts = await storage.getReceipts();
+          const foundRec = allReceipts.find(r => r.id === p.receiptId);
+          if (foundRec?.patientId) rxPid = foundRec.patientId;
+          else if (foundRec?.receiptNumber) rxPid = foundRec.receiptNumber;
+        } catch {}
+      }
       const enrichedPrescription = {
         ...p,
+        patientId: rxPid,
+        receiptNumber: rxPid,
+        pid: rxPid,
         doctorSpecialization: docObj?.specialization || '',
         doctorQualifications: docObj?.qualifications || ''
       };
@@ -108,7 +121,7 @@ const PrescriptionsTab: React.FC<PrescriptionsTabProps> = ({ prescriptions, onPr
             className="history-table-wrapper"
             style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', overflowX: 'auto' }}
           >
-            <table className="history-table" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
+            <table className="history-table" style={{ width: '100%', minWidth: '880px', borderCollapse: 'separate', borderSpacing: 0 }}>
               <thead>
                 <tr>
                   {['Date', 'Patient Details', 'Age / Gender', 'Prescribed By', 'Diagnosis', 'Medicines', 'Action'].map((col, idx, arr) => (
@@ -121,9 +134,10 @@ const PrescriptionsTab: React.FC<PrescriptionsTabProps> = ({ prescriptions, onPr
                         color: '#475569',
                         fontSize: '0.875rem',
                         borderBottom: '1px solid var(--border)',
+                        textAlign: col === 'Action' || col === 'Age / Gender' ? 'center' : 'left',
                         ...(idx === 0 ? { borderTopLeftRadius: '12px' } : {}),
                         ...(idx === arr.length - 1 ? { borderTopRightRadius: '12px' } : {}),
-                        ...(col === 'Action' ? { width: '100px', textAlign: 'center' } : {}),
+                        ...(col === 'Action' ? { width: '100px' } : {}),
                       }}
                     >
                       {col}
@@ -134,8 +148,8 @@ const PrescriptionsTab: React.FC<PrescriptionsTabProps> = ({ prescriptions, onPr
               <tbody>
                 {filtered.map(p => (
                   <tr key={p.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                    <td style={{ padding: '1rem', fontSize: '0.875rem', whiteSpace: 'nowrap' }}>{p.date}</td>
-                    <td style={{ padding: '1rem', fontSize: '0.875rem' }}>
+                    <td style={{ padding: '1rem', fontSize: '0.875rem', whiteSpace: 'nowrap', textAlign: 'left' }}>{p.date}</td>
+                    <td style={{ padding: '1rem', fontSize: '0.875rem', textAlign: 'left' }}>
                       {p.patientId && (
                         <div style={{ marginBottom: '3px' }}>
                           <span className="patient-id-badge">{p.patientId}</span>
@@ -145,11 +159,11 @@ const PrescriptionsTab: React.FC<PrescriptionsTabProps> = ({ prescriptions, onPr
                       <br />
                       <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{p.patientPhone || 'No Phone'}</span>
                     </td>
-                    <td style={{ padding: '1rem', fontSize: '0.875rem' }}>
+                    <td className="text-center" style={{ padding: '1rem', fontSize: '0.875rem', textAlign: 'center' }}>
                       {formatAgeGender(p.patientAge, p.patientGender)}
                     </td>
-                    <td style={{ padding: '1rem', fontSize: '0.875rem', whiteSpace: 'nowrap' }}>{p.doctorName}</td>
-                    <td style={{ padding: '1rem', fontSize: '0.875rem' }}>
+                    <td style={{ padding: '1rem', fontSize: '0.875rem', whiteSpace: 'nowrap', textAlign: 'left' }}>{p.doctorName}</td>
+                    <td style={{ padding: '1rem', fontSize: '0.875rem', textAlign: 'left' }}>
                       <div>{p.diagnosis || 'N/A'}</div>
                       {p.followUpDate && (
                         <div style={{ marginTop: '4px' }}>
@@ -159,10 +173,19 @@ const PrescriptionsTab: React.FC<PrescriptionsTabProps> = ({ prescriptions, onPr
                         </div>
                       )}
                     </td>
-                    <td style={{ padding: '1rem', fontSize: '0.875rem' }}>
+                    <td style={{ padding: '1rem', fontSize: '0.875rem', textAlign: 'left' }}>
                       <MedicinesDropdown medicines={p.medicines || []} />
+                      {p.labInvestigations && p.labInvestigations.length > 0 && (
+                        <div style={{ marginTop: '6px', display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                          {p.labInvestigations.map((test, idx) => (
+                            <span key={idx} style={{ fontSize: '0.7rem', background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                              🧪 {test}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </td>
-                    <td className="text-center" style={{ padding: '1rem' }}>
+                    <td className="text-center" style={{ padding: '1rem', textAlign: 'center' }}>
                       <div className="table-actions" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem' }}>
                         <button
                           className="btn-icon"

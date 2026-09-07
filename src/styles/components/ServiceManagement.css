@@ -1,0 +1,87 @@
+/* ==========================================================================
+   ServiceManagement Stylesheet
+   ========================================================================== */
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.form-card {
+  margin-bottom: 2rem;
+}
+
+.service-form {
+  display: grid;
+  gap: 1.25rem;
+  margin-top: 1rem;
+}
+
+.service-form .form-group label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+  color: var(--text-main);
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.service-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.25rem;
+}
+
+.service-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.15rem 1.25rem;
+  border-radius: 10px;
+  transition: all 0.2s;
+}
+
+.service-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px -4px rgba(0, 0, 0, 0.08);
+}
+
+.service-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 4px;
+}
+
+.service-price {
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.service-actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.service-category-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  margin-bottom: 4px;
+}

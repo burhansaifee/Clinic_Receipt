@@ -1,0 +1,114 @@
+/* ==========================================================================
+   BedsTab Stylesheet
+   ========================================================================== */
+
+.beds-tab-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding-bottom: 2rem;
+}
+
+.beds-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.bed-metric-card {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+  transition: transform 0.2s ease;
+}
+
+.bed-metric-card:hover {
+  transform: translateY(-2px);
+}
+
+.beds-filter-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  background: white;
+  padding: 1rem 1.25rem;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+}
+
+.beds-grid-layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.25rem;
+}
+
+.bed-status-card {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+}
+
+.bed-status-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px -4px rgba(0, 0, 0, 0.08);
+}
+
+.bed-status-card.occupied {
+  border-left: 4px solid #ef4444;
+}
+
+.bed-status-card.available {
+  border-left: 4px solid #10b981;
+}
+
+.bed-status-card.maintenance {
+  border-left: 4px solid #f59e0b;
+}
+
+.bed-status-card.reserved {
+  border-left: 4px solid #6366f1;
+}
+
+.bed-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.bed-number-badge {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--text-main);
+  font-family: 'Outfit', sans-serif;
+}
+
+.bed-patient-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  background: #f8fafc;
+  padding: 0.75rem;
+  border-radius: 10px;
+}
+
+.bed-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: auto;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--border);
+}

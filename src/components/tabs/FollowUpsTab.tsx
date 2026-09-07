@@ -14,6 +14,7 @@ import { storage, formatAgeGender, type Doctor, type FollowUp, type FollowUpStat
 import { sendFollowUpViaWhatsApp, formatFollowUpWhatsAppMessage } from '../../lib/whatsappReceipt';
 import { useToast } from '../ui/Toast';
 import { useConfirm } from '../ui/ConfirmDialog';
+import '../../styles/tabs/FollowUpsTab.css';
 
 interface FollowUpsTabProps {
   doctors: Doctor[];
@@ -358,7 +359,7 @@ export const FollowUpsTab: React.FC<FollowUpsTabProps> = ({
             >
               <option value="ALL">All Doctors</option>
               {doctors.map(d => (
-                <option key={d.id} value={d.id}>Dr. {d.name.replace(/^Dr\.?\s+/i, '')}</option>
+                <option key={d.id} value={d.id}> {d.name.replace(/^Dr\.?\s+/i, '')}</option>
               ))}
             </select>
 
@@ -397,9 +398,9 @@ export const FollowUpsTab: React.FC<FollowUpsTabProps> = ({
         ) : (
           <div
             className="history-table-wrapper"
-            style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden' }}
+            style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', overflowX: 'auto' }}
           >
-            <table className="history-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <table className="history-table" style={{ width: '100%', minWidth: '880px', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
                   {['Scheduled Date', 'Patient Details', 'Age / Gender', 'Doctor', 'Status', 'Actions'].map(col => (
@@ -412,7 +413,7 @@ export const FollowUpsTab: React.FC<FollowUpsTabProps> = ({
                         color: '#475569',
                         fontSize: '0.825rem',
                         borderBottom: '1px solid var(--border)',
-                        textAlign: col === 'Actions' ? 'center' : 'left'
+                        textAlign: col === 'Actions' || col === 'Age / Gender' || col === 'Status' ? 'center' : 'left'
                       }}
                     >
                       {col}
@@ -432,14 +433,14 @@ export const FollowUpsTab: React.FC<FollowUpsTabProps> = ({
                   return (
                     <tr key={fu.id} style={{ borderBottom: '1px solid var(--border)' }}>
                       {/* Scheduled Date */}
-                      <td style={{ padding: '0.85rem 1rem', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '0.85rem 1rem', fontSize: '0.85rem', whiteSpace: 'nowrap', textAlign: 'left' }}>
                         <div style={{ fontWeight: 700, color: 'var(--text-main)' }}>{formattedDate}</div>
                         <div style={{ marginTop: '3px' }}>{getRelativeDateTag(fu.scheduledDate, fu.status)}</div>
                       </td>
 
                       {/* Patient Details */}
                       <td 
-                        style={{ padding: '0.85rem 1rem', fontSize: '0.85rem', cursor: 'pointer', transition: 'background 0.2s' }}
+                        style={{ padding: '0.85rem 1rem', fontSize: '0.85rem', cursor: 'pointer', transition: 'background 0.2s', textAlign: 'left' }}
                         onClick={() => alert(`Follow-Up Advice for ${fu.patientName}:\n\n${fu.notes || 'General consultation revisit'}`)}
                         title="Click to view follow-up advice"
                         onMouseEnter={(e) => e.currentTarget.style.background = '#f1f5f9'}
@@ -464,17 +465,17 @@ export const FollowUpsTab: React.FC<FollowUpsTabProps> = ({
                       </td>
 
                       {/* Age / Gender */}
-                      <td style={{ padding: '0.85rem 1rem', fontSize: '0.825rem', color: '#475569', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '0.85rem 1rem', fontSize: '0.825rem', color: '#475569', whiteSpace: 'nowrap', textAlign: 'center' }}>
                         {formatAgeGender(fu.patientAge, fu.patientGender)}
                       </td>
 
                       {/* Doctor */}
-                      <td style={{ padding: '0.85rem 1rem', fontSize: '0.85rem', color: 'var(--text-main)' }}>
+                      <td style={{ padding: '0.85rem 1rem', fontSize: '0.85rem', color: 'var(--text-main)', textAlign: 'left' }}>
                         {fu.doctorName.replace(/^Dr\.?\s+/i, '')}
                       </td>
 
                       {/* Status Dropdown */}
-                      <td style={{ padding: '0.85rem 1rem', fontSize: '0.825rem' }}>
+                      <td style={{ padding: '0.85rem 1rem', fontSize: '0.825rem', textAlign: 'center' }}>
                         <select
                           value={fu.status}
                           onChange={e => handleStatusChange(fu.id, e.target.value as FollowUpStatus)}
@@ -649,7 +650,7 @@ export const FollowUpsTab: React.FC<FollowUpsTabProps> = ({
                   style={{ width: '100%', marginTop: '4px' }}
                 >
                   {doctors.map(d => (
-                    <option key={d.id} value={d.id}>Dr. {d.name.replace(/^Dr\.?\s+/i, '')} ({d.specialization})</option>
+                    <option key={d.id} value={d.id}> {d.name.replace(/^Dr\.?\s+/i, '')} ({d.specialization})</option>
                   ))}
                 </select>
               </div>

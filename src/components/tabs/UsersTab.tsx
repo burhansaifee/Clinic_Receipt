@@ -6,6 +6,7 @@ import {
 import type { Doctor } from '../../lib/storage';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
+import '../../styles/tabs/UsersTab.css';
 
 interface UsersTabProps {
   currentUser: string | null;
@@ -18,8 +19,12 @@ export const AVAILABLE_TABS = [
   { id: 'dashboard', label: 'Dashboard', desk: 'Clinical Desk' },
   { id: 'new-receipt', label: 'New Receipt', desk: 'Clinical Desk' },
   { id: 'facility-billing', label: 'Facility Billing', desk: 'Clinical Desk' },
+  { id: 'beds', label: 'IPD Beds & Wards', desk: 'Hospital Desk' },
+  { id: 'inpatient-census', label: 'Inpatient Census', desk: 'Hospital Desk' },
   { id: 'history', label: 'Receipt History', desk: 'Clinical Desk' },
   { id: 'prescriptions', label: 'Prescriptions (Rx)', desk: 'Clinical Desk' },
+  { id: 'pharmacy', label: 'Pharmacy & POS', desk: 'Hospital Desk' },
+  { id: 'lab', label: 'Diagnostics & Lab', desk: 'Hospital Desk' },
   { id: 'appointments', label: 'Appointments', desk: 'Clinical Desk' },
   { id: 'follow-ups', label: 'Follow-Ups', desk: 'Clinical Desk' },
   { id: 'doctors', label: 'Doctors Registry', desk: 'Management' },
@@ -482,7 +487,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
                           {linkedDoc && (
                             <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                               <Stethoscope size={13} style={{ color: '#059669' }} />
-                              <span>Linked Physician: <strong>Dr. {linkedDoc.name}</strong> ({linkedDoc.specialization})</span>
+                              <span>Linked Physician: <strong> {linkedDoc.name}</strong> ({linkedDoc.specialization})</span>
                             </div>
                           )}
                         </div>

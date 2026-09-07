@@ -7,6 +7,7 @@ import {
 import { storage, type ReceiptPaperType, type PrescriptionPaperType } from '../../lib/storage';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
+import '../../styles/tabs/SettingsTab.css';
 
 interface ActivationStatus {
   status: 'NOT_ACTIVATED' | 'ACTIVATED' | 'EXPIRED' | 'TAMPERED' | 'INVALID';
@@ -149,25 +150,13 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
   return (
     <div className="control-center">
       {/* Banner */}
-      <div
-        className="control-header-banner"
-        style={{
-          background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-          color: 'white',
-          padding: '1.75rem 2rem',
-          borderRadius: '16px',
-          marginBottom: '2rem',
-          boxShadow: '0 10px 25px -5px rgba(15,23,42,0.15)',
-          position: 'relative',
-          overflow: 'hidden',
-        }}
-      >
-        <div style={{ position: 'absolute', right: '-20px', top: '-20px', width: '150px', height: '150px', background: 'radial-gradient(circle, rgba(14,165,233,0.2) 0%, transparent 70%)', borderRadius: '50%', pointerEvents: 'none' }} />
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(14,165,233,0.15)', color: '#38bdf8', fontSize: '0.725rem', fontWeight: 700, padding: '0.25rem 0.75rem', borderRadius: '9999px', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.65rem', border: '1px solid rgba(56,189,248,0.25)' }}>
-          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#38bdf8' }} /> CONTROL CENTER &amp; CONFIGURATION
+      <div className="settings-header-banner">
+        <div className="settings-header-radial" />
+        <div className="settings-pill-tag">
+          <span className="settings-pill-dot" /> CONTROL CENTER &amp; CONFIGURATION
         </div>
-        <h2 style={{ fontSize: '1.65rem', margin: '0 0 0.4rem 0', fontWeight: 700, fontFamily: 'Outfit, sans-serif', color: 'white' }}>System Control Center</h2>
-        <p style={{ margin: 0, fontSize: '0.875rem', color: '#94a3b8', maxWidth: '640px', lineHeight: 1.5 }}>
+        <h2 className="settings-banner-title">System Control Center</h2>
+        <p className="settings-banner-desc">
           Manage your clinic's database backups, printer formats, system license, automated WhatsApp booking bot, workstation user profiles, and local network sync.
         </p>
       </div>
@@ -176,7 +165,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
         {/* ROW 1 — CARD 1: WhatsApp Bot */}
         <div className="card control-card" style={{ padding: '1.6rem', gap: '0.85rem', height: '100%' }}>
           <div className="card-icon-header inline">
-            <div className="header-icon green" style={{ background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', boxShadow: '0 4px 10px rgba(16,185,129,0.3)' }}>
+            <div className="header-icon settings-icon-green">
               <MessageSquare size={18} />
             </div>
             <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>WhatsApp Bot Setup</h3>
@@ -184,7 +173,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
           <p className="card-description">Enable automated patient appointment booking and instant WhatsApp notifications for your clinic.</p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: 'auto', paddingTop: '0.5rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '0.6rem 0.85rem', borderRadius: '10px', border: '1px solid var(--border)' }}>
+            <div className="settings-status-box">
               <span className="label-caps" style={{ color: '#64748b' }}>STATUS</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '0.825rem' }}>
                 <div className={`dot ${botStatus?.status === 'CONNECTED' ? 'green' : botStatus?.status === 'QR_READY' || botStatus?.status === 'CONNECTING' ? 'amber' : ''}`} />
@@ -203,11 +192,11 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
             )}
 
             {botStatus?.status === 'QR_READY' && botStatus?.qrCodeDataUrl && (
-              <div style={{ textAlign: 'center', background: '#f0f9ff', padding: '0.85rem', borderRadius: '12px', border: '1px solid #bae6fd' }}>
+              <div className="settings-qr-container">
                 <p style={{ fontSize: '0.78rem', color: '#0369a1', fontWeight: 700, marginBottom: '0.4rem' }}>
                   Scan with WhatsApp (Settings → Linked Devices)
                 </p>
-                <img src={botStatus.qrCodeDataUrl} alt="WhatsApp QR Code" style={{ width: '160px', height: '160px', margin: '0 auto', display: 'block', borderRadius: '8px', border: '2px solid white', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }} />
+                <img src={botStatus.qrCodeDataUrl} alt="WhatsApp QR Code" className="settings-qr-image" />
                 <p style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '0.4rem', margin: 0 }}>
                   Point your phone's WhatsApp camera at this code
                 </p>
@@ -290,7 +279,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
         {/* ROW 1 — CARD 2: Global Clinic & Hospital Identity */}
         <div className="card control-card" style={{ padding: '1.6rem', gap: '0.85rem', height: '100%' }}>
           <div className="card-icon-header inline">
-            <div className="header-icon" style={{ background: 'linear-gradient(135deg, #0ea5e9, #0284c7)', color: 'white', boxShadow: '0 4px 10px rgba(14,165,233,0.3)' }}>
+            <div className="header-icon settings-icon-blue">
               <Building2 size={18} />
             </div>
             <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>Global Clinic & Hospital Identity</h3>
@@ -328,7 +317,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
               </span>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            <div className="settings-profile-grid">
               <div>
                 <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: '3px' }}>
                   Hospital Phone
@@ -492,7 +481,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
         {/* ROW 3 — CARD 5: Workstation & Network Sync */}
         <div className="card control-card" style={{ padding: '1.6rem', gap: '0.85rem', height: '100%' }}>
           <div className="card-icon-header inline">
-            <div className="header-icon cyan" style={{ background: 'linear-gradient(135deg, #06b6d4, #0d9488)', color: 'white', boxShadow: '0 4px 10px rgba(6,182,212,0.3)' }}>
+            <div className="header-icon settings-icon-blue">
               <Server size={18} />
             </div>
             <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>Workstation &amp; Network Sync</h3>
@@ -516,8 +505,8 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
 
             {workstationMode === 'client' && (
               <>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <div style={{ flex: 2, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div className="settings-ip-grid">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>HOST IP ADDRESS</label>
                     <input
                       type="text"
@@ -528,7 +517,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                       style={{ margin: 0, padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
                     />
                   </div>
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>PORT</label>
                     <input
                       type="number"

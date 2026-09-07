@@ -10,31 +10,56 @@ import './App.css';
 import Sidebar from './components/layout/Sidebar';
 import PrintTemplates from './components/layout/PrintTemplates';
 
-// Screens
+// Core Shell Screens (Instant load)
 import Dashboard from './components/Dashboard';
 import ActivationScreen from './components/ActivationScreen';
 import UserConnectionScreen from './components/UserConnectionScreen';
-import DoctorWorkstation from './components/DoctorWorkstation';
 
-// Feature components
-import DoctorManagement from './components/DoctorManagement';
-import ServiceManagement from './components/ServiceManagement';
-import ReceiptForm from './components/ReceiptForm';
-import AppointmentManagement from './components/AppointmentManagement';
+// Feature components & Tabs (Code-Split on demand via React.lazy)
+const DoctorWorkstation = React.lazy(() => import('./components/DoctorWorkstation'));
+const DoctorManagement = React.lazy(() => import('./components/DoctorManagement'));
+const ServiceManagement = React.lazy(() => import('./components/ServiceManagement'));
+const ReceiptForm = React.lazy(() => import('./components/ReceiptForm'));
+const AppointmentManagement = React.lazy(() => import('./components/AppointmentManagement'));
+const HistoryTab = React.lazy(() => import('./components/tabs/HistoryTab'));
+const PrescriptionsTab = React.lazy(() => import('./components/tabs/PrescriptionsTab'));
+const SettingsTab = React.lazy(() => import('./components/tabs/SettingsTab'));
+const FollowUpsTab = React.lazy(() => import('./components/tabs/FollowUpsTab').then(m => ({ default: m.FollowUpsTab })));
+const ExpensesTab = React.lazy(() => import('./components/tabs/ExpensesTab'));
+const UsersTab = React.lazy(() => import('./components/tabs/UsersTab').then(m => ({ default: m.UsersTab })));
+const FacilityBillingTab = React.lazy(() => import('./components/tabs/FacilityBillingTab'));
+const PharmacyTab = React.lazy(() => import('./components/tabs/PharmacyTab').then(m => ({ default: m.PharmacyTab })));
+const BedsTab = React.lazy(() => import('./components/tabs/BedsTab').then(m => ({ default: m.BedsTab })));
+const InpatientCensusTab = React.lazy(() => import('./components/tabs/InpatientCensusTab').then(m => ({ default: m.InpatientCensusTab })));
+const LaboratoryTab = React.lazy(() => import('./components/tabs/LaboratoryTab').then(m => ({ default: m.LaboratoryTab })));
+
 import { ConfirmProvider, useConfirm } from './components/ui/ConfirmDialog';
 import { ToastProvider, useToast } from './components/ui/Toast';
 
-// Tabs
-import HistoryTab from './components/tabs/HistoryTab';
-import PrescriptionsTab from './components/tabs/PrescriptionsTab';
-import SettingsTab from './components/tabs/SettingsTab';
-import { FollowUpsTab } from './components/tabs/FollowUpsTab';
-import ExpensesTab from './components/tabs/ExpensesTab';
-import { UsersTab } from './components/tabs/UsersTab';
-import FacilityBillingTab from './components/tabs/FacilityBillingTab';
-
 import type { Tab } from './components/layout/Sidebar';
-import type { FollowUp } from './lib/storage';
+import type { FollowUp, BedAdmission } from './lib/storage';
+
+const TabFallback: React.FC = () => (
+  <div style={{
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: '380px',
+    gap: '0.85rem',
+    color: 'var(--text-muted, #64748b)'
+  }}>
+    <div style={{
+      width: '36px',
+      height: '36px',
+      border: '3px solid #e2e8f0',
+      borderTopColor: 'var(--primary, #0284c7)',
+      borderRadius: '50%',
+      animation: 'buvoraSpin 0.75s linear infinite'
+    }} />
+    <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Loading workstation module...</span>
+  </div>
+);
 
 const MainApp: React.FC = () => {
   const confirm = useConfirm();
@@ -69,6 +94,7 @@ const MainApp: React.FC = () => {
   const [editingReceipt, setEditingReceipt] = useState<ReceiptType | null>(null);
   const [receiptsToPrint, setReceiptsToPrint] = useState<ReceiptType[]>([]);
   const [activePrintPrescription, setActivePrintPrescription] = useState<Prescription | null>(null);
+  const [billingInitialAdmission, setBillingInitialAdmission] = useState<BedAdmission | null>(null);
   const [receiptPaperType, setReceiptPaperType] = useState<ReceiptPaperType>('A5');
   const [prescriptionPaperType, setPrescriptionPaperType] = useState<PrescriptionPaperType>('A4');
 
@@ -116,16 +142,16 @@ const MainApp: React.FC = () => {
     if (!currentUser) return [];
     const isUserAdmin = currentUser.toLowerCase() === 'admin';
     if (isUserAdmin) {
-      return ['dashboard', 'doctors', 'services', 'expenses', 'users', 'new-receipt', 'facility-billing', 'history', 'prescriptions', 'appointments', 'follow-ups', 'settings'];
+      return ['dashboard', 'doctors', 'services', 'expenses', 'users', 'new-receipt', 'facility-billing', 'beds', 'inpatient-census', 'history', 'prescriptions', 'pharmacy', 'lab', 'appointments', 'follow-ups', 'settings'];
     }
     if (currentUserTabs && currentUserTabs.length > 0) {
       return currentUserTabs;
     }
     if (currentUserRole === 'management') {
-      return ['doctors', 'services', 'expenses', 'users', 'settings'];
+      return ['doctors', 'services', 'expenses', 'pharmacy', 'beds', 'inpatient-census', 'lab', 'users', 'settings'];
     }
     if (currentUserRole === 'reception') {
-      return ['dashboard', 'new-receipt', 'facility-billing', 'history', 'prescriptions', 'appointments', 'follow-ups'];
+      return ['dashboard', 'new-receipt', 'facility-billing', 'beds', 'inpatient-census', 'history', 'prescriptions', 'pharmacy', 'lab', 'appointments', 'follow-ups'];
     }
     return [];
   }, [currentUser, currentUserRole, currentUserTabs]);
@@ -344,11 +370,13 @@ const MainApp: React.FC = () => {
 
   if (currentUserRole === 'doctor') {
     return (
-      <DoctorWorkstation
-        currentUser={currentUser}
-        currentUserDoctorId={currentUserDoctorId}
-        onLogout={handleLogout}
-      />
+      <React.Suspense fallback={<TabFallback />}>
+        <DoctorWorkstation
+          currentUser={currentUser}
+          currentUserDoctorId={currentUserDoctorId}
+          onLogout={handleLogout}
+        />
+      </React.Suspense>
     );
   }
 
@@ -384,6 +412,7 @@ const MainApp: React.FC = () => {
         onNewReceipt={() => { setEditingReceipt(null); setActiveTab('new-receipt'); setIsMobileMenuOpen(false); }}
         isMobileMenuOpen={isMobileMenuOpen}
         closeMenu={() => setIsMobileMenuOpen(false)}
+        allowedTabs={allowedTabs as Tab[]}
       />
 
       <main className="main-content">
@@ -392,9 +421,12 @@ const MainApp: React.FC = () => {
             <h1 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.01em' }}>
               {activeTab === 'dashboard' && 'Executive Dashboard'}
               {activeTab === 'new-receipt' && 'Create Patient Receipt'}
+              {activeTab === 'beds' && 'Inpatient Bed & Ward Occupancy Matrix (IPD)'}
+              {activeTab === 'inpatient-census' && 'Inpatient Census & Clinical Registry'}
               {activeTab === 'facility-billing' && 'Inpatient & Facility Billing'}
               {activeTab === 'history' && 'Invoices & Billing History'}
               {activeTab === 'prescriptions' && 'Prescriptions (Rx) Registry'}
+              {activeTab === 'pharmacy' && 'Hospital Pharmacy & Dispensary'}
               {activeTab === 'appointments' && 'Appointment Booking Desk'}
               {activeTab === 'follow-ups' && 'Patient Follow-Up Tracker'}
               {activeTab === 'doctors' && 'Doctors Registry'}
@@ -406,9 +438,12 @@ const MainApp: React.FC = () => {
             <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
               {activeTab === 'dashboard' && 'Overview of clinic operations, revenue, and live queue'}
               {activeTab === 'new-receipt' && 'Generate and print patient consultation invoices'}
+              {activeTab === 'beds' && 'Visual floor plan, 1-click admissions, vitals surveillance, bed transfers & facility billing integration'}
+              {activeTab === 'inpatient-census' && 'Live roster of active inpatients, stay duration, clinical vitals surveillance & financial folios'}
               {activeTab === 'facility-billing' && 'Itemized billing for room rent, oxygen supply, nursing care & procedures'}
               {activeTab === 'history' && 'Search, filter, reprint, and export financial records'}
               {activeTab === 'prescriptions' && 'Patient consultation records, diagnoses & medication charts'}
+              {activeTab === 'pharmacy' && 'Dispensary POS, 1-click prescription fulfillment, batches, expiry radar & stock management'}
               {activeTab === 'appointments' && 'Manage WhatsApp & reception patient appointment requests'}
               {activeTab === 'follow-ups' && 'Track patient revisit schedules, overdue reviews & WhatsApp reminders'}
               {activeTab === 'doctors' && 'Manage consulting physicians, qualifications & UPI QR setups'}
@@ -489,127 +524,157 @@ const MainApp: React.FC = () => {
               onNewReceipt={() => setActiveTab('new-receipt')}
             />
           )}
-          {activeTab === 'doctors' && <DoctorManagement doctors={doctors} onUpdate={refreshData} />}
-          {activeTab === 'services' && <ServiceManagement services={services} onUpdate={refreshData} />}
-          {activeTab === 'expenses' && <ExpensesTab />}
-          {activeTab === 'new-receipt' && (
-            <ReceiptForm
-              doctors={doctors}
-              initialData={editingReceipt}
-              onSave={() => { refreshData(); setEditingReceipt(null); setActiveTab('history'); }}
-              onPrintRequest={(receipt) => {
-                setReceiptsToPrint([receipt]);
-                setTimeout(() => window.print(), 150);
-              }}
-            />
-          )}
-          {activeTab === 'facility-billing' && (
-            <FacilityBillingTab
-              doctors={doctors}
-              onSave={() => { refreshData(); setActiveTab('history'); }}
-              onPrintRequest={(receipt) => {
-                setReceiptsToPrint([receipt]);
-                setTimeout(() => window.print(), 150);
-              }}
-            />
-          )}
-          {activeTab === 'history' && (
-            <HistoryTab
-              onPrint={handlePrint}
-              onEdit={handleEditReceipt}
-              onDelete={async (id) => {
-                if (await confirm('Are you sure you want to delete this receipt?', { isDanger: true })) {
-                  await storage.deleteReceipt(id);
-                  refreshData();
-                  toast('Receipt deleted', { type: 'success' });
-                }
-              }}
-              onExportCsv={() => storage.exportToExcel()}
-            />
-          )}
-          {activeTab === 'prescriptions' && (
-            <PrescriptionsTab prescriptions={prescriptions} onPrintRx={handlePrintRx} />
-          )}
-          {activeTab === 'appointments' && (
-            <AppointmentManagement
-              doctors={doctors}
-              onConvertToReceipt={(apt) => {
-                setEditingReceipt({
-                  id: '',
-                  receiptNumber: '',
-                  date: apt.appointmentDate || (apt as any).date || format(new Date(), 'yyyy-MM-dd'),
-                  patientName: apt.patientName,
-                  patientAge: apt.patientAge || '30',
-                  patientGender: apt.patientGender || 'Male',
-                  patientPhone: apt.patientPhone || '',
-                  doctorId: apt.doctorId,
-                  doctorName: apt.doctorName,
-                  items: [],
-                  total: 0,
-                  paymentMethod: 'CASH',
-                  appointmentId: apt.id,
-                });
-                setActiveTab('new-receipt');
-              }}
-            />
-          )}
-          {activeTab === 'follow-ups' && (
-            <FollowUpsTab
-              doctors={doctors}
-              followUps={followUps}
-              onRefresh={refreshData}
-              onConvertToReceipt={(fu) => {
-                setEditingReceipt({
-                  id: '',
-                  receiptNumber: '',
-                  date: format(new Date(), 'yyyy-MM-dd'),
-                  patientName: fu.patientName,
-                  patientAge: fu.patientAge || '30',
-                  patientGender: fu.patientGender || 'Male',
-                  patientPhone: fu.patientPhone || '',
-                  doctorId: fu.doctorId,
-                  doctorName: fu.doctorName,
-                  items: [],
-                  total: 0,
-                  paymentMethod: 'CASH',
-                });
-                setActiveTab('new-receipt');
-              }}
-            />
-          )}
-          {activeTab === 'users' && (
-            <UsersTab
-              currentUser={currentUser}
-              knownUsers={knownUsers}
-              setKnownUsers={setKnownUsers}
-              doctors={doctors}
-            />
-          )}
-          {activeTab === 'settings' && (
-            <SettingsTab
-              activationStatus={activationStatus}
-              machineId={machineId}
-              networkSecret={networkSecret}
-              workstationMode={workstationMode}
-              setWorkstationMode={setWorkstationMode}
-              hostIp={hostIp}
-              setHostIp={setHostIp}
-              hostPort={hostPort}
-              setHostPort={setHostPort}
-              localIp={localIp}
-              botStatus={botStatus}
-              setBotStatus={setBotStatus}
-              receiptPaperType={receiptPaperType}
-              setReceiptPaperType={setReceiptPaperType}
-              prescriptionPaperType={prescriptionPaperType}
-              setPrescriptionPaperType={setPrescriptionPaperType}
-              onExportData={() => storage.exportData()}
-              onImportData={handleImportData}
-              onExportCsv={() => storage.exportToExcel()}
-              onSaveConnectionSettings={handleSaveConnectionSettings}
-              onDeactivateLicense={handleDeactivateLicense}
-            />
-          )}
+          <React.Suspense fallback={<TabFallback />}>
+            {activeTab === 'doctors' && <DoctorManagement doctors={doctors} onUpdate={refreshData} />}
+            {activeTab === 'services' && <ServiceManagement services={services} onUpdate={refreshData} />}
+            {activeTab === 'expenses' && <ExpensesTab />}
+            {activeTab === 'new-receipt' && (
+              <ReceiptForm
+                doctors={doctors}
+                initialData={editingReceipt}
+                onSave={() => { refreshData(); setEditingReceipt(null); setActiveTab('history'); }}
+                onPrintRequest={(receipt) => {
+                  setReceiptsToPrint([receipt]);
+                  setTimeout(() => window.print(), 150);
+                }}
+              />
+            )}
+            {activeTab === 'beds' && (
+              <BedsTab
+                doctors={doctors}
+                onNavigateToBilling={(admission) => {
+                  setBillingInitialAdmission(admission);
+                  setActiveTab('facility-billing');
+                }}
+                onNavigateToCensus={() => setActiveTab('inpatient-census')}
+              />
+            )}
+            {activeTab === 'inpatient-census' && (
+              <InpatientCensusTab
+                doctors={doctors}
+                onNavigateToBilling={(admission) => {
+                  setBillingInitialAdmission(admission);
+                  setActiveTab('facility-billing');
+                }}
+                onNavigateToBeds={() => setActiveTab('beds')}
+              />
+            )}
+            {activeTab === 'facility-billing' && (
+              <FacilityBillingTab
+                doctors={doctors}
+                initialAdmission={billingInitialAdmission}
+                onClearInitialAdmission={() => setBillingInitialAdmission(null)}
+                onSave={() => { refreshData(); setActiveTab('history'); }}
+                onPrintRequest={(receipt) => {
+                  setReceiptsToPrint([receipt]);
+                  setTimeout(() => window.print(), 150);
+                }}
+              />
+            )}
+            {activeTab === 'history' && (
+              <HistoryTab
+                onPrint={handlePrint}
+                onEdit={handleEditReceipt}
+                onDelete={async (id) => {
+                  if (await confirm('Are you sure you want to delete this receipt?', { isDanger: true })) {
+                    await storage.deleteReceipt(id);
+                    refreshData();
+                    toast('Receipt deleted', { type: 'success' });
+                  }
+                }}
+                onExportCsv={() => storage.exportToExcel()}
+              />
+            )}
+            {activeTab === 'prescriptions' && (
+              <PrescriptionsTab prescriptions={prescriptions} onPrintRx={handlePrintRx} />
+            )}
+            {activeTab === 'pharmacy' && (
+              <PharmacyTab onRefresh={refreshData} />
+            )}
+            {activeTab === 'lab' && (
+              <LaboratoryTab onRefresh={refreshData} />
+            )}
+            {activeTab === 'appointments' && (
+              <AppointmentManagement
+                doctors={doctors}
+                onConvertToReceipt={(apt) => {
+                  setEditingReceipt({
+                    id: '',
+                    receiptNumber: '',
+                    date: apt.appointmentDate || (apt as any).date || format(new Date(), 'yyyy-MM-dd'),
+                    patientName: apt.patientName,
+                    patientAge: apt.patientAge || '30',
+                    patientGender: apt.patientGender || 'Male',
+                    patientPhone: apt.patientPhone || '',
+                    doctorId: apt.doctorId,
+                    doctorName: apt.doctorName,
+                    items: [],
+                    total: 0,
+                    paymentMethod: 'CASH',
+                    appointmentId: apt.id,
+                  });
+                  setActiveTab('new-receipt');
+                }}
+              />
+            )}
+            {activeTab === 'follow-ups' && (
+              <FollowUpsTab
+                doctors={doctors}
+                followUps={followUps}
+                onRefresh={refreshData}
+                onConvertToReceipt={(fu) => {
+                  setEditingReceipt({
+                    id: '',
+                    receiptNumber: '',
+                    date: format(new Date(), 'yyyy-MM-dd'),
+                    patientName: fu.patientName,
+                    patientAge: fu.patientAge || '30',
+                    patientGender: fu.patientGender || 'Male',
+                    patientPhone: fu.patientPhone || '',
+                    doctorId: fu.doctorId,
+                    doctorName: fu.doctorName,
+                    items: [],
+                    total: 0,
+                    paymentMethod: 'CASH',
+                  });
+                  setActiveTab('new-receipt');
+                }}
+              />
+            )}
+            {activeTab === 'users' && (
+              <UsersTab
+                currentUser={currentUser}
+                knownUsers={knownUsers}
+                setKnownUsers={setKnownUsers}
+                doctors={doctors}
+              />
+            )}
+            {activeTab === 'settings' && (
+              <SettingsTab
+                activationStatus={activationStatus}
+                machineId={machineId}
+                networkSecret={networkSecret}
+                workstationMode={workstationMode}
+                setWorkstationMode={setWorkstationMode}
+                hostIp={hostIp}
+                setHostIp={setHostIp}
+                hostPort={hostPort}
+                setHostPort={setHostPort}
+                localIp={localIp}
+                botStatus={botStatus}
+                setBotStatus={setBotStatus}
+                receiptPaperType={receiptPaperType}
+                setReceiptPaperType={setReceiptPaperType}
+                prescriptionPaperType={prescriptionPaperType}
+                setPrescriptionPaperType={setPrescriptionPaperType}
+                onExportData={() => storage.exportData()}
+                onImportData={handleImportData}
+                onExportCsv={() => storage.exportToExcel()}
+                onSaveConnectionSettings={handleSaveConnectionSettings}
+                onDeactivateLicense={handleDeactivateLicense}
+              />
+            )}
+          </React.Suspense>
         </div>
       </main>
 

@@ -158,7 +158,17 @@ if (typeof window !== 'undefined' && !(window as any).ipcRenderer) {
     'deleteReceipt', 'getMetadata', 'setMetadata', 'batchImportDoctors', 'getPrescriptions',
     'savePrescription', 'deletePrescription', 'getAppointments', 'saveAppointment',
     'updateAppointmentStatus', 'deleteAppointment', 'getFollowUps', 'saveFollowUp',
-    'updateFollowUpStatus', 'deleteFollowUp', 'getExpenses', 'saveExpense', 'deleteExpense'
+    'updateFollowUpStatus', 'deleteFollowUp', 'getExpenses', 'saveExpense', 'deleteExpense',
+    'getMedicines', 'saveMedicine', 'deleteMedicine', 'getMedicineBatches', 'saveMedicineBatch',
+    'deleteMedicineBatch', 'adjustMedicineStock', 'getPharmacySales', 'savePharmacySale',
+    'deletePharmacySale', 'getPharmacyMetrics', 'getPharmacyDashboardMetrics',
+    'getWards', 'saveWard', 'deleteWard', 'getBeds', 'saveBed', 'deleteBed', 'updateBedStatus',
+    'getBedAdmissions', 'admitPatientToBed', 'transferPatientBed', 'updateAdmissionBillingStatus',
+    'dischargePatientAdmission', 'addAdmissionVital', 'addAdmissionCharge', 'deleteAdmissionCharge',
+    'getIpdDashboardMetrics',
+    'getLabTests', 'saveLabTest', 'deleteLabTest', 'getNextLabOrderNumber', 'getLabOrders',
+    'getLabOrderById', 'saveLabOrder', 'updateLabOrderStatus', 'saveLabOrderResults', 'deleteLabOrder',
+    'getLabDashboardMetrics'
   ];
 
   const dbPolyfill: any = {};

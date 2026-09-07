@@ -3,6 +3,7 @@ import { storage, formatAgeGender, type Doctor, type Appointment, type Appointme
 import { Calendar, Search, CheckCircle, XCircle, Clock, Plus, Trash2, MessageSquare, Phone, Tag, Save, Check, CalendarDays, RefreshCw } from 'lucide-react';
 import { useConfirm } from './ui/ConfirmDialog';
 import { useToast } from './ui/Toast';
+import '../styles/components/AppointmentManagement.css';
 
 interface AppointmentManagementProps {
   doctors: Doctor[];
@@ -471,22 +472,22 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
             <p className="text-muted">No appointments found matching your current filter.</p>
           </div>
         ) : (
-          <div className="history-table-wrapper" style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden' }}>
-            <table className="history-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <div className="history-table-wrapper" style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', overflowX: 'auto' }}>
+            <table className="history-table" style={{ width: '100%', minWidth: '880px', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
-                  <th style={{ padding: '0.85rem 1rem' }}>Patient Details</th>
-                  <th style={{ padding: '0.85rem 1rem' }}>Doctor</th>
-                  <th style={{ padding: '0.85rem 1rem' }}>Requested Date & Time</th>
-                  <th style={{ padding: '0.85rem 1rem' }}>Source</th>
-                  <th style={{ padding: '0.85rem 1rem' }}>Status</th>
-                  <th className="text-right" style={{ padding: '0.85rem 1rem', width: '220px' }}>Actions</th>
+                  <th style={{ padding: '0.85rem 1rem', textAlign: 'left' }}>Patient Details</th>
+                  <th style={{ padding: '0.85rem 1rem', textAlign: 'left' }}>Doctor</th>
+                  <th style={{ padding: '0.85rem 1rem', textAlign: 'left' }}>Requested Date & Time</th>
+                  <th style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>Source</th>
+                  <th style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>Status</th>
+                  <th className="text-center" style={{ padding: '0.85rem 1rem', width: '220px', textAlign: 'center' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredAppointments.map((apt) => (
                   <tr key={apt.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                    <td style={{ padding: '1rem' }}>
+                    <td style={{ padding: '1rem', textAlign: 'left' }}>
                       {apt.patientId && (
                         <div style={{ marginBottom: '3px' }}>
                           <span className="patient-id-badge">{apt.patientId}</span>
@@ -500,17 +501,17 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
                       </span>
                     </td>
 
-                    <td style={{ padding: '1rem', fontSize: '0.9rem', fontWeight: 600, color: '#334155' }}>
+                    <td style={{ padding: '1rem', fontSize: '0.9rem', fontWeight: 600, color: '#334155', textAlign: 'left' }}>
                        {apt.doctorName}
                     </td>
 
-                    <td style={{ padding: '1rem', fontSize: '0.875rem' }}>
+                    <td style={{ padding: '1rem', fontSize: '0.875rem', textAlign: 'left' }}>
                       <strong style={{ color: '#0f172a' }}>{apt.appointmentDate}</strong>
                       <br />
                       <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 500 }}>{apt.appointmentTime}</span>
                     </td>
 
-                    <td style={{ padding: '1rem' }}>
+                    <td style={{ padding: '1rem', textAlign: 'center' }}>
                       {apt.source === 'WHATSAPP' ? (
                         <span style={{ background: '#dcfce7', color: '#15803d', padding: '0.2rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                           <MessageSquare size={13} /> WhatsApp
@@ -522,7 +523,7 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
                       )}
                     </td>
 
-                    <td style={{ padding: '1rem' }}>
+                    <td style={{ padding: '1rem', textAlign: 'center' }}>
                       {apt.status === 'PENDING' && (
                         <span style={{ background: '#fef3c7', color: '#b45309', padding: '0.25rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                           <Clock size={12} /> Pending Approval
@@ -534,12 +535,12 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
                         </span>
                       )}
                       {apt.status === 'CANCELLED' && (
-                        <div>
+                        <div style={{ display: 'inline-block' }}>
                           <span style={{ background: '#fef2f2', color: '#dc2626', padding: '0.25rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                             <XCircle size={12} /> Rejected / Cancelled
                           </span>
                           {apt.rejectionReason && (
-                            <div style={{ marginTop: '4px', fontSize: '0.75rem', color: '#991b1b', background: '#fff1f2', padding: '0.25rem 0.5rem', borderRadius: '6px', borderLeft: '3px solid #f43f5e' }}>
+                            <div style={{ marginTop: '4px', fontSize: '0.75rem', color: '#991b1b', background: '#fff1f2', padding: '0.25rem 0.5rem', borderRadius: '6px', borderLeft: '3px solid #f43f5e', textAlign: 'left' }}>
                               <strong>Reason:</strong> {apt.rejectionReason}
                             </div>
                           )}
@@ -552,8 +553,8 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
                       )}
                     </td>
 
-                    <td className="text-right" style={{ padding: '1rem' }}>
-                      <div className="action-buttons" style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
+                    <td className="text-center" style={{ padding: '1rem', textAlign: 'center' }}>
+                      <div className="action-buttons" style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center', alignItems: 'center' }}>
                         {apt.status === 'PENDING' && (
                           <>
                             <button

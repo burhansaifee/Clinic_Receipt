@@ -120,20 +120,27 @@ input:focus, select:focus {
 
 /* Print Styles */
 @media print {
-  html, body, #root, .app-container {
+  html, body, #root, .app-container, .doctor-container, .main-content {
     display: block !important;
     width: 100% !important;
     height: auto !important;
+    min-height: 0 !important;
     background: white !important;
     padding: 0 !important;
     margin: 0 !important;
     box-shadow: none !important;
+    overflow: visible !important;
+    position: static !important;
   }
-  .no-print, .modal-overlay {
+  .no-print, .modal-overlay, .doctor-header, .doctor-layout, .writer-overlay {
     display: none !important;
   }
-  .print-only {
+  .print-only,
+  #prescription-print-template,
+  #receipt-print-template {
     display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
   }
 }
 
@@ -176,7 +183,7 @@ input:focus, select:focus {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  z-index: 9999;
+  z-index: 25000;
 }
 
 .toast-message {
@@ -249,4 +256,52 @@ input:focus, select:focus {
 
 .text-right, th.text-right, td.text-right {
   text-align: right !important;
+}
+
+/* Cross-Platform Responsive, iOS Safe-Area & Touch Support */
+@supports (padding-top: env(safe-area-inset-top)) {
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* Touch Device Optimization (iPad, iOS, Android, Tablets) */
+@media (pointer: coarse) {
+  button, 
+  .btn,
+  .nav-item,
+  input[type="checkbox"],
+  input[type="radio"] {
+    min-height: 38px;
+    touch-action: manipulation;
+  }
+
+  .table-container,
+  .table-responsive,
+  .modal-content,
+  .tab-pane {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Mobile & Tablet Modal & Drawer Viewport Resilience */
+@media (max-width: 768px) {
+  .modal-backdrop,
+  .modal-overlay {
+    padding: 0.5rem !important;
+    align-items: flex-end !important;
+  }
+
+  .modal-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 94vh !important;
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    padding: 1rem !important;
+    margin: 0 !important;
+  }
 }

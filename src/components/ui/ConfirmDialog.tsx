@@ -69,7 +69,7 @@ export const ConfirmProvider: React.FC<{ children: ReactNode }> = ({ children })
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 9999,
+            zIndex: 20000,
             padding: '1rem'
           }}
         >

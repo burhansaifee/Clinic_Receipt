@@ -79,9 +79,33 @@ const hostPort = store.get('host_port') as number || 49152;
 const savedUser = store.get('current_user') as string || '';
 if (workstationMode !== 'client') {
   if (savedUser) {
-    database.init(Database, savedUser)
+    database.init(Database, savedUser);
   } else {
-    database.init(Database)
+    database.init(Database);
+  }
+
+  // Two-way synchronization: ensure users in SQLite are merged with electron-store
+  try {
+    const dbUsers = database.getUsers();
+    if (dbUsers && dbUsers.length > 0) {
+      for (const du of dbUsers) {
+        const existingIdx = knownUsersList.findIndex(u => u && u.id === du.id);
+        if (existingIdx !== -1) {
+          knownUsersList[existingIdx] = { ...knownUsersList[existingIdx], ...du };
+        } else {
+          knownUsersList.push(du);
+        }
+      }
+      store.set('known_users', knownUsersList);
+    }
+    // Persist all known users to SQLite database
+    for (const su of knownUsersList) {
+      if (su && su.id) {
+        database.saveUser(su);
+      }
+    }
+  } catch (e) {
+    console.error('[User Bootstrap] Failed to sync users with database:', e);
   }
 }
 
@@ -210,10 +234,26 @@ function startHostServer() {
               'getWards', 'saveWard', 'deleteWard',
               'getBeds', 'saveBed', 'deleteBed', 'updateBedStatus',
               'getBedAdmissions', 'admitPatientToBed', 'transferPatientBed',
-              'updateAdmissionBillingStatus', 'dischargePatientAdmission', 'addAdmissionVital', 'addAdmissionCharge', 'deleteAdmissionCharge', 'getIpdDashboardMetrics',
+              'updateAdmissionBillingStatus', 'dischargePatientAdmission', 'addAdmissionVital', 'addAdmissionCharge', 'deleteAdmissionCharge',
+              'addEmarOrder', 'updateEmarOrderStatus', 'recordEmarAdministration', 'addFluidIoEntry', 'deleteFluidIoEntry', 'addNursingShiftNote', 'deleteNursingShiftNote',
+              'getIpdDashboardMetrics',
               'getLabTests', 'saveLabTest', 'deleteLabTest', 'getNextLabOrderNumber',
               'getLabOrders', 'getLabOrderById', 'saveLabOrder', 'updateLabOrderStatus',
-              'saveLabOrderResults', 'deleteLabOrder', 'getLabDashboardMetrics'
+              'saveLabOrderResults', 'deleteLabOrder', 'getLabDashboardMetrics',
+              'getTpaProviders', 'saveTpaProvider', 'deleteTpaProvider',
+              'getInsuranceClaims', 'getInsuranceClaimById', 'saveInsuranceClaim',
+              'updateClaimStatus', 'addClaimQuery', 'getInsuranceDashboardMetrics',
+              'saveDischargeSummary', 'getDischargeSummary',
+              'getOperationTheatres', 'saveOperationTheatre', 'deleteOperationTheatre',
+              'getSurgicalCases', 'getSurgicalCaseById', 'saveSurgicalCase', 'updateSurgicalCaseStatus',
+              'getOtDashboardMetrics',
+              'getEmergencyVisits', 'getEmergencyVisitById', 'saveEmergencyVisit', 'updateEmergencyDisposition',
+              'getMlcRecords', 'getMlcRecordById', 'saveMlcRecord', 'getEmergencyDashboardMetrics',
+              'getDoctorCommissionRules', 'getDoctorCommissionRuleByDoctorId', 'saveDoctorCommissionRule',
+              'calculateDoctorAccruedEarnings', 'getDoctorPayoutTransactions', 'saveDoctorPayoutTransaction',
+              'getHospitalIndents', 'getHospitalIndentById', 'saveHospitalIndent', 'issueHospitalIndent',
+              'completeHospitalIndent', 'cancelHospitalIndent',
+              'getHospitalTier3Metrics', 'searchGlobalPatients'
             ];
             if (allowedMethods.includes(camelMethod) && typeof (database as any)[camelMethod] === 'function') {
               result = await (database as any)[camelMethod](...args);
@@ -221,10 +261,32 @@ function startHostServer() {
               throw new Error(`Unauthorized or unknown database method: ${camelMethod}`);
             }
           } else if (method === 'get-known-users') {
-            const knownUsers = store.get('known_users') as any[] || [
-              { id: 'default', role: 'reception' },
-              { id: 'admin', role: 'reception' }
-            ];
+            let knownUsers = store.get('known_users') as any[] || [];
+            try {
+              const dbUsers = database.getUsers();
+              if (dbUsers && dbUsers.length > 0) {
+                const map = new Map<string, any>();
+                for (const u of knownUsers) {
+                  if (u && u.id) map.set(u.id.toLowerCase(), u);
+                }
+                for (const u of dbUsers) {
+                  if (u && u.id) {
+                    const existing = map.get(u.id.toLowerCase());
+                    map.set(u.id.toLowerCase(), { ...(existing || {}), ...u });
+                  }
+                }
+                knownUsers = Array.from(map.values());
+                store.set('known_users', knownUsers);
+              }
+            } catch (e) {
+              console.error('[RPC get-known-users] DB error:', e);
+            }
+            if (knownUsers.length === 0) {
+              knownUsers = [
+                { id: 'default', role: 'reception' },
+                { id: 'admin', role: 'reception' }
+              ];
+            }
             result = knownUsers;
           } else if (method === 'add-known-user') {
             const [userId, role, doctorId, allowedTabs] = args;
@@ -233,19 +295,30 @@ function startHostServer() {
             if (knownUsers.some(u => u.id === cleanId)) {
               result = { success: false, error: 'User ID already exists' };
             } else {
-              knownUsers.push({ id: cleanId, role: role || 'reception', doctorId: doctorId || undefined, allowedTabs: allowedTabs || [] });
+              const newUser = { id: cleanId, role: role || 'reception', doctorId: doctorId || undefined, allowedTabs: allowedTabs || [], createdAt: new Date().toISOString() };
+              knownUsers.push(newUser);
               store.set('known_users', knownUsers);
+              try {
+                database.saveUser(newUser);
+              } catch (e) {
+                console.error('[RPC add-known-user] DB save error:', e);
+              }
               result = { success: true };
             }
           } else if (method === 'delete-known-user') {
             const [userId] = args;
             const cleanId = userId.trim().toLowerCase();
-            if (cleanId === 'default') {
-              result = { success: false, error: 'Cannot delete the default profile' };
+            if (cleanId === 'default' || cleanId === 'admin') {
+              result = { success: false, error: 'Cannot delete the default/admin profile' };
             } else {
               let knownUsers = store.get('known_users') as any[] || [];
               knownUsers = knownUsers.filter(u => u.id !== cleanId);
               store.set('known_users', knownUsers);
+              try {
+                database.deleteUser(cleanId);
+              } catch (e) {
+                console.error('[RPC delete-known-user] DB delete error:', e);
+              }
               result = { success: true };
             }
           } else if (method === 'set-user-password') {
@@ -255,8 +328,14 @@ function startHostServer() {
             const idx = knownUsers.findIndex(u => u.id === cleanId);
             if (idx !== -1) {
               const hashPassword = (pwd: string) => crypto.createHash('sha256').update(pwd + PASSWORD_SALT).digest('hex');
-              knownUsers[idx].password = password ? hashPassword(password) : '';
+              const pwdHash = password ? hashPassword(password) : '';
+              knownUsers[idx].password = pwdHash;
               store.set('known_users', knownUsers);
+              try {
+                database.setUserPassword(cleanId, pwdHash);
+              } catch (e) {
+                console.error('[RPC set-user-password] DB error:', e);
+              }
               result = { success: true };
             } else {
               result = { success: false, error: 'User ID not found' };
@@ -267,6 +346,11 @@ function startHostServer() {
             if (idx !== -1) {
               knownUsers[idx].password = '';
               store.set('known_users', knownUsers);
+              try {
+                database.setUserPassword('admin', '');
+              } catch (e) {
+                console.error('[RPC reset-admin-password] DB error:', e);
+              }
               result = { success: true, message: 'Admin password reset successfully! Enter "admin" to set a new password.' };
             } else {
               result = { success: false, error: 'Admin user not found.' };
@@ -290,6 +374,9 @@ function startHostServer() {
                 if (isPlainMatch && !isHashedMatch) {
                   user.password = hashPassword(password);
                   store.set('known_users', knownUsers);
+                  try {
+                    database.setUserPassword(cleanId, user.password);
+                  } catch (e) {}
                 }
                 result = { success: true, role: user.role, doctorId: user.doctorId };
               } else {
@@ -304,6 +391,11 @@ function startHostServer() {
             if (userIndex !== -1) {
               knownUsers[userIndex].allowedTabs = tabs;
               store.set('known_users', knownUsers);
+              try {
+                database.updateUserTabs(cleanId, tabs);
+              } catch (e) {
+                console.error('[RPC update-user-tabs] DB error:', e);
+              }
               result = { success: true };
             } else {
               result = { success: false, error: 'User not found' };
@@ -612,8 +704,8 @@ ipcMain.handle('deactivate-license', () => {
 
 
 ipcMain.handle('update-user-tabs', (_, userId: string, tabs: string[]) => {
-  const activeUser = store.get('current_user') as string || '';
-  if (activeUser.toLowerCase() !== 'admin') {
+  const activeUser = (store.get('current_user') as string || '').toLowerCase();
+  if (activeUser && activeUser !== 'admin' && activeUser !== 'default') {
     return { success: false, error: 'Unauthorized: Only the "admin" profile can edit user tabs.' };
   }
   if (workstationMode === 'client') return clientRequest('update-user-tabs', userId, tabs);
@@ -621,19 +713,32 @@ ipcMain.handle('update-user-tabs', (_, userId: string, tabs: string[]) => {
   const cleanId = userId.trim().toLowerCase();
   const knownUsers = store.get('known_users') as any[] || [];
   const userIndex = knownUsers.findIndex(u => u.id === cleanId);
-  if (userIndex === -1) return { success: false, error: 'User not found' };
-
-  knownUsers[userIndex].allowedTabs = tabs;
-  store.set('known_users', knownUsers);
+  if (userIndex !== -1) {
+    knownUsers[userIndex].allowedTabs = tabs;
+    store.set('known_users', knownUsers);
+  }
+  try {
+    database.updateUserTabs(cleanId, tabs);
+  } catch (e) {
+    console.error('[DB] updateUserTabs error:', e);
+  }
   return { success: true };
 });
 
 ipcMain.handle('get-current-user-tabs', () => {
   const currentUser = store.get('current_user') as string || null;
   if (!currentUser) return null;
+  if (currentUser.toLowerCase() === 'admin') return null;
+  try {
+    const dbUsers = database.getUsers();
+    const dbUser = dbUsers.find(u => u.id.toLowerCase() === currentUser.toLowerCase());
+    if (dbUser && Array.isArray(dbUser.allowedTabs)) {
+      return dbUser.allowedTabs;
+    }
+  } catch (e) {}
   const knownUsers = store.get('known_users') as any[] || [];
-  const user = knownUsers.find(u => u.id === currentUser);
-  return user ? user.allowedTabs : null;
+  const user = knownUsers.find(u => u.id.toLowerCase() === currentUser.toLowerCase());
+  return user && Array.isArray(user.allowedTabs) ? user.allowedTabs : null;
 });
 
 // Database folder IPC
@@ -867,6 +972,34 @@ ipcMain.handle('db-delete-admission-charge', (_, admissionId, chargeId) => {
   if (workstationMode === 'client') return clientRequest('db-delete-admission-charge', admissionId, chargeId);
   return database.deleteAdmissionCharge(admissionId, chargeId);
 })
+ipcMain.handle('db-add-emar-order', (_, admissionId, order) => {
+  if (workstationMode === 'client') return clientRequest('db-add-emar-order', admissionId, order);
+  return database.addEmarOrder(admissionId, order);
+})
+ipcMain.handle('db-update-emar-order-status', (_, admissionId, orderId, status) => {
+  if (workstationMode === 'client') return clientRequest('db-update-emar-order-status', admissionId, orderId, status);
+  return database.updateEmarOrderStatus(admissionId, orderId, status);
+})
+ipcMain.handle('db-record-emar-administration', (_, admissionId, record) => {
+  if (workstationMode === 'client') return clientRequest('db-record-emar-administration', admissionId, record);
+  return database.recordEmarAdministration(admissionId, record);
+})
+ipcMain.handle('db-add-fluid-io-entry', (_, admissionId, entry) => {
+  if (workstationMode === 'client') return clientRequest('db-add-fluid-io-entry', admissionId, entry);
+  return database.addFluidIoEntry(admissionId, entry);
+})
+ipcMain.handle('db-delete-fluid-io-entry', (_, admissionId, entryId) => {
+  if (workstationMode === 'client') return clientRequest('db-delete-fluid-io-entry', admissionId, entryId);
+  return database.deleteFluidIoEntry(admissionId, entryId);
+})
+ipcMain.handle('db-add-nursing-shift-note', (_, admissionId, note) => {
+  if (workstationMode === 'client') return clientRequest('db-add-nursing-shift-note', admissionId, note);
+  return database.addNursingShiftNote(admissionId, note);
+})
+ipcMain.handle('db-delete-nursing-shift-note', (_, admissionId, noteId) => {
+  if (workstationMode === 'client') return clientRequest('db-delete-nursing-shift-note', admissionId, noteId);
+  return database.deleteNursingShiftNote(admissionId, noteId);
+})
 ipcMain.handle('db-get-ipd-dashboard-metrics', () => {
   if (workstationMode === 'client') return clientRequest('db-get-ipd-dashboard-metrics');
   return database.getIpdDashboardMetrics();
@@ -918,6 +1051,180 @@ ipcMain.handle('db-get-lab-dashboard-metrics', () => {
   return database.getLabDashboardMetrics();
 })
 
+// SQLite Database TPA & Health Insurance Claims IPCs
+ipcMain.handle('db-get-tpa-providers', () => {
+  if (workstationMode === 'client') return clientRequest('db-get-tpa-providers');
+  return database.getTpaProviders();
+})
+ipcMain.handle('db-save-tpa-provider', (_, provider) => {
+  if (workstationMode === 'client') return clientRequest('db-save-tpa-provider', provider);
+  return database.saveTpaProvider(provider);
+})
+ipcMain.handle('db-delete-tpa-provider', (_, id) => {
+  if (workstationMode === 'client') return clientRequest('db-delete-tpa-provider', id);
+  return database.deleteTpaProvider(id);
+})
+ipcMain.handle('db-get-insurance-claims', (_, options) => {
+  if (workstationMode === 'client') return clientRequest('db-get-insurance-claims', options);
+  return database.getInsuranceClaims(options);
+})
+ipcMain.handle('db-get-insurance-claim-by-id', (_, id) => {
+  if (workstationMode === 'client') return clientRequest('db-get-insurance-claim-by-id', id);
+  return database.getInsuranceClaimById(id);
+})
+ipcMain.handle('db-save-insurance-claim', (_, claim) => {
+  if (workstationMode === 'client') return clientRequest('db-save-insurance-claim', claim);
+  return database.saveInsuranceClaim(claim);
+})
+ipcMain.handle('db-update-claim-status', (_, id, status, notes) => {
+  if (workstationMode === 'client') return clientRequest('db-update-claim-status', id, status, notes);
+  return database.updateClaimStatus(id, status, notes);
+})
+ipcMain.handle('db-add-claim-query', (_, claimId, query) => {
+  if (workstationMode === 'client') return clientRequest('db-add-claim-query', claimId, query);
+  return database.addClaimQuery(claimId, query);
+})
+ipcMain.handle('db-get-insurance-dashboard-metrics', () => {
+  if (workstationMode === 'client') return clientRequest('db-get-insurance-dashboard-metrics');
+  return database.getInsuranceDashboardMetrics();
+})
+ipcMain.handle('db-save-discharge-summary', (_, admissionId, summary) => {
+  if (workstationMode === 'client') return clientRequest('db-save-discharge-summary', admissionId, summary);
+  return database.saveDischargeSummary(admissionId, summary);
+})
+ipcMain.handle('db-get-discharge-summary', (_, admissionId) => {
+  if (workstationMode === 'client') return clientRequest('db-get-discharge-summary', admissionId);
+  return database.getDischargeSummary(admissionId);
+})
+
+// Operation Theatre (OT) IPCs
+ipcMain.handle('db-get-operation-theatres', () => {
+  if (workstationMode === 'client') return clientRequest('db-get-operation-theatres');
+  return database.getOperationTheatres();
+})
+ipcMain.handle('db-save-operation-theatre', (_, theatre) => {
+  if (workstationMode === 'client') return clientRequest('db-save-operation-theatre', theatre);
+  return database.saveOperationTheatre(theatre);
+})
+ipcMain.handle('db-delete-operation-theatre', (_, id) => {
+  if (workstationMode === 'client') return clientRequest('db-delete-operation-theatre', id);
+  return database.deleteOperationTheatre(id);
+})
+ipcMain.handle('db-get-surgical-cases', (_, options) => {
+  if (workstationMode === 'client') return clientRequest('db-get-surgical-cases', options);
+  return database.getSurgicalCases(options);
+})
+ipcMain.handle('db-get-surgical-case-by-id', (_, id) => {
+  if (workstationMode === 'client') return clientRequest('db-get-surgical-case-by-id', id);
+  return database.getSurgicalCaseById(id);
+})
+ipcMain.handle('db-save-surgical-case', (_, sc) => {
+  if (workstationMode === 'client') return clientRequest('db-save-surgical-case', sc);
+  return database.saveSurgicalCase(sc);
+})
+ipcMain.handle('db-update-surgical-case-status', (_, id, status, notes) => {
+  if (workstationMode === 'client') return clientRequest('db-update-surgical-case-status', id, status, notes);
+  return database.updateSurgicalCaseStatus(id, status, notes);
+})
+ipcMain.handle('db-get-ot-dashboard-metrics', () => {
+  if (workstationMode === 'client') return clientRequest('db-get-ot-dashboard-metrics');
+  return database.getOtDashboardMetrics();
+})
+
+// Emergency Department & MLC IPCs
+ipcMain.handle('db-get-emergency-visits', (_, options) => {
+  if (workstationMode === 'client') return clientRequest('db-get-emergency-visits', options);
+  return database.getEmergencyVisits(options);
+})
+ipcMain.handle('db-get-emergency-visit-by-id', (_, id) => {
+  if (workstationMode === 'client') return clientRequest('db-get-emergency-visit-by-id', id);
+  return database.getEmergencyVisitById(id);
+})
+ipcMain.handle('db-save-emergency-visit', (_, visit) => {
+  if (workstationMode === 'client') return clientRequest('db-save-emergency-visit', visit);
+  return database.saveEmergencyVisit(visit);
+})
+ipcMain.handle('db-update-emergency-disposition', (_, id, disposition, details) => {
+  if (workstationMode === 'client') return clientRequest('db-update-emergency-disposition', id, disposition, details);
+  return database.updateEmergencyDisposition(id, disposition, details);
+})
+ipcMain.handle('db-get-mlc-records', () => {
+  if (workstationMode === 'client') return clientRequest('db-get-mlc-records');
+  return database.getMlcRecords();
+})
+ipcMain.handle('db-get-mlc-record-by-id', (_, id) => {
+  if (workstationMode === 'client') return clientRequest('db-get-mlc-record-by-id', id);
+  return database.getMlcRecordById(id);
+})
+ipcMain.handle('db-save-mlc-record', (_, mlc) => {
+  if (workstationMode === 'client') return clientRequest('db-save-mlc-record', mlc);
+  return database.saveMlcRecord(mlc);
+})
+ipcMain.handle('db-get-emergency-dashboard-metrics', () => {
+  if (workstationMode === 'client') return clientRequest('db-get-emergency-dashboard-metrics');
+  return database.getEmergencyDashboardMetrics();
+})
+
+// Module 3: Doctor Revenue Share, Commission & Payouts IPCs
+ipcMain.handle('db-get-doctor-commission-rules', () => {
+  if (workstationMode === 'client') return clientRequest('db-get-doctor-commission-rules');
+  return database.getDoctorCommissionRules();
+})
+ipcMain.handle('db-get-doctor-commission-rule-by-doctor-id', (_, doctorId) => {
+  if (workstationMode === 'client') return clientRequest('db-get-doctor-commission-rule-by-doctor-id', doctorId);
+  return database.getDoctorCommissionRuleByDoctorId(doctorId);
+})
+ipcMain.handle('db-save-doctor-commission-rule', (_, rule) => {
+  if (workstationMode === 'client') return clientRequest('db-save-doctor-commission-rule', rule);
+  return database.saveDoctorCommissionRule(rule);
+})
+ipcMain.handle('db-calculate-doctor-accrued-earnings', (_, doctorId, startDate, endDate) => {
+  if (workstationMode === 'client') return clientRequest('db-calculate-doctor-accrued-earnings', doctorId, startDate, endDate);
+  return database.calculateDoctorAccruedEarnings(doctorId, startDate, endDate);
+})
+ipcMain.handle('db-get-doctor-payout-transactions', (_, doctorId) => {
+  if (workstationMode === 'client') return clientRequest('db-get-doctor-payout-transactions', doctorId);
+  return database.getDoctorPayoutTransactions(doctorId);
+})
+ipcMain.handle('db-save-doctor-payout-transaction', (_, payout) => {
+  if (workstationMode === 'client') return clientRequest('db-save-doctor-payout-transaction', payout);
+  return database.saveDoctorPayoutTransaction(payout);
+})
+
+// Module 3: Hospital Stock Indenting IPCs
+ipcMain.handle('db-get-hospital-indents', (_, filter) => {
+  if (workstationMode === 'client') return clientRequest('db-get-hospital-indents', filter);
+  return database.getHospitalIndents(filter);
+})
+ipcMain.handle('db-get-hospital-indent-by-id', (_, id) => {
+  if (workstationMode === 'client') return clientRequest('db-get-hospital-indent-by-id', id);
+  return database.getHospitalIndentById(id);
+})
+ipcMain.handle('db-save-hospital-indent', (_, indent, items) => {
+  if (workstationMode === 'client') return clientRequest('db-save-hospital-indent', indent, items);
+  return database.saveHospitalIndent(indent, items);
+})
+ipcMain.handle('db-issue-hospital-indent', (_, indentId, itemsIssued, fulfilledBy) => {
+  if (workstationMode === 'client') return clientRequest('db-issue-hospital-indent', indentId, itemsIssued, fulfilledBy);
+  return database.issueHospitalIndent(indentId, itemsIssued, fulfilledBy);
+})
+ipcMain.handle('db-complete-hospital-indent', (_, indentId, fulfilledBy) => {
+  if (workstationMode === 'client') return clientRequest('db-complete-hospital-indent', indentId, fulfilledBy);
+  return database.completeHospitalIndent(indentId, fulfilledBy);
+})
+ipcMain.handle('db-cancel-hospital-indent', (_, indentId, reason) => {
+  if (workstationMode === 'client') return clientRequest('db-cancel-hospital-indent', indentId, reason);
+  return database.cancelHospitalIndent(indentId, reason);
+})
+ipcMain.handle('db-get-hospital-tier3-metrics', () => {
+  if (workstationMode === 'client') return clientRequest('db-get-hospital-tier3-metrics');
+  return database.getHospitalTier3Metrics();
+})
+ipcMain.handle('db-search-global-patients', (_, query) => {
+  if (workstationMode === 'client') return clientRequest('db-search-global-patients', query);
+  return database.searchGlobalPatients(query);
+})
+
 // WhatsApp Bot IPCs
 whatsappBot.setOnAppointmentSavedCallback(() => {
   if (win) win.webContents.send('appointment-updated');
@@ -947,7 +1254,7 @@ ipcMain.handle('whatsapp-send-message', (_, phone: string, message: string) => {
 })
 
 async function generateAndSendPrescriptionPdf(phone: string, rxData: any) {
-  const cleanDoctorName = 'Dr. ' + (rxData.doctorName || '').replace(/^(Dr\.?\s*)+/gi, '').trim();
+  const cleanDoctorName = '' + (rxData.doctorName || '').replace(/^(Dr\.?\s*)+/gi, '').trim();
 
   // Resolve PID (UHID / Patient ID / Receipt Number)
   let pid = rxData.patientId || rxData.pid || rxData.receiptNumber || '';
@@ -1144,16 +1451,40 @@ ipcMain.handle('get-known-users', async () => {
       return store.get('known_users') || [];
     }
   }
-  const knownUsers = store.get('known_users') as any[] || [
-    { id: 'default', role: 'reception' },
-    { id: 'admin', role: 'reception' }
-  ];
+  let knownUsers = store.get('known_users') as any[] || [];
+  try {
+    const dbUsers = database.getUsers();
+    if (dbUsers && dbUsers.length > 0) {
+      const map = new Map<string, any>();
+      for (const u of knownUsers) {
+        if (u && u.id) map.set(u.id.toLowerCase(), u);
+      }
+      for (const u of dbUsers) {
+        if (u && u.id) {
+          const existing = map.get(u.id.toLowerCase());
+          map.set(u.id.toLowerCase(), { ...(existing || {}), ...u });
+        }
+      }
+      knownUsers = Array.from(map.values());
+      store.set('known_users', knownUsers);
+    }
+  } catch (e) {
+    console.error('[get-known-users] DB lookup error:', e);
+  }
+
+  if (knownUsers.length === 0) {
+    knownUsers = [
+      { id: 'default', role: 'reception' },
+      { id: 'admin', role: 'reception' }
+    ];
+    store.set('known_users', knownUsers);
+  }
   return knownUsers;
 });
 
 ipcMain.handle('add-known-user', (_, userId: string, role: string, doctorId?: string, allowedTabs?: string[]) => {
-  const activeUser = store.get('current_user') as string || '';
-  if (activeUser.toLowerCase() !== 'admin') {
+  const activeUser = (store.get('current_user') as string || '').toLowerCase();
+  if (activeUser && activeUser !== 'admin' && activeUser !== 'default') {
     return { success: false, error: 'Unauthorized: Only the "admin" profile can add users.' };
   }
 
@@ -1167,27 +1498,38 @@ ipcMain.handle('add-known-user', (_, userId: string, role: string, doctorId?: st
     return { success: false, error: 'User ID already exists' };
   }
   
-  knownUsers.push({ id: cleanId, role: role || 'reception', doctorId: doctorId || undefined, allowedTabs });
+  const newUser = { id: cleanId, role: role || 'reception', doctorId: doctorId || undefined, allowedTabs, createdAt: new Date().toISOString() };
+  knownUsers.push(newUser);
   store.set('known_users', knownUsers);
+  try {
+    database.saveUser(newUser);
+  } catch (e) {
+    console.error('[add-known-user] DB save error:', e);
+  }
   return { success: true };
 });
 
 ipcMain.handle('delete-known-user', (_, userId: string) => {
-  const activeUser = store.get('current_user') as string || '';
-  if (activeUser.toLowerCase() !== 'admin') {
+  const activeUser = (store.get('current_user') as string || '').toLowerCase();
+  if (activeUser && activeUser !== 'admin' && activeUser !== 'default') {
     return { success: false, error: 'Unauthorized: Only the "admin" profile can delete users.' };
   }
 
   if (workstationMode === 'client') return clientRequest('delete-known-user', userId);
 
   const cleanId = userId.trim().toLowerCase();
-  if (cleanId === 'default') {
-    return { success: false, error: 'Cannot delete the default profile' };
+  if (cleanId === 'default' || cleanId === 'admin') {
+    return { success: false, error: 'Cannot delete the default/admin profile' };
   }
   
   let knownUsers = store.get('known_users') as { id: string, role: string, doctorId?: string }[] || [];
   knownUsers = knownUsers.filter(u => u.id !== cleanId);
   store.set('known_users', knownUsers);
+  try {
+    database.deleteUser(cleanId);
+  } catch (e) {
+    console.error('[delete-known-user] DB delete error:', e);
+  }
   
   // If the deleted user was active, disconnect them
   const currentUser = store.get('current_user') as string || '';
@@ -1238,6 +1580,9 @@ ipcMain.handle('connect-user', async (_, userId: string, password?: string) => {
     if (isPlainMatch && !isHashedMatch) {
       user.password = hashPassword(password);
       store.set('known_users', knownUsers);
+      try {
+        database.setUserPassword(cleanId, user.password);
+      } catch (e) {}
     }
     database.init(Database, cleanId);
     store.set('current_user', cleanId);
@@ -1255,8 +1600,14 @@ ipcMain.handle('set-user-password', (_, userId: string, password?: string) => {
   const idx = knownUsers.findIndex(u => u.id === cleanId);
   if (idx !== -1) {
     const hashPassword = (pwd: string) => crypto.createHash('sha256').update(pwd + PASSWORD_SALT).digest('hex');
-    knownUsers[idx].password = password ? hashPassword(password) : '';
+    const pwdHash = password ? hashPassword(password) : '';
+    knownUsers[idx].password = pwdHash;
     store.set('known_users', knownUsers);
+    try {
+      database.setUserPassword(cleanId, pwdHash);
+    } catch (e) {
+      console.error('[set-user-password] DB error:', e);
+    }
     return { success: true };
   }
   return { success: false, error: 'User ID not found' };
@@ -1270,6 +1621,11 @@ ipcMain.handle('reset-admin-password', () => {
   if (idx !== -1) {
     knownUsers[idx].password = '';
     store.set('known_users', knownUsers);
+    try {
+      database.setUserPassword('admin', '');
+    } catch (e) {
+      console.error('[reset-admin-password] DB error:', e);
+    }
     return { success: true, message: 'Admin password reset successfully! Enter "admin" to set a new password.' };
   }
   return { success: false, error: 'Admin user not found.' };
@@ -1494,6 +1850,38 @@ ipcMain.handle('open-external', (_, url: string) => {
   if (url && (url.startsWith('https://') || url.startsWith('http://') || url.startsWith('mailto:'))) {
     return shell.openExternal(url);
   }
+});
+
+let tvDisplayWindow: BrowserWindow | null = null;
+ipcMain.handle('open-tv-display', async () => {
+  if (tvDisplayWindow && !tvDisplayWindow.isDestroyed()) {
+    tvDisplayWindow.show();
+    tvDisplayWindow.focus();
+    return { success: true };
+  }
+
+  tvDisplayWindow = new BrowserWindow({
+    width: 1920,
+    height: 1080,
+    title: 'Buvora OPD Queue - 1080p TV Display',
+    icon: path.join(process.env.VITE_PUBLIC || RENDERER_DIST, 'icon.png'),
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.mjs'),
+    },
+  });
+
+  if (VITE_DEV_SERVER_URL) {
+    tvDisplayWindow.loadURL(`${VITE_DEV_SERVER_URL}?mode=tv-display`);
+  } else {
+    tvDisplayWindow.loadFile(path.join(RENDERER_DIST, 'index.html'), { query: { mode: 'tv-display' } });
+  }
+
+  tvDisplayWindow.on('closed', () => {
+    tvDisplayWindow = null;
+  });
+
+  return { success: true };
 });
 
 app.whenReady().then(() => {

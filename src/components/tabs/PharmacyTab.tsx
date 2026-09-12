@@ -5,19 +5,24 @@ import {
   Printer, CheckCircle, RefreshCw,
   Trash2, Edit, ShoppingCart,
   Sparkles, Layers,
-  Download, X, MessageCircle
+  Download, X, MessageCircle, PackagePlus
 } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 import {
   storage,
+  notifyDataChanged,
   type Medicine,
   type MedicineBatch,
   type PharmacySale,
   type PharmacySaleItem,
   type PharmacyDashboardMetrics,
-  type Prescription
+  type Prescription,
+  type GlobalPatientProfile,
+  type HospitalIndent,
+  formatAgeGender
 } from '../../lib/storage';
 import { SearchablePrescriptionSelect } from '../ui/SearchablePrescriptionSelect';
+import { StockIndentingTab } from './StockIndentingTab';
 import '../../styles/tabs/PharmacyTab.css';
 
 interface PharmacyTabProps {
@@ -26,13 +31,14 @@ interface PharmacyTabProps {
 
 export const PharmacyTab: React.FC<PharmacyTabProps> = () => {
   const toast = useToast();
-  const [activeSubTab, setActiveSubTab] = useState<'pos' | 'inventory' | 'batches' | 'sales'>('pos');
+  const [activeSubTab, setActiveSubTab] = useState<'pos' | 'inventory' | 'batches' | 'sales' | 'indents'>('pos');
   
   // Data States
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [batches, setBatches] = useState<MedicineBatch[]>([]);
   const [sales, setSales] = useState<PharmacySale[]>([]);
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
+  const [pendingIndents, setPendingIndents] = useState<HospitalIndent[]>([]);
   const [metrics, setMetrics] = useState<PharmacyDashboardMetrics>({
     totalInventoryValue: 0,
     totalCostValue: 0,
@@ -98,6 +104,8 @@ export const PharmacyTab: React.FC<PharmacyTabProps> = () => {
   const [posPaymentMethod, setPosPaymentMethod] = useState<'CASH' | 'ONLINE' | 'FREE'>('CASH');
   const [posNotes, setPosNotes] = useState('');
   const [posSearchTerm, setPosSearchTerm] = useState('');
+  const [posPatientSuggestions, setPosPatientSuggestions] = useState<GlobalPatientProfile[]>([]);
+  const [showPosPatientDropdown, setShowPosPatientDropdown] = useState(false);
 
   // Categories list
   const categories = ['All', 'Tablet', 'Capsule', 'Syrup', 'Injection', 'IV Fluid', 'Ointment', 'Drops', 'Inhaler', 'Surgical'];
@@ -106,12 +114,13 @@ export const PharmacyTab: React.FC<PharmacyTabProps> = () => {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [medsData, batchesData, salesData, rxData, metricsData, paperSettings, profileData] = await Promise.all([
+      const [medsData, batchesData, salesData, rxData, metricsData, indentsData, paperSettings, profileData] = await Promise.all([
         storage.getMedicines(),
         storage.getMedicineBatches(),
         storage.getPharmacySales({ limit: 100 }),
         storage.getPrescriptions(),
         storage.getPharmacyMetrics(),
+        storage.getHospitalIndents ? storage.getHospitalIndents({ status: 'PENDING' }) : [],
         storage.getPrintPaperSettings().catch(() => ({ receiptPaper: 'A5' as const })),
         storage.getClinicProfile().catch(() => ({ clinicName: 'Buvora Clinic' }))
       ]);
@@ -120,6 +129,7 @@ export const PharmacyTab: React.FC<PharmacyTabProps> = () => {
       setSales(salesData);
       setPrescriptions(rxData);
       setMetrics(metricsData);
+      setPendingIndents(indentsData || []);
       if (paperSettings?.receiptPaper) {
         setReceiptPaperType(paperSettings.receiptPaper as any);
       }
@@ -136,7 +146,59 @@ export const PharmacyTab: React.FC<PharmacyTabProps> = () => {
 
   useEffect(() => {
     loadData();
+    const handleSync = (e: any) => {
+      const dt = e?.detail?.dataType;
+      if (!dt || dt === 'medicines' || dt === 'prescriptions' || dt === 'sales' || dt === 'indents' || dt === 'all') {
+        loadData();
+      }
+    };
+    window.addEventListener('buvora-data-updated', handleSync);
+    const interval = setInterval(loadData, 5000);
+    return () => {
+      window.removeEventListener('buvora-data-updated', handleSync);
+      clearInterval(interval);
+    };
   }, []);
+
+  const handlePosPatientNameChange = async (val: string) => {
+    setPosPatientName(val);
+    if (val.trim().length >= 2) {
+      try {
+        const results = await storage.searchGlobalPatients(val.trim());
+        setPosPatientSuggestions(results || []);
+        setShowPosPatientDropdown((results || []).length > 0);
+      } catch (_) {
+        setPosPatientSuggestions([]);
+      }
+    } else {
+      setPosPatientSuggestions([]);
+      setShowPosPatientDropdown(false);
+    }
+  };
+
+  const handleSelectPosPatient = (p: GlobalPatientProfile) => {
+    setPosPatientName(p.patientName);
+    setPosPatientPhone(p.patientPhone || '');
+    setPosPatientId(p.patientUhid || p.patientId || '');
+    setShowPosPatientDropdown(false);
+
+    // Look for matching prescription by phone, id, or name
+    const cleanPhone = p.patientPhone?.trim();
+    const cleanId = (p.patientUhid || p.patientId || '').trim().toLowerCase();
+    const cleanName = p.patientName.trim().toLowerCase();
+
+    const matchingRx = prescriptions.find(rx => {
+      if (cleanPhone && rx.patientPhone && rx.patientPhone.trim() === cleanPhone) return true;
+      if (cleanId && ((rx.patientId && rx.patientId.toLowerCase() === cleanId) || (rx.pid && rx.pid.toLowerCase() === cleanId))) return true;
+      if (cleanName && rx.patientName.toLowerCase().trim() === cleanName) return true;
+      return false;
+    });
+
+    if (matchingRx) {
+      handleLoadPrescription(matchingRx.id);
+      toast(`Auto-loaded prescription #${matchingRx.receiptNumber || matchingRx.id} for ${p.patientName}!`, { type: 'success' });
+    }
+  };
 
   // Filtered inventory
   const filteredMedicines = useMemo(() => {
@@ -580,6 +642,50 @@ export const PharmacyTab: React.FC<PharmacyTabProps> = () => {
         </div>
       </div>
 
+      {/* ── PENDING WARD INDENTS ALERT BANNER ─────────────────────────── */}
+      {pendingIndents.length > 0 && activeSubTab !== 'indents' && (
+        <div style={{
+          background: '#eff6ff',
+          border: '1px solid #bfdbfe',
+          borderRadius: '12px',
+          padding: '0.75rem 1.25rem',
+          marginBottom: '1rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          color: '#1e40af',
+          fontSize: '0.875rem',
+          boxShadow: '0 2px 8px rgba(37,99,235,0.06)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '1.25rem' }}>📦</span>
+            <div>
+              <strong>{pendingIndents.length} Ward / OT Requisition{pendingIndents.length > 1 ? 's' : ''} Pending:</strong>{' '}
+              {pendingIndents[0].sourceLocation} requested medicines &amp; consumables.
+            </div>
+          </div>
+          <button
+            onClick={() => setActiveSubTab('indents')}
+            style={{
+              background: '#0284c7',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '0.45rem 1rem',
+              fontSize: '0.8rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
+            <PackagePlus size={15} />
+            <span>Fulfill Indents</span>
+          </button>
+        </div>
+      )}
+
       {/* ── NAVIGATION SUB-TABS ────────────────────────────────────────── */}
       <div style={{
         display: 'flex',
@@ -678,6 +784,40 @@ export const PharmacyTab: React.FC<PharmacyTabProps> = () => {
           >
             <Printer size={16} />
             <span>Sales &amp; Dispensation Log</span>
+          </button>
+
+          <button
+            onClick={() => setActiveSubTab('indents')}
+            style={{
+              padding: '0.5rem 1.15rem',
+              borderRadius: '8px',
+              border: 'none',
+              background: activeSubTab === 'indents' ? '#ffffff' : 'transparent',
+              color: activeSubTab === 'indents' ? '#0284c7' : '#64748b',
+              fontWeight: 700,
+              fontSize: '0.825rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              boxShadow: activeSubTab === 'indents' ? '0 2px 5px rgba(0,0,0,0.06)' : 'none',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <PackagePlus size={16} />
+            <span>Ward &amp; OT Indents</span>
+            {pendingIndents.length > 0 && (
+              <span style={{
+                background: '#ef4444',
+                color: '#ffffff',
+                fontSize: '0.7rem',
+                fontWeight: 800,
+                padding: '1px 6px',
+                borderRadius: '10px'
+              }}>
+                {pendingIndents.length}
+              </span>
+            )}
           </button>
         </div>
 
@@ -1320,17 +1460,80 @@ export const PharmacyTab: React.FC<PharmacyTabProps> = () => {
 
             {/* Patient Header Fields */}
             <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '0.6rem', marginBottom: '1rem' }}>
-              <div>
+              <div style={{ position: 'relative' }}>
                 <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#64748b', marginBottom: '2px' }}>
                   Patient / Customer Name *
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Rahul Sharma"
+                  placeholder="e.g. Rahul Sharma (Search global clinic database)"
                   value={posPatientName}
-                  onChange={e => setPosPatientName(e.target.value)}
+                  onChange={e => handlePosPatientNameChange(e.target.value)}
+                  onFocus={() => {
+                    if (posPatientName.trim().length >= 2) setShowPosPatientDropdown(true);
+                  }}
+                  onBlur={() => {
+                    setTimeout(() => setShowPosPatientDropdown(false), 200);
+                  }}
                   style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '0.8rem' }}
                 />
+
+                {showPosPatientDropdown && posPatientSuggestions.length > 0 && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    background: 'white',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    boxShadow: '0 10px 25px rgba(0,0,0,0.18)',
+                    zIndex: 1000,
+                    marginTop: '4px',
+                    maxHeight: '220px',
+                    overflowY: 'auto'
+                  }}>
+                    {posPatientSuggestions.map(p => (
+                      <div
+                        key={p.patientUhid || p.patientId || p.patientPhone || p.patientName}
+                        onMouseDown={e => {
+                          e.preventDefault();
+                          handleSelectPosPatient(p);
+                        }}
+                        onClick={() => handleSelectPosPatient(p)}
+                        style={{ padding: '0.55rem 0.75rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'white'}
+                      >
+                        <div>
+                          <strong style={{ color: '#0f172a' }}>{p.patientName}</strong>
+                          {p.patientPhone && (
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: '8px' }}>
+                              📞 {p.patientPhone}
+                            </span>
+                          )}
+                          {p.patientAge && (
+                            <span style={{ fontSize: '0.72rem', color: '#64748b', marginLeft: '6px' }}>
+                              • {formatAgeGender(p.patientAge, p.patientGender)}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          {(p.patientUhid || p.patientId) && (
+                            <span style={{ fontSize: '0.72rem', background: '#e0e7ff', color: '#4338ca', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                              {p.patientUhid || p.patientId}
+                            </span>
+                          )}
+                          {p.source && (
+                            <span style={{ fontSize: '0.68rem', background: '#f1f5f9', color: '#475569', padding: '1px 5px', borderRadius: '4px', fontWeight: 600 }}>
+                              {p.source}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#64748b', marginBottom: '2px' }}>
@@ -1865,6 +2068,12 @@ export const PharmacyTab: React.FC<PharmacyTabProps> = () => {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {activeSubTab === 'indents' && (
+        <div className="no-print animate-fade-in" style={{ marginTop: '0.5rem' }}>
+          <StockIndentingTab />
         </div>
       )}
 

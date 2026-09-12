@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { storage, cleanAgeString, type Doctor, type Receipt, type ReceiptItem, type Service } from '../lib/storage';
+import { storage, cleanAgeString, notifyDataChanged, type Doctor, type Receipt, type ReceiptItem, type Service, type GlobalPatientProfile } from '../lib/storage';
 import { Plus, Trash2, Save, User, CreditCard, AlertCircle, QrCode, MessageSquare, Printer, Send } from 'lucide-react';
 import { format } from 'date-fns';
 import QRCodeImage from './ui/QRCodeImage';
@@ -60,6 +60,48 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, onPrintReque
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'ONLINE' | 'FREE'>(initialData?.paymentMethod || 'CASH');
   const [appointmentDate, setAppointmentDate] = useState(initialData?.date || format(new Date(), 'yyyy-MM-dd'));
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Global Patient Autocomplete State
+  const [patientSearchResults, setPatientSearchResults] = useState<GlobalPatientProfile[]>([]);
+  const [showPatientDropdown, setShowPatientDropdown] = useState(false);
+  const [isSearchingPatient, setIsSearchingPatient] = useState(false);
+
+  const handlePatientNameChange = async (val: string) => {
+    setPatientName(val);
+    if (val.trim().length >= 2) {
+      setIsSearchingPatient(true);
+      try {
+        const results = await storage.searchGlobalPatients(val.trim());
+        setPatientSearchResults(results || []);
+        setShowPatientDropdown((results || []).length > 0);
+      } catch (_) {}
+      finally {
+        setIsSearchingPatient(false);
+      }
+    } else {
+      setPatientSearchResults([]);
+      setShowPatientDropdown(false);
+    }
+  };
+
+  const handleSelectPatientProfile = (p: GlobalPatientProfile) => {
+    setPatientName(p.patientName);
+    if (p.patientId || p.patientUhid) setPatientId(p.patientUhid || p.patientId || '');
+    if (p.patientPhone) setPatientPhone(p.patientPhone);
+    if (p.patientAge) {
+      setPatientAge(String(p.patientAge));
+      const { years, months } = parseAge(String(p.patientAge));
+      setAgeYears(years);
+      setAgeMonths(months);
+    }
+    if (p.patientGender) setPatientGender(p.patientGender);
+    if (p.lastDoctorId && doctors.some(d => d.id === p.lastDoctorId)) {
+      setSelectedDoctorId(p.lastDoctorId);
+    }
+    setIsReturningPatient(true);
+    setTimeout(() => setIsReturningPatient(false), 4000);
+    setShowPatientDropdown(false);
+  };
   
   // QR Code states
   const [showQrCode, setShowQrCode] = useState<boolean>(initialData?.showQrCode ?? false);
@@ -288,6 +330,8 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, onPrintReque
         await storage.updateReceipt(receipt);
       }
 
+      notifyDataChanged('receipts');
+      notifyDataChanged('queue');
       setSaveError(null);
 
       if (shouldSendWhatsApp) {
@@ -317,9 +361,80 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, onPrintReque
           <div className="card">
             <h3><User size={18} /> Patient Information</h3>
             <div className="field-grid">
-              <div className="form-group">
-                <label>Patient Name</label>
-                <input value={patientName} onChange={e => setPatientName(e.target.value)} required placeholder="Full Name" />
+              <div className="form-group" style={{ position: 'relative' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label>Patient Name</label>
+                  {isSearchingPatient && <span style={{ fontSize: '0.7rem', color: 'var(--primary)' }}>Searching...</span>}
+                </div>
+                <input 
+                  value={patientName} 
+                  onChange={e => handlePatientNameChange(e.target.value)} 
+                  onFocus={() => {
+                    if (patientSearchResults.length > 0) setShowPatientDropdown(true);
+                  }}
+                  required 
+                  placeholder="Full Name (auto-fills if returning)" 
+                  autoComplete="off"
+                />
+                {showPatientDropdown && patientSearchResults.length > 0 && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      background: 'white',
+                      border: '1px solid var(--border)',
+                      borderRadius: '8px',
+                      boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
+                      zIndex: 100,
+                      maxHeight: '220px',
+                      overflowY: 'auto',
+                      marginTop: '4px'
+                    }}
+                  >
+                    <div style={{ padding: '6px 10px', fontSize: '0.72rem', background: '#f8fafc', fontWeight: 700, color: 'var(--text-muted)' }}>
+                      MATCHING PATIENTS (CLICK TO AUTO-FILL)
+                    </div>
+                    {patientSearchResults.map((p, idx) => (
+                      <div
+                        key={`${p.patientId || p.patientName}-${idx}`}
+                        onClick={() => handleSelectPatientProfile(p)}
+                        style={{
+                          padding: '8px 10px',
+                          borderBottom: '1px solid #f1f5f9',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          fontSize: '0.8rem'
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f8fafc')}
+                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                      >
+                        <div>
+                          <div style={{ fontWeight: 700, color: 'var(--text-main)' }}>{p.patientName}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                            {p.patientAge ? `${p.patientAge} Y` : ''} {p.patientGender || ''} {p.patientPhone ? `• 📞 ${p.patientPhone}` : ''}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <span style={{
+                            fontSize: '0.68rem',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            fontWeight: 700,
+                            background: p.source === 'IPD' ? '#e0f2fe' : p.source === 'EMERGENCY' ? '#fee2e2' : '#f0fdf4',
+                            color: p.source === 'IPD' ? '#0369a1' : p.source === 'EMERGENCY' ? '#b91c1c' : '#15803d'
+                          }}>
+                            {p.source}
+                          </span>
+                          {p.patientUhid && <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '2px' }}>{p.patientUhid}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="form-group">
                 <label className="flex-label">

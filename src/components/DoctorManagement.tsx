@@ -15,6 +15,7 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate }
   const [name, setName] = useState('');
   const [specialization, setSpecialization] = useState('');
   const [phone, setPhone] = useState('');
+  const [chamber, setChamber] = useState('');
   const [qualifications, setQualifications] = useState('');
   const [address, setAddress] = useState('');
   const [printHeader, setPrintHeader] = useState(true);
@@ -28,6 +29,7 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate }
     setName('');
     setSpecialization('');
     setPhone('');
+    setChamber('');
     setQualifications('');
     setAddress('');
     setPrintHeader(true);
@@ -48,6 +50,7 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate }
       specialization,
       qualifications,
       phone,
+      chamber: chamber.trim() || undefined,
       address,
       printHeader,
       customTopMargin,
@@ -65,6 +68,7 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate }
     setName(doctor.name);
     setSpecialization(doctor.specialization);
     setPhone(doctor.phone);
+    setChamber(doctor.chamber || '');
     setQualifications(doctor.qualifications || '');
     setAddress(doctor.address || '');
     setPrintHeader(doctor.printHeader !== false);
@@ -130,6 +134,15 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate }
                 value={phone} 
                 onChange={e => setPhone(e.target.value)} 
                 placeholder="+91 98765 43210" 
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Assigned Chamber / Room (For OPD Queue & Tokens)</label>
+              <input 
+                value={chamber} 
+                onChange={e => setChamber(e.target.value)} 
+                placeholder="e.g. Chamber 1, Room 102, Cabin A, OPD-1" 
               />
             </div>
 
@@ -248,6 +261,11 @@ const DoctorManagement: React.FC<DoctorManagementProps> = ({ doctors, onUpdate }
                 <h3>{doctor.name}</h3>
                 <div className="doctor-badges">
                   <span className="badge">{doctor.specialization}</span>
+                  {doctor.chamber && (
+                    <span className="badge" style={{ background: '#f0f9ff', color: '#0369a1', border: '1px solid #bae6fd', fontWeight: 700 }}>
+                      🚪 {doctor.chamber}
+                    </span>
+                  )}
                   {doctor.qualifications && <span className="badge secondary">{doctor.qualifications}</span>}
                   {doctor.upiId && <span className="badge" style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>UPI: {doctor.upiId}</span>}
                   {doctor.showQrCodeOnReceipt && <span className="badge" style={{ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' }}>QR Enabled</span>}

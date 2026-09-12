@@ -1,0 +1,460 @@
+/* ==========================================================================
+   QueueDisplayTab Stylesheet (OPD Waiting Area QDS & Speech Token Caller)
+   ========================================================================== */
+
+.qds-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding-bottom: 2rem;
+}
+
+/* ── Top Bar & Mode Switcher ──────────────────────────────────────────────── */
+.qds-top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  background: white;
+  padding: 0.75rem 1.25rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+
+.qds-mode-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.qds-btn-tv-mode {
+  background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  height: 36px !important;
+  padding: 0 1.1rem !important;
+  font-weight: 600;
+  font-size: 0.84rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.25);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.qds-btn-tv-mode:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.35);
+}
+
+/* ── RECEPTIONIST CALLER CONSOLE (Desk Mode) ──────────────────────────────── */
+.qds-desk-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1.25rem;
+}
+
+.qds-chamber-desk-card {
+  background: white;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+  display: flex;
+  flex-direction: column;
+}
+
+.qds-chamber-header {
+  padding: 1rem 1.25rem;
+  background: #f8fafc;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.qds-chamber-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.qds-chamber-badge {
+  background: #e0f2fe;
+  color: #0369a1;
+  padding: 0.2rem 0.6rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.qds-chamber-body {
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  flex: 1;
+}
+
+.qds-serving-box {
+  background: #f0fdf4;
+  border: 1.5px solid #86efac;
+  border-radius: 10px;
+  padding: 1rem;
+  text-align: center;
+}
+
+.qds-serving-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #166534;
+}
+
+.qds-serving-token {
+  font-size: 2.25rem;
+  font-weight: 900;
+  color: #15803d;
+  margin: 0.2rem 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.qds-serving-patient {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #14532d;
+}
+
+.qds-chamber-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.qds-action-btn {
+  height: 34px !important;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border: 1px solid var(--border);
+  background: white;
+  transition: all 0.15s ease;
+}
+
+.qds-action-btn.call-next {
+  background: #2563eb;
+  color: white;
+  border-color: #2563eb;
+  grid-column: span 2;
+}
+
+.qds-action-btn.call-next:hover {
+  background: #1d4ed8;
+}
+
+.qds-action-btn.repeat-call {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+
+.qds-action-btn.complete {
+  background: #f0fdf4;
+  color: #15803d;
+  border-color: #bbf7d0;
+}
+
+.qds-queue-preview {
+  margin-top: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--border);
+}
+
+.qds-queue-preview-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 0.4rem;
+}
+
+.qds-queue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.qds-queue-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.35rem 0.5rem;
+  background: #f8fafc;
+  border-radius: 6px;
+  font-size: 0.78rem;
+}
+
+/* ── HIGH-VISIBILITY 1080P TV FULLSCREEN VIEW ─────────────────────────────── */
+.qds-tv-view {
+  position: fixed;
+  inset: 0;
+  background: #0b1120;
+  color: #ffffff;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  padding: 2rem;
+  box-sizing: border-box;
+  overflow: hidden;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.qds-tv-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid #1e293b;
+  padding-bottom: 1.25rem;
+}
+
+.qds-tv-hospital-brand {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.qds-tv-logo-pulse {
+  width: 52px;
+  height: 52px;
+  background: linear-gradient(135deg, #0ea5e9, #6366f1);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+  animation: qds-glow 2s infinite ease-in-out;
+}
+
+.qds-tv-hospital-name {
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: linear-gradient(to right, #ffffff, #94a3b8);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.qds-tv-hospital-sub {
+  font-size: 0.95rem;
+  color: #38bdf8;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.qds-tv-time-box {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.qds-tv-clock {
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: #f8fafc;
+  font-variant-numeric: tabular-nums;
+}
+
+.qds-tv-close-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #94a3b8;
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.qds-tv-close-btn:hover {
+  background: #ef4444;
+  color: white;
+  border-color: #ef4444;
+}
+
+/* ── Live Token Calling Announcement Banner ───────────────────────────────── */
+.qds-tv-announcement-banner {
+  margin-top: 1.5rem;
+  background: linear-gradient(90deg, #1e1b4b 0%, #312e81 50%, #1e1b4b 100%);
+  border: 2px solid #6366f1;
+  border-radius: 16px;
+  padding: 1.25rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 0 35px rgba(99, 102, 241, 0.35);
+  animation: qds-banner-flash 1.5s ease-in-out infinite alternate;
+}
+
+.qds-tv-banner-text {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #c7d2fe;
+}
+
+.qds-tv-banner-token {
+  font-size: 2.5rem;
+  font-weight: 900;
+  color: #38bdf8;
+  text-shadow: 0 0 15px rgba(56, 189, 248, 0.6);
+}
+
+/* ── Doctor Chamber TV Cards Grid ─────────────────────────────────────────── */
+.qds-tv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 1.75rem;
+  margin-top: 1.75rem;
+  flex: 1;
+  align-content: start;
+}
+
+.qds-tv-card {
+  background: #131d31;
+  border: 2px solid #1e293b;
+  border-radius: 18px;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+  transition: border-color 0.2s ease;
+}
+
+.qds-tv-card.active-calling {
+  border-color: #38bdf8;
+  box-shadow: 0 0 30px rgba(56, 189, 248, 0.25);
+}
+
+.qds-tv-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.qds-tv-chamber-title {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.qds-tv-doctor-name {
+  font-size: 1.1rem;
+  color: #94a3b8;
+  margin-top: 0.2rem;
+}
+
+.qds-tv-card-badge {
+  background: #0284c7;
+  color: white;
+  padding: 0.35rem 0.85rem;
+  border-radius: 30px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.qds-tv-token-display {
+  margin: 1.5rem 0;
+  background: #0b1120;
+  border-radius: 14px;
+  padding: 1.25rem;
+  text-align: center;
+  border: 1.5px solid #1e293b;
+}
+
+.qds-tv-token-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #38bdf8;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.qds-tv-token-number {
+  font-size: 4.5rem;
+  font-weight: 900;
+  color: #22c55e;
+  line-height: 1;
+  margin: 0.3rem 0;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 20px rgba(34, 197, 94, 0.4);
+}
+
+.qds-tv-patient-name {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.qds-tv-next-strip {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  color: #94a3b8;
+}
+
+.qds-tv-next-badge {
+  color: #f59e0b;
+  font-weight: 700;
+}
+
+/* ── Scrolling Footer Ticker ──────────────────────────────────────────────── */
+.qds-tv-ticker {
+  margin-top: auto;
+  border-top: 1px solid #1e293b;
+  padding-top: 1rem;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.qds-tv-ticker-content {
+  display: inline-block;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #64748b;
+  animation: qds-marquee 25s linear infinite;
+}
+
+@keyframes qds-glow {
+  0%, 100% { box-shadow: 0 0 10px rgba(14, 165, 233, 0.4); }
+  50% { box-shadow: 0 0 25px rgba(99, 102, 241, 0.7); }
+}
+
+@keyframes qds-banner-flash {
+  from { border-color: #6366f1; }
+  to { border-color: #38bdf8; }
+}
+
+@keyframes qds-marquee {
+  0% { transform: translateX(100vw); }
+  100% { transform: translateX(-100%); }
+}

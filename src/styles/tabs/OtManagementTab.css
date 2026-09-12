@@ -1,0 +1,322 @@
+/* ==========================================================================
+   OtManagementTab Stylesheet
+   ========================================================================== */
+
+.ot-tab-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding-bottom: 2rem;
+}
+
+.ot-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.ot-metric-card {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ot-metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.ot-metric-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ot-theatres-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.ot-room-card {
+  background: white;
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  padding: 1.1rem;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.ot-room-card.status-available {
+  border-color: #86efac;
+  background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 50%);
+}
+
+.ot-room-card.status-in_surgery {
+  border-color: #c084fc;
+  background: linear-gradient(180deg, #faf5ff 0%, #ffffff 50%);
+}
+
+.ot-room-card.status-cleaning {
+  border-color: #fde047;
+  background: linear-gradient(180deg, #fefce8 0%, #ffffff 50%);
+}
+
+.ot-room-card.status-maintenance {
+  border-color: #cbd5e1;
+  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 50%);
+}
+
+.ot-filter-bar {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.6rem 0.9rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.ot-filter-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.ot-search-box {
+  position: relative;
+  width: 220px;
+  min-width: 170px;
+}
+
+.ot-search-box input.ot-filter-input {
+  width: 100% !important;
+  padding-left: 30px !important;
+  padding-right: 26px !important;
+  background-color: #ffffff;
+}
+
+.ot-filter-input,
+.ot-filter-select {
+  width: auto !important;
+  max-width: 100%;
+  height: 32px !important;
+  line-height: 32px !important;
+  padding: 0 0.65rem !important;
+  font-size: 0.8rem !important;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  border-radius: 7px !important;
+  background-color: #f8fafc;
+  color: var(--text-main);
+  box-sizing: border-box;
+  margin: 0;
+  transition: all 0.15s ease;
+}
+
+.ot-filter-select {
+  padding-right: 1.75rem !important;
+  cursor: pointer;
+}
+
+.ot-filter-input[type="date"] {
+  width: 130px !important;
+  padding: 0 0.5rem !important;
+  cursor: pointer;
+}
+
+.ot-filter-input:hover,
+.ot-filter-select:hover {
+  border-color: #cbd5e1;
+  background-color: #ffffff;
+}
+
+.ot-filter-input:focus,
+.ot-filter-select:focus {
+  border-color: var(--primary, #0284c7);
+  background-color: #ffffff;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.12);
+}
+
+.ot-filter-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 0.3rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.ot-filter-btn {
+  height: 32px !important;
+  padding: 0 0.65rem !important;
+  font-size: 0.78rem !important;
+  font-weight: 600 !important;
+  border-radius: 7px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  white-space: nowrap !important;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: #ffffff;
+  color: #475569;
+  transition: all 0.15s ease;
+}
+
+.ot-filter-btn:hover {
+  background: #f8fafc;
+  color: var(--text-main);
+  border-color: #cbd5e1;
+}
+
+.ot-cases-table-wrapper {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+
+.ot-urgency-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.ot-urgency-emergency {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+  animation: pulseUrgent 2s infinite;
+}
+
+@keyframes pulseUrgent {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.75; }
+}
+
+.ot-urgency-urgent {
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fcd34d;
+}
+
+.ot-urgency-elective {
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+}
+
+.ot-action-btn-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ot-action-icon-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ot-action-icon-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
+}
+
+.ot-checklist-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ot-checklist-item:hover {
+  background: #f1f5f9;
+}
+
+.ot-checklist-item.checked {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.ot-aldrete-row {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.ot-aldrete-options {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.ot-aldrete-btn {
+  flex: 1;
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  font-size: 0.78rem;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s ease;
+}
+
+.ot-aldrete-btn.selected {
+  background: #0284c7;
+  color: white;
+  border-color: #0284c7;
+  font-weight: 700;
+}
+
+@media (max-width: 768px) {
+  .ot-aldrete-row {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+}

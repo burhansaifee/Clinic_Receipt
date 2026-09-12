@@ -3,6 +3,8 @@ import { FileText, Search, Printer, MessageCircle } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 import { storage, formatAgeGender, type Prescription } from '../../lib/storage';
 import { MedicinesDropdown } from '../ui/MedicinesDropdown';
+import { LabOrdersDropdown } from '../ui/LabOrdersDropdown';
+import { DiagnosisDropdown } from '../ui/DiagnosisDropdown';
 import '../../styles/tabs/PrescriptionsTab.css';
 
 interface PrescriptionsTabProps {
@@ -124,7 +126,7 @@ const PrescriptionsTab: React.FC<PrescriptionsTabProps> = ({ prescriptions, onPr
             <table className="history-table" style={{ width: '100%', minWidth: '880px', borderCollapse: 'separate', borderSpacing: 0 }}>
               <thead>
                 <tr>
-                  {['Date', 'Patient Details', 'Age / Gender', 'Prescribed By', 'Diagnosis', 'Medicines', 'Action'].map((col, idx, arr) => (
+                  {['Date', 'Patient Details', 'Age / Gender', 'Prescribed By', 'Diagnosis', 'Medicines & Tests', 'Action'].map((col, idx, arr) => (
                     <th
                       key={col}
                       style={{
@@ -164,26 +166,22 @@ const PrescriptionsTab: React.FC<PrescriptionsTabProps> = ({ prescriptions, onPr
                     </td>
                     <td style={{ padding: '1rem', fontSize: '0.875rem', whiteSpace: 'nowrap', textAlign: 'left' }}>{p.doctorName}</td>
                     <td style={{ padding: '1rem', fontSize: '0.875rem', textAlign: 'left' }}>
-                      <div>{p.diagnosis || 'N/A'}</div>
-                      {p.followUpDate && (
-                        <div style={{ marginTop: '4px' }}>
-                          <span style={{ fontSize: '0.72rem', background: '#e0f2fe', color: '#0369a1', padding: '2px 6px', borderRadius: '10px', fontWeight: 600 }}>
-                            Follow-Up: {p.followUpDate}
-                          </span>
-                        </div>
-                      )}
+                      <DiagnosisDropdown
+                        diagnosis={p.diagnosis}
+                        symptoms={p.symptoms}
+                        notes={p.notes}
+                        followUpDate={p.followUpDate}
+                        followUpNotes={p.followUpNotes}
+                        doctorName={p.doctorName}
+                      />
                     </td>
                     <td style={{ padding: '1rem', fontSize: '0.875rem', textAlign: 'left' }}>
-                      <MedicinesDropdown medicines={p.medicines || []} />
-                      {p.labInvestigations && p.labInvestigations.length > 0 && (
-                        <div style={{ marginTop: '6px', display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                          {p.labInvestigations.map((test, idx) => (
-                            <span key={idx} style={{ fontSize: '0.7rem', background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
-                              🧪 {test}
-                            </span>
-                          ))}
-                        </div>
-                      )}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'flex-start' }}>
+                        <MedicinesDropdown medicines={p.medicines || []} />
+                        {p.labInvestigations && p.labInvestigations.length > 0 && (
+                          <LabOrdersDropdown tests={p.labInvestigations} />
+                        )}
+                      </div>
                     </td>
                     <td className="text-center" style={{ padding: '1rem', textAlign: 'center' }}>
                       <div className="table-actions" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem' }}>

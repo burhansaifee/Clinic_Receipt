@@ -28,6 +28,16 @@ import type {
   LabOrderItem,
   LabOrder,
   LabDashboardMetrics,
+  TpaProvider,
+  InsuranceClaim,
+  InsuranceDashboardMetrics,
+  DischargeSummaryData,
+  OperationTheatre,
+  SurgicalCase,
+  OtDashboardMetrics,
+  EmergencyVisit,
+  MlcRecord,
+  EmergencyDashboardMetrics,
 } from '../lib/storage';
 
 interface DatabaseBridge {
@@ -91,6 +101,13 @@ interface DatabaseBridge {
   addAdmissionVital(admissionId: string, vital: any): Promise<any>;
   addAdmissionCharge(admissionId: string, charge: any): Promise<any>;
   deleteAdmissionCharge(admissionId: string, chargeId: string): Promise<any>;
+  addEmarOrder(admissionId: string, order: any): Promise<any>;
+  updateEmarOrderStatus(admissionId: string, orderId: string, status: string): Promise<any>;
+  recordEmarAdministration(admissionId: string, record: any): Promise<any>;
+  addFluidIoEntry(admissionId: string, entry: any): Promise<any>;
+  deleteFluidIoEntry(admissionId: string, entryId: string): Promise<any>;
+  addNursingShiftNote(admissionId: string, note: any): Promise<any>;
+  deleteNursingShiftNote(admissionId: string, noteId: string): Promise<any>;
   getIpdDashboardMetrics(): Promise<IpdDashboardMetrics>;
   getLabTests(category?: string): Promise<LabTest[]>;
   saveLabTest(test: Partial<LabTest>): Promise<{ success: boolean; id: string }>;
@@ -103,6 +120,47 @@ interface DatabaseBridge {
   saveLabOrderResults(id: string, testsWithResults: any[], pathologistRemarks?: string): Promise<{ success: boolean; status: string }>;
   deleteLabOrder(id: string): Promise<{ success: boolean }>;
   getLabDashboardMetrics(): Promise<LabDashboardMetrics>;
+  getTpaProviders(): Promise<TpaProvider[]>;
+  saveTpaProvider(provider: Partial<TpaProvider>): Promise<{ success: boolean; id: string }>;
+  deleteTpaProvider(id: string): Promise<{ success: boolean }>;
+  getInsuranceClaims(options?: { status?: string; admissionId?: string }): Promise<InsuranceClaim[]>;
+  getInsuranceClaimById(id: string): Promise<InsuranceClaim | null>;
+  saveInsuranceClaim(claim: Partial<InsuranceClaim>): Promise<{ success: boolean; id: string; claimNumber: string }>;
+  updateClaimStatus(id: string, status: string, notes?: string): Promise<{ success: boolean }>;
+  addClaimQuery(claimId: string, query: any): Promise<{ success: boolean }>;
+  getInsuranceDashboardMetrics(): Promise<InsuranceDashboardMetrics>;
+  saveDischargeSummary(admissionId: string, summary: DischargeSummaryData): Promise<{ success: boolean }>;
+  getDischargeSummary(admissionId: string): Promise<DischargeSummaryData | null>;
+  getOperationTheatres(): Promise<OperationTheatre[]>;
+  saveOperationTheatre(theatre: Partial<OperationTheatre>): Promise<{ success: boolean; id: string }>;
+  deleteOperationTheatre(id: string): Promise<{ success: boolean }>;
+  getSurgicalCases(options?: { date?: string; status?: string; theatreId?: string }): Promise<SurgicalCase[]>;
+  getSurgicalCaseById(id: string): Promise<SurgicalCase | null>;
+  saveSurgicalCase(sc: Partial<SurgicalCase>): Promise<{ success: boolean; id: string; caseNumber: string }>;
+  updateSurgicalCaseStatus(id: string, status: string, notes?: string): Promise<{ success: boolean }>;
+  getOtDashboardMetrics(): Promise<OtDashboardMetrics>;
+  getEmergencyVisits(options?: { status?: string; isMlc?: boolean; date?: string }): Promise<EmergencyVisit[]>;
+  getEmergencyVisitById(id: string): Promise<EmergencyVisit | null>;
+  saveEmergencyVisit(visit: Partial<EmergencyVisit>): Promise<{ success: boolean; id: string; emergencyNumber: string }>;
+  updateEmergencyDisposition(id: string, disposition: string, details?: any): Promise<{ success: boolean }>;
+  getMlcRecords(): Promise<MlcRecord[]>;
+  getMlcRecordById(id: string): Promise<MlcRecord | null>;
+  saveMlcRecord(mlc: Partial<MlcRecord>): Promise<{ success: boolean; id: string; mlcNumber: string }>;
+  getEmergencyDashboardMetrics(): Promise<EmergencyDashboardMetrics>;
+  getDoctorCommissionRules(): Promise<any[]>;
+  getDoctorCommissionRuleByDoctorId(doctorId: string): Promise<any | null>;
+  saveDoctorCommissionRule(rule: any): Promise<{ success: boolean; id: string }>;
+  calculateDoctorAccruedEarnings(doctorId: string, startDate?: string, endDate?: string): Promise<any | null>;
+  getDoctorPayoutTransactions(doctorId?: string): Promise<any[]>;
+  saveDoctorPayoutTransaction(payout: any): Promise<{ success: boolean; id: string; payoutNumber: string }>;
+  getHospitalIndents(filter?: any): Promise<any[]>;
+  getHospitalIndentById(id: string): Promise<any | null>;
+  saveHospitalIndent(indent: any, items: any[]): Promise<{ success: boolean; id: string; indentNumber: string }>;
+  issueHospitalIndent(indentId: string, itemsIssued: any[], fulfilledBy: string): Promise<{ success: boolean; id: string }>;
+  completeHospitalIndent(indentId: string, fulfilledBy?: string): Promise<{ success: boolean; id: string }>;
+  cancelHospitalIndent(indentId: string, reason?: string): Promise<{ success: boolean; id: string }>;
+  getHospitalTier3Metrics(): Promise<any>;
+  searchGlobalPatients(query: string): Promise<any[]>;
 }
 
 interface LicensingBridge {
@@ -217,6 +275,7 @@ interface IpcRendererBridge {
 
 interface SystemBridge {
   openExternal(url: string): Promise<void>;
+  openTvDisplay(): Promise<{ success: boolean }>;
 }
 
 declare global {

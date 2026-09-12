@@ -5,11 +5,13 @@ import {
   Clock, ArrowRightLeft, LogOut, CheckCircle,
   DollarSign, Heart, Plus, Trash2, Receipt as ReceiptIcon,
   Stethoscope, ArrowUpDown, X, PackageCheck,
-  Sparkles, Check
+  Sparkles, Check, Pill, FileText
 } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 import { useConfirm } from '../ui/ConfirmDialog';
 import '../../styles/tabs/InpatientCensusTab.css';
+import { EmarNursingModal } from './inpatient/EmarNursingModal';
+import { DischargeSummaryModal } from './inpatient/DischargeSummaryModal';
 import {
   storage,
   formatAgeGender,
@@ -63,6 +65,9 @@ export const InpatientCensusTab: React.FC<InpatientCensusTabProps> = ({
   const [selectedBedForDetails, setSelectedBedForDetails] = useState<HospitalBed | null>(null);
   const [activeAdmissionRecord, setActiveAdmissionRecord] = useState<BedAdmission | null>(null);
   const [detailsActiveTab, setDetailsActiveTab] = useState<'overview' | 'vitals' | 'transfer' | 'discharge'>('overview');
+  const [selectedBedForEmar, setSelectedBedForEmar] = useState<HospitalBed | null>(null);
+  const [activeAdmissionForEmar, setActiveAdmissionForEmar] = useState<BedAdmission | null>(null);
+  const [admissionForDischargeSummary, setAdmissionForDischargeSummary] = useState<BedAdmission | null>(null);
 
   // Vitals Form State
   const [vitalForm, setVitalForm] = useState({
@@ -167,6 +172,15 @@ export const InpatientCensusTab: React.FC<InpatientCensusTabProps> = ({
 
   useEffect(() => {
     loadData();
+    const handleSync = () => {
+      loadData(true);
+    };
+    window.addEventListener('buvora-data-updated', handleSync);
+    const interval = setInterval(() => loadData(true), 5000);
+    return () => {
+      window.removeEventListener('buvora-data-updated', handleSync);
+      clearInterval(interval);
+    };
   }, []);
 
   // Helper for stay duration text
@@ -891,33 +905,33 @@ export const InpatientCensusTab: React.FC<InpatientCensusTabProps> = ({
           </div>
 
           {/* Grid of Beds in Cleaning */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '0.85rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 320px))', gap: '0.65rem' }}>
             {filteredCleaningBeds.map(bed => (
               <div
                 key={bed.id}
                 style={{
                   background: 'white',
                   border: '1px solid #fde68a',
-                  borderRadius: '12px',
-                  padding: '0.9rem 1.1rem',
+                  borderRadius: '10px',
+                  padding: '0.55rem 0.8rem',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  gap: '14px',
+                  gap: '10px',
                   boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
                 }}
               >
                 <div style={{ minWidth: 0, flex: '1 1 auto' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'nowrap' }}>
-                    <Bed size={17} color="#d97706" style={{ flexShrink: 0 }} />
-                    <span style={{ fontWeight: 800, fontSize: '0.95rem', color: '#0f172a', whiteSpace: 'nowrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    <Bed size={16} color="#d97706" style={{ flexShrink: 0 }} />
+                    <span style={{ fontWeight: 800, fontSize: '0.9rem', color: '#0f172a', whiteSpace: 'nowrap' }}>
                       Bed {bed.bedNumber}
                     </span>
-                    <span style={{ fontSize: '0.68rem', padding: '2px 7px', background: '#fef3c7', color: '#92400e', borderRadius: '4px', fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                    <span style={{ fontSize: '0.68rem', padding: '2px 6px', background: '#fef3c7', color: '#92400e', borderRadius: '4px', fontWeight: 700, whiteSpace: 'nowrap', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {bed.bedType || 'Standard'}
                     </span>
                   </div>
-                  <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {bed.wardName || 'General Ward'} • ₹{Number(bed.dailyRate || 0).toLocaleString('en-IN')}/day
                   </div>
                 </div>
@@ -926,26 +940,26 @@ export const InpatientCensusTab: React.FC<InpatientCensusTabProps> = ({
                   type="button"
                   onClick={() => handleMarkBedSanitized(bed.id, bed.bedNumber)}
                   style={{
-                    display: 'flex',
+                    display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '6px',
+                    gap: '4px',
                     background: '#f59e0b',
                     color: 'white',
                     border: 'none',
-                    borderRadius: '8px',
-                    padding: '0.55rem 0.9rem',
-                    fontSize: '0.78rem',
+                    borderRadius: '6px',
+                    padding: '0.35rem 0.65rem',
+                    fontSize: '0.72rem',
                     fontWeight: 700,
                     cursor: 'pointer',
                     whiteSpace: 'nowrap',
                     flexShrink: 0,
-                    boxShadow: '0 1px 2px rgba(245, 158, 11, 0.25)',
+                    boxShadow: '0 1px 2px rgba(245, 158, 11, 0.2)',
                     transition: 'all 0.15s ease'
                   }}
                   title="Confirm bed has been cleaned, disinfected, and is ready for next patient"
                 >
-                  <Check size={14} />
-                  Mark Sanitized &amp; Ready
+                  <Check size={13} />
+                  <span>Ready</span>
                 </button>
               </div>
             ))}
@@ -993,7 +1007,7 @@ export const InpatientCensusTab: React.FC<InpatientCensusTabProps> = ({
                 <th style={{ width: '120px', textAlign: 'center' }}>Length of Stay</th>
                 <th style={{ minWidth: '160px', textAlign: 'left' }}>Diagnosis</th>
                 <th style={{ width: '110px', textAlign: 'right' }}>Advance Paid</th>
-                <th className="no-print" style={{ width: '160px', textAlign: 'center' }}>Actions</th>
+                <th className="no-print" style={{ width: '180px', textAlign: 'center' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -1101,15 +1115,15 @@ export const InpatientCensusTab: React.FC<InpatientCensusTabProps> = ({
                           display: 'inline-flex',
                           alignItems: 'center',
                           gap: '4px',
-                          fontWeight: 700,
-                          color: '#e11d48',
-                          background: '#ffe4e6',
-                          border: '1px solid #fecdd3',
+                          fontWeight: 600,
+                          color: '#334155',
+                          background: '#f1f5f9',
+                          border: '1px solid #e2e8f0',
                           padding: '3px 8px',
                           borderRadius: '6px',
                           fontSize: '0.75rem'
                         }}>
-                          <Clock size={12} />
+                          <Clock size={12} color="#64748b" />
                           {getStayDurationString(bed.admittedAt)}
                         </span>
                       </td>
@@ -1149,42 +1163,49 @@ export const InpatientCensusTab: React.FC<InpatientCensusTabProps> = ({
                       </td>
 
                       <td className="no-print" style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                        <div style={{ display: 'inline-flex', gap: '5px', alignItems: 'center', justifyContent: 'center' }}>
+                        <div className="census-actions">
                           <button
                             type="button"
-                            className="btn-secondary"
+                            className="census-btn-chart"
                             onClick={() => handleOpenBedDetails(bed, 'overview')}
-                            style={{
-                              padding: '0.35rem 0.65rem',
-                              fontSize: '0.78rem',
-                              fontWeight: 600,
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px'
-                            }}
                             title="Open Inpatient Chart & Vitals"
                           >
-                            <Activity size={13} color="#0284c7" />
+                            <Activity size={13} />
                             Chart
                           </button>
 
                           <button
                             type="button"
-                            className="btn-primary"
-                            onClick={() => handleOpenBedDetails(bed, 'discharge')}
-                            style={{
-                              padding: '0.35rem 0.65rem',
-                              fontSize: '0.78rem',
-                              fontWeight: 700,
-                              background: '#e11d48',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px'
+                            className="census-btn-icon census-btn-emar"
+                            onClick={() => {
+                              setSelectedBedForEmar(bed);
+                              const adm = admissions.find(a => a.id === bed.currentAdmissionId);
+                              setActiveAdmissionForEmar(adm || null);
                             }}
-                            title="Discharge & Settle Bill"
+                            title="Bedside eMAR & Nursing Station"
                           >
-                            <LogOut size={13} />
-                            Discharge
+                            <Pill size={14} />
+                          </button>
+
+                          <button
+                            type="button"
+                            className="census-btn-icon census-btn-summary"
+                            onClick={() => {
+                              const adm = admissions.find(a => a.id === bed.currentAdmissionId);
+                              if (adm) setAdmissionForDischargeSummary(adm);
+                            }}
+                            title="Structured Discharge Summary & A4 Print"
+                          >
+                            <FileText size={14} />
+                          </button>
+
+                          <button
+                            type="button"
+                            className="census-btn-icon census-btn-discharge"
+                            onClick={() => handleOpenBedDetails(bed, 'discharge')}
+                            title="Discharge & Queue for Facility Billing"
+                          >
+                            <LogOut size={14} />
                           </button>
                         </div>
                       </td>
@@ -1297,8 +1318,55 @@ export const InpatientCensusTab: React.FC<InpatientCensusTabProps> = ({
                   gap: '4px'
                 }}
               >
-                <Activity size={14} />
-                Vitals &amp; Care
+                <PackageCheck size={14} />
+                Ward Consumables &amp; Care
+              </button>
+
+              <button
+                onClick={() => {
+                  setSelectedBedForEmar(selectedBedForDetails);
+                  setActiveAdmissionForEmar(activeAdmissionRecord);
+                }}
+                style={{
+                  padding: '0.45rem 0.85rem',
+                  borderRadius: '6px',
+                  border: '1px solid #bae6fd',
+                  fontSize: '0.825rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  background: '#e0f2fe',
+                  color: '#0369a1',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+                title="Open Bedside eMAR & Nursing Suite"
+              >
+                <Pill size={14} />
+                eMAR &amp; Nursing Station
+              </button>
+
+              <button
+                onClick={() => {
+                  if (activeAdmissionRecord) setAdmissionForDischargeSummary(activeAdmissionRecord);
+                }}
+                style={{
+                  padding: '0.45rem 0.85rem',
+                  borderRadius: '6px',
+                  border: '1px solid #fed7aa',
+                  fontSize: '0.825rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  background: '#fff7ed',
+                  color: '#c2410c',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+                title="Structured Clinical Discharge Summary & A4 Print Engine"
+              >
+                <FileText size={14} />
+                Discharge Summary
               </button>
               <button
                 onClick={() => setDetailsActiveTab('transfer')}
@@ -1355,7 +1423,7 @@ export const InpatientCensusTab: React.FC<InpatientCensusTabProps> = ({
                         {selectedBedForDetails.patientPhone && ` • Phone: ${selectedBedForDetails.patientPhone}`}
                       </div>
                     </div>
-                    <span style={{ fontSize: '0.75rem', fontWeight: 800, background: '#fee2e2', color: '#b91c1c', padding: '4px 10px', borderRadius: '8px' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, background: '#f1f5f9', color: '#334155', border: '1px solid #e2e8f0', padding: '4px 10px', borderRadius: '8px' }}>
                       ⏱️ {getStayDurationString(selectedBedForDetails.admittedAt)}
                     </span>
                   </div>
@@ -1556,246 +1624,80 @@ export const InpatientCensusTab: React.FC<InpatientCensusTabProps> = ({
               </div>
             )}
 
-            {/* Tab 2: Vitals & Care Tracking */}
+            {/* Tab 2: Ward Billing Tracker (Consumables & Care) & Bedside Vitals */}
             {detailsActiveTab === 'vitals' && (
               <div>
-                {/* Form to log new vital */}
-                <form onSubmit={handleRecordVital} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '1rem', marginBottom: '1.25rem' }}>
-                  <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Heart size={16} color="#ef4444" />
-                    Record New Nursing Vitals:
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                    <div>
-                      <label className="form-label" style={{ fontSize: '0.725rem' }}>BP (Sys / Dia)</label>
-                      <div style={{ display: 'flex', gap: '2px', alignItems: 'center' }}>
-                        <input
-                          type="text"
-                          placeholder="120"
-                          value={vitalForm.bpSystolic}
-                          onChange={e => setVitalForm({ ...vitalForm, bpSystolic: e.target.value })}
-                          className="input-field"
-                          style={{ textAlign: 'center', padding: '0.25rem' }}
-                        />
-                        <span>/</span>
-                        <input
-                          type="text"
-                          placeholder="80"
-                          value={vitalForm.bpDiastolic}
-                          onChange={e => setVitalForm({ ...vitalForm, bpDiastolic: e.target.value })}
-                          className="input-field"
-                          style={{ textAlign: 'center', padding: '0.25rem' }}
-                        />
+                {/* Bedside Vitals Entry Card */}
+                <div style={{ background: '#ffffff', border: '1.5px solid #0284c7', borderRadius: '12px', padding: '1.2rem', marginBottom: '1.25rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{ background: '#e0f2fe', color: '#0284c7', padding: '6px', borderRadius: '8px', display: 'flex' }}>
+                        <Heart size={20} color="#ef4444" />
+                      </div>
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: '#0f172a' }}>
+                          Bedside Vitals Entry (Clinical Rounds)
+                        </h4>
+                        <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b' }}>
+                          Real-time clinical vitals logged to patient admission history
+                        </p>
                       </div>
                     </div>
-                    <div>
-                      <label className="form-label" style={{ fontSize: '0.725rem' }}>Pulse (bpm)</label>
-                      <input
-                        type="text"
-                        placeholder="72"
-                        value={vitalForm.pulse}
-                        onChange={e => setVitalForm({ ...vitalForm, pulse: e.target.value })}
-                        className="input-field"
-                        style={{ textAlign: 'center' }}
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label" style={{ fontSize: '0.725rem' }}>Temp (°F)</label>
-                      <input
-                        type="text"
-                        placeholder="98.6"
-                        value={vitalForm.temp}
-                        onChange={e => setVitalForm({ ...vitalForm, temp: e.target.value })}
-                        className="input-field"
-                        style={{ textAlign: 'center' }}
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label" style={{ fontSize: '0.725rem' }}>SpO2 (%)</label>
-                      <input
-                        type="text"
-                        placeholder="99"
-                        value={vitalForm.spo2}
-                        onChange={e => setVitalForm({ ...vitalForm, spo2: e.target.value })}
-                        className="input-field"
-                        style={{ textAlign: 'center' }}
-                      />
-                    </div>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                    <div>
-                      <label className="form-label" style={{ fontSize: '0.725rem' }}>Respiratory Rate (/min)</label>
-                      <input
-                        type="text"
-                        placeholder="18"
-                        value={vitalForm.respiratoryRate}
-                        onChange={e => setVitalForm({ ...vitalForm, respiratoryRate: e.target.value })}
-                        className="input-field"
-                        style={{ textAlign: 'center' }}
-                      />
+                  <form onSubmit={handleRecordVital}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '10px', marginBottom: '10px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>BP Systolic (mmHg)</label>
+                        <input type="text" required value={vitalForm.bpSystolic} onChange={e => setVitalForm({ ...vitalForm, bpSystolic: e.target.value })} style={{ width: '100%', padding: '6px', fontSize: '0.85rem', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>BP Diastolic</label>
+                        <input type="text" required value={vitalForm.bpDiastolic} onChange={e => setVitalForm({ ...vitalForm, bpDiastolic: e.target.value })} style={{ width: '100%', padding: '6px', fontSize: '0.85rem', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>Pulse (bpm)</label>
+                        <input type="text" required value={vitalForm.pulse} onChange={e => setVitalForm({ ...vitalForm, pulse: e.target.value })} style={{ width: '100%', padding: '6px', fontSize: '0.85rem', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>Temp (°F)</label>
+                        <input type="text" required value={vitalForm.temp} onChange={e => setVitalForm({ ...vitalForm, temp: e.target.value })} style={{ width: '100%', padding: '6px', fontSize: '0.85rem', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>SpO2 (%)</label>
+                        <input type="text" required value={vitalForm.spo2} onChange={e => setVitalForm({ ...vitalForm, spo2: e.target.value })} style={{ width: '100%', padding: '6px', fontSize: '0.85rem', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>Resp Rate (/min)</label>
+                        <input type="text" required value={vitalForm.respiratoryRate} onChange={e => setVitalForm({ ...vitalForm, respiratoryRate: e.target.value })} style={{ width: '100%', padding: '6px', fontSize: '0.85rem', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>GRBS (mg/dL)</label>
+                        <input type="number" placeholder="Optional" value={vitalForm.bloodSugar} onChange={e => setVitalForm({ ...vitalForm, bloodSugar: e.target.value })} style={{ width: '100%', padding: '6px', fontSize: '0.85rem', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>Urine Output</label>
+                        <input type="text" placeholder="Optional" value={vitalForm.urineOutput} onChange={e => setVitalForm({ ...vitalForm, urineOutput: e.target.value })} style={{ width: '100%', padding: '6px', fontSize: '0.85rem', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+                      </div>
                     </div>
-                    <div>
-                      <label className="form-label" style={{ fontSize: '0.725rem' }}>Blood Sugar GRBS (mg/dL)</label>
-                      <input
-                        type="number"
-                        placeholder="e.g. 110"
-                        value={vitalForm.bloodSugar}
-                        onChange={e => setVitalForm({ ...vitalForm, bloodSugar: e.target.value })}
-                        className="input-field"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label" style={{ fontSize: '0.725rem' }}>Urine Output (ml)</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. 350 ml / 4 hrs"
-                        value={vitalForm.urineOutput}
-                        onChange={e => setVitalForm({ ...vitalForm, urineOutput: e.target.value })}
-                        className="input-field"
-                      />
-                    </div>
-                  </div>
 
-                  <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end' }}>
-                    <div style={{ flex: 1 }}>
-                      <label className="form-label" style={{ fontSize: '0.725rem' }}>Clinical Observation Notes</label>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                       <input
                         type="text"
-                        placeholder="Patient alert, oriented, IV line intact..."
+                        placeholder="Clinical notes or symptoms during rounds (e.g. resting comfortably, mild cough)..."
                         value={vitalForm.notes}
                         onChange={e => setVitalForm({ ...vitalForm, notes: e.target.value })}
-                        className="input-field"
+                        style={{ flex: 1, padding: '6px 12px', fontSize: '0.85rem', borderRadius: '6px', border: '1px solid #cbd5e1' }}
                       />
+                      <button
+                        type="submit"
+                        className="btn-primary"
+                        style={{ background: '#0284c7', padding: '6px 16px', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}
+                      >
+                        <Plus size={15} /> Save Vitals Log
+                      </button>
                     </div>
-                    <button type="submit" className="btn-primary" style={{ background: '#0284c7', height: '36px' }}>
-                      Log Vitals
-                    </button>
-                  </div>
-                </form>
-
-                {/* Historical Vitals Flowsheet / Chart */}
-                <div style={{ marginBottom: '1.5rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
-                    <h5 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 800, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Activity size={15} color="#0284c7" />
-                      Historical Vitals Flowsheet / Chart:
-                    </h5>
-                    {(() => {
-                      let logArray: any[] = [];
-                      try {
-                        logArray = JSON.parse(activeAdmissionRecord?.vitalsLog || '[]');
-                      } catch (_) {}
-                      return logArray.length > 0 ? (
-                        <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#0369a1', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px' }}>
-                          {logArray.length} {logArray.length === 1 ? 'Reading' : 'Readings'} Logged
-                        </span>
-                      ) : null;
-                    })()}
-                  </div>
-
-                  {(() => {
-                    let logArray: any[] = [];
-                    try {
-                      logArray = JSON.parse(activeAdmissionRecord?.vitalsLog || '[]');
-                    } catch (_) {}
-
-                    if (logArray.length === 0) {
-                      return (
-                        <div style={{ textAlign: 'center', padding: '1.5rem', color: '#64748b', fontSize: '0.825rem', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #cbd5e1' }}>
-                          No vitals recorded yet during this stay. Use the form above to log current patient vitals.
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div style={{ border: '1px solid var(--border)', borderRadius: '8px', overflowX: 'auto', background: 'white' }}>
-                        <table className="data-table" style={{ width: '100%', minWidth: '860px', margin: 0, fontSize: '0.825rem' }}>
-                          <thead>
-                            <tr>
-                              <th className="text-center" style={{ width: '140px', textAlign: 'center', whiteSpace: 'nowrap' }}>Timestamp</th>
-                              <th className="text-center" style={{ width: '110px', textAlign: 'center', whiteSpace: 'nowrap' }}>BP</th>
-                              <th className="text-center" style={{ width: '85px', textAlign: 'center', whiteSpace: 'nowrap' }}>Pulse</th>
-                              <th className="text-center" style={{ width: '85px', textAlign: 'center', whiteSpace: 'nowrap' }}>Temp</th>
-                              <th className="text-center" style={{ width: '80px', textAlign: 'center', whiteSpace: 'nowrap' }}>SpO2</th>
-                              <th className="text-center" style={{ width: '85px', textAlign: 'center', whiteSpace: 'nowrap' }}>Resp</th>
-                              <th className="text-center" style={{ width: '110px', textAlign: 'center', whiteSpace: 'nowrap' }}>Blood Sugar</th>
-                              <th className="text-center" style={{ width: '90px', textAlign: 'center', whiteSpace: 'nowrap' }}>Urine</th>
-                              <th className="text-left" style={{ minWidth: '160px', textAlign: 'left', whiteSpace: 'nowrap' }}>Notes</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {logArray.map((v, i) => (
-                              <tr key={v.id || i}>
-                                <td className="text-center" style={{ whiteSpace: 'nowrap', textAlign: 'center', color: '#475569', fontWeight: 500 }}>
-                                  {v.recordedAt ? format(parseISO(v.recordedAt), 'dd MMM, hh:mm a') : 'Recent'}
-                                </td>
-                                <td className="text-center" style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                                  {v.bpSystolic && v.bpDiastolic ? (
-                                    <>
-                                      <strong style={{ color: '#0f172a' }}>{v.bpSystolic}/{v.bpDiastolic}</strong>{' '}
-                                      <span style={{ fontSize: '0.72rem', color: '#64748b' }}>mmHg</span>
-                                    </>
-                                  ) : '—'}
-                                </td>
-                                <td className="text-center" style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                                  {v.pulse ? (
-                                    <>
-                                      <strong style={{ color: '#0f172a' }}>{v.pulse}</strong>{' '}
-                                      <span style={{ fontSize: '0.72rem', color: '#64748b' }}>bpm</span>
-                                    </>
-                                  ) : '—'}
-                                </td>
-                                <td className="text-center" style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                                  {v.temp ? (
-                                    <>
-                                      <strong style={{ color: '#0f172a' }}>{v.temp}</strong>{' '}
-                                      <span style={{ fontSize: '0.72rem', color: '#64748b' }}>°F</span>
-                                    </>
-                                  ) : '—'}
-                                </td>
-                                <td className="text-center" style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                                  {v.spo2 ? (
-                                    <strong style={{ color: Number(v.spo2) < 95 ? '#dc2626' : '#16a34a', background: Number(v.spo2) < 95 ? '#fef2f2' : '#f0fdf4', padding: '2px 8px', borderRadius: '4px' }}>
-                                      {v.spo2}%
-                                    </strong>
-                                  ) : '—'}
-                                </td>
-                                <td className="text-center" style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                                  {v.respiratoryRate ? (
-                                    <>
-                                      <strong style={{ color: '#0f172a' }}>{v.respiratoryRate}</strong>{' '}
-                                      <span style={{ fontSize: '0.72rem', color: '#64748b' }}>/min</span>
-                                    </>
-                                  ) : '—'}
-                                </td>
-                                <td className="text-center" style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                                  {v.bloodSugar ? (
-                                    <>
-                                      <strong style={{ color: '#0f172a' }}>{v.bloodSugar}</strong>{' '}
-                                      <span style={{ fontSize: '0.72rem', color: '#64748b' }}>mg/dL</span>
-                                    </>
-                                  ) : '—'}
-                                </td>
-                                <td className="text-center" style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                                  {v.urineOutput ? (
-                                    <>
-                                      <strong style={{ color: '#0f172a' }}>{v.urineOutput}</strong>{' '}
-                                      <span style={{ fontSize: '0.72rem', color: '#64748b' }}>ml</span>
-                                    </>
-                                  ) : '—'}
-                                </td>
-                                <td className="text-left" style={{ textAlign: 'left', color: '#475569', fontSize: '0.8rem' }}>
-                                  {v.notes || '—'}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    );
-                  })()}
+                  </form>
                 </div>
 
                 {/* Master Tariff Consumables & Care Tracker */}
@@ -2341,6 +2243,45 @@ export const InpatientCensusTab: React.FC<InpatientCensusTabProps> = ({
             )}
           </div>
         </div>
+      )}
+
+      {/* Hospital Inpatient Nursing & eMAR Suite Modal */}
+      {selectedBedForEmar && activeAdmissionForEmar && (
+        <EmarNursingModal
+          bed={selectedBedForEmar}
+          admission={activeAdmissionForEmar}
+          onClose={() => {
+            setSelectedBedForEmar(null);
+            setActiveAdmissionForEmar(null);
+          }}
+          onAdmissionUpdated={async () => {
+            await loadData(true);
+            if (selectedBedForEmar?.currentAdmissionId) {
+              const freshAdms = await storage.getBedAdmissions({ limit: 100 });
+              const updated = freshAdms.find(a => a.id === selectedBedForEmar.currentAdmissionId);
+              if (updated) {
+                setActiveAdmissionForEmar(updated);
+                setActiveAdmissionRecord(updated);
+              }
+            }
+          }}
+        />
+      )}
+
+      {/* Structured Clinical Discharge Summary Modal */}
+      {admissionForDischargeSummary && (
+        <DischargeSummaryModal
+          admission={admissionForDischargeSummary}
+          onClose={() => setAdmissionForDischargeSummary(null)}
+          onSaved={async () => {
+            await loadData(true);
+            if (activeAdmissionRecord && activeAdmissionRecord.id === admissionForDischargeSummary.id) {
+              const freshAdms = await storage.getBedAdmissions({ limit: 100 });
+              const updated = freshAdms.find(a => a.id === admissionForDischargeSummary.id);
+              if (updated) setActiveAdmissionRecord(updated);
+            }
+          }}
+        />
       )}
     </div>
   );

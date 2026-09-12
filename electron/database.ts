@@ -42,6 +42,15 @@ export const database = {
 
     // Initialize Tables
     db.exec(`
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        role TEXT NOT NULL DEFAULT 'reception',
+        doctorId TEXT,
+        password TEXT,
+        allowedTabs TEXT,
+        createdAt TEXT NOT NULL
+      );
+
       CREATE TABLE IF NOT EXISTS doctors (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -54,7 +63,8 @@ export const database = {
         customBottomMargin INTEGER DEFAULT 0,
         upiId TEXT,
         qrCodeText TEXT,
-        showQrCodeOnReceipt INTEGER DEFAULT 0
+        showQrCodeOnReceipt INTEGER DEFAULT 0,
+        chamber TEXT
       );
 
       CREATE TABLE IF NOT EXISTS services (
@@ -288,6 +298,10 @@ export const database = {
         initialVitals TEXT,
         vitalsLog TEXT,
         wardChargesLog TEXT,
+        emarOrdersLog TEXT,
+        emarAdminLog TEXT,
+        fluidIoLog TEXT,
+        nursingNotesLog TEXT,
         advancePaid REAL DEFAULT 0,
         paymentMode TEXT DEFAULT 'CASH',
         status TEXT DEFAULT 'admitted',
@@ -342,6 +356,159 @@ export const database = {
         updatedAt TEXT NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS tpa_providers (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        code TEXT NOT NULL,
+        contactEmail TEXT,
+        contactPhone TEXT,
+        portalUrl TEXT,
+        defaultCopayPercent REAL DEFAULT 0,
+        isActive INTEGER DEFAULT 1,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS insurance_claims (
+        id TEXT PRIMARY KEY,
+        claimNumber TEXT NOT NULL,
+        admissionId TEXT,
+        patientId TEXT,
+        patientUhid TEXT,
+        patientName TEXT NOT NULL,
+        patientPhone TEXT,
+        tpaProviderId TEXT NOT NULL,
+        tpaProviderName TEXT NOT NULL,
+        insurerName TEXT NOT NULL,
+        policyNumber TEXT NOT NULL,
+        cardId TEXT,
+        corporateName TEXT,
+        sumInsured REAL DEFAULT 0,
+        initialPreAuthAmount REAL DEFAULT 0,
+        approvedAmount REAL DEFAULT 0,
+        finalSettledAmount REAL DEFAULT 0,
+        copayPercent REAL DEFAULT 0,
+        nonPayableDeductions REAL DEFAULT 0,
+        status TEXT DEFAULT 'PREAUTH_DRAFT',
+        queriesLog TEXT,
+        preAuthLetterRef TEXT,
+        settlementDate TEXT,
+        notes TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+
+      -- Operation Theatres & Surgical Suites
+      CREATE TABLE IF NOT EXISTS operation_theatres (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        code TEXT NOT NULL,
+        theatreType TEXT DEFAULT 'MAJOR',
+        floor TEXT DEFAULT '1st Floor',
+        dailyRate REAL DEFAULT 0,
+        status TEXT DEFAULT 'AVAILABLE',
+        isActive INTEGER DEFAULT 1,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS surgical_cases (
+        id TEXT PRIMARY KEY,
+        caseNumber TEXT NOT NULL,
+        patientId TEXT,
+        patientUhid TEXT,
+        patientName TEXT NOT NULL,
+        patientPhone TEXT,
+        patientAge TEXT,
+        patientGender TEXT,
+        admissionId TEXT,
+        theatreId TEXT NOT NULL,
+        theatreName TEXT NOT NULL,
+        surgeryName TEXT NOT NULL,
+        surgeryCategory TEXT DEFAULT 'GENERAL',
+        urgency TEXT DEFAULT 'ELECTIVE',
+        primarySurgeonId TEXT NOT NULL,
+        primarySurgeonName TEXT NOT NULL,
+        assistantSurgeonName TEXT,
+        anesthetistName TEXT,
+        scrubNurseName TEXT,
+        circulatingNurseName TEXT,
+        scheduledDate TEXT NOT NULL,
+        startTime TEXT NOT NULL,
+        endTime TEXT,
+        status TEXT DEFAULT 'SCHEDULED',
+        pacData TEXT,
+        whoChecklistData TEXT,
+        intraOpNotes TEXT,
+        pacuData TEXT,
+        chargesLogged TEXT,
+        notes TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+
+      -- Emergency Department, Casualty & Triage
+      CREATE TABLE IF NOT EXISTS emergency_visits (
+        id TEXT PRIMARY KEY,
+        emergencyNumber TEXT NOT NULL,
+        patientId TEXT,
+        patientUhid TEXT,
+        patientName TEXT NOT NULL,
+        patientPhone TEXT,
+        patientAge TEXT,
+        patientGender TEXT,
+        triageLevel INTEGER NOT NULL DEFAULT 3,
+        triageCategory TEXT NOT NULL DEFAULT 'YELLOW',
+        chiefComplaint TEXT NOT NULL,
+        triageVitals TEXT,
+        triageNurseName TEXT,
+        attendingDoctorId TEXT,
+        attendingDoctorName TEXT,
+        arrivedAt TEXT NOT NULL,
+        disposition TEXT DEFAULT 'UNDER_TREATMENT',
+        dispositionNotes TEXT,
+        dischargedAt TEXT,
+        admittedBedId TEXT,
+        admittedAdmissionId TEXT,
+        isMlc INTEGER DEFAULT 0,
+        mlcNumber TEXT,
+        mlcData TEXT,
+        notes TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+
+      -- Medico-Legal Cases (MLC) Registry
+      CREATE TABLE IF NOT EXISTS mlc_records (
+        id TEXT PRIMARY KEY,
+        mlcNumber TEXT NOT NULL,
+        emergencyVisitId TEXT,
+        patientId TEXT,
+        patientName TEXT NOT NULL,
+        patientAge TEXT,
+        patientGender TEXT,
+        policeStation TEXT NOT NULL,
+        policeOfficerName TEXT,
+        policeBadgeNumber TEXT,
+        incidentDate TEXT NOT NULL,
+        incidentPlace TEXT,
+        incidentType TEXT NOT NULL DEFAULT 'RTA',
+        broughtByName TEXT NOT NULL,
+        broughtByPhone TEXT,
+        broughtByRelation TEXT,
+        injuryDescription TEXT NOT NULL,
+        injuryType TEXT DEFAULT 'SIMPLE',
+        weaponType TEXT,
+        alcoholSmellDetected INTEGER DEFAULT 0,
+        dyingDeclarationRequired INTEGER DEFAULT 0,
+        intimationSentAt TEXT,
+        certificateIssuedAt TEXT,
+        doctorSignatureName TEXT NOT NULL,
+        status TEXT DEFAULT 'REGISTERED',
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+
       CREATE INDEX IF NOT EXISTS idx_beds_wardId ON beds(wardId);
       CREATE INDEX IF NOT EXISTS idx_beds_status ON beds(status);
       CREATE INDEX IF NOT EXISTS idx_admissions_patientId ON bed_admissions(patientId);
@@ -352,6 +519,102 @@ export const database = {
       CREATE INDEX IF NOT EXISTS idx_lab_orders_patientId ON lab_orders(patientId);
       CREATE INDEX IF NOT EXISTS idx_lab_orders_status ON lab_orders(status);
       CREATE INDEX IF NOT EXISTS idx_lab_orders_orderDate ON lab_orders(orderDate);
+      CREATE INDEX IF NOT EXISTS idx_claims_patientId ON insurance_claims(patientId);
+      CREATE INDEX IF NOT EXISTS idx_claims_admissionId ON insurance_claims(admissionId);
+      CREATE INDEX IF NOT EXISTS idx_claims_status ON insurance_claims(status);
+      CREATE INDEX IF NOT EXISTS idx_claims_tpaProviderId ON insurance_claims(tpaProviderId);
+      CREATE INDEX IF NOT EXISTS idx_surgical_theatreId ON surgical_cases(theatreId);
+      CREATE INDEX IF NOT EXISTS idx_surgical_scheduledDate ON surgical_cases(scheduledDate);
+      CREATE INDEX IF NOT EXISTS idx_surgical_status ON surgical_cases(status);
+      CREATE INDEX IF NOT EXISTS idx_surgical_admissionId ON surgical_cases(admissionId);
+      CREATE INDEX IF NOT EXISTS idx_emergency_triageCategory ON emergency_visits(triageCategory);
+      CREATE INDEX IF NOT EXISTS idx_emergency_disposition ON emergency_visits(disposition);
+      CREATE INDEX IF NOT EXISTS idx_emergency_arrivedAt ON emergency_visits(arrivedAt);
+      CREATE INDEX IF NOT EXISTS idx_mlc_mlcNumber ON mlc_records(mlcNumber);
+      CREATE INDEX IF NOT EXISTS idx_mlc_policeStation ON mlc_records(policeStation);
+
+      -- Module 3: Doctor Revenue Share & Payouts Engine
+      CREATE TABLE IF NOT EXISTS doctor_commission_rules (
+        id TEXT PRIMARY KEY,
+        doctorId TEXT NOT NULL UNIQUE,
+        doctorName TEXT NOT NULL,
+        opdType TEXT DEFAULT 'PERCENT',
+        opdValue REAL DEFAULT 70,
+        ipdVisitRate REAL DEFAULT 800,
+        surgerySharePercent REAL DEFAULT 60,
+        assistantSurgeonPercent REAL DEFAULT 15,
+        anesthetistPercent REAL DEFAULT 25,
+        labReferralPercent REAL DEFAULT 10,
+        pharmacyReferralPercent REAL DEFAULT 0,
+        tdsPercent REAL DEFAULT 10,
+        hospitalFacilityRetentionPercent REAL DEFAULT 0,
+        isActive INTEGER DEFAULT 1,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS doctor_payout_transactions (
+        id TEXT PRIMARY KEY,
+        payoutNumber TEXT NOT NULL UNIQUE,
+        doctorId TEXT NOT NULL,
+        doctorName TEXT NOT NULL,
+        periodStart TEXT NOT NULL,
+        periodEnd TEXT NOT NULL,
+        opdConsultationEarnings REAL DEFAULT 0,
+        ipdVisitsEarnings REAL DEFAULT 0,
+        surgeryEarnings REAL DEFAULT 0,
+        labReferralEarnings REAL DEFAULT 0,
+        grossEarnings REAL DEFAULT 0,
+        tdsDeduction REAL DEFAULT 0,
+        hospitalFacilityDeduction REAL DEFAULT 0,
+        otherDeductions REAL DEFAULT 0,
+        netPayoutAmount REAL DEFAULT 0,
+        paymentMode TEXT DEFAULT 'BANK_TRANSFER',
+        paymentReference TEXT,
+        status TEXT DEFAULT 'PAID',
+        notes TEXT,
+        payoutDate TEXT NOT NULL,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+
+      -- Module 3: Hospital Ward & OT to Pharmacy Stock Indenting
+      CREATE TABLE IF NOT EXISTS hospital_indents (
+        id TEXT PRIMARY KEY,
+        indentNumber TEXT NOT NULL UNIQUE,
+        departmentType TEXT NOT NULL,
+        sourceLocation TEXT NOT NULL,
+        targetDepartment TEXT DEFAULT 'PHARMACY',
+        requestedBy TEXT NOT NULL,
+        priority TEXT DEFAULT 'ROUTINE',
+        status TEXT DEFAULT 'PENDING',
+        notes TEXT,
+        requestedAt TEXT NOT NULL,
+        fulfilledAt TEXT,
+        fulfilledBy TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS hospital_indent_items (
+        id TEXT PRIMARY KEY,
+        indentId TEXT NOT NULL,
+        medicineId TEXT,
+        itemName TEXT NOT NULL,
+        itemCategory TEXT,
+        requestedQuantity INTEGER NOT NULL,
+        issuedQuantity INTEGER DEFAULT 0,
+        batchNumber TEXT,
+        notes TEXT,
+        FOREIGN KEY (indentId) REFERENCES hospital_indents(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_commission_rules_doctorId ON doctor_commission_rules(doctorId);
+      CREATE INDEX IF NOT EXISTS idx_payouts_doctorId ON doctor_payout_transactions(doctorId);
+      CREATE INDEX IF NOT EXISTS idx_payouts_date ON doctor_payout_transactions(payoutDate);
+      CREATE INDEX IF NOT EXISTS idx_indents_status ON hospital_indents(status);
+      CREATE INDEX IF NOT EXISTS idx_indents_date ON hospital_indents(requestedAt);
+      CREATE INDEX IF NOT EXISTS idx_indent_items_indentId ON hospital_indent_items(indentId);
     `);
 
     // Clean up any previously seeded default medicines so no hardcoded data remains
@@ -676,6 +939,62 @@ export const database = {
       console.warn('[DB] Seeding lab tests failed or skipped:', e);
     }
 
+    // Seed default standard TPA / Health Insurance Providers if empty
+    try {
+      const tpaCount = db.prepare('SELECT COUNT(*) as cnt FROM tpa_providers').get() as { cnt: number };
+      if (tpaCount && tpaCount.cnt === 0) {
+        const seedNow = new Date().toISOString();
+        const defaultTpas = [
+          { id: 'TPA-STAR', name: 'Star Health & Allied Insurance', code: 'STAR-HEALTH', email: 'cashless@starhealth.in', phone: '1800-425-2255', portal: 'https://www.starhealth.in', copay: 0 },
+          { id: 'TPA-MEDI', name: 'Medi Assist Insurance TPA', code: 'MEDI-ASSIST', email: 'claims@mediassist.in', phone: '1800-425-9449', portal: 'https://mediassisttpa.in', copay: 0 },
+          { id: 'TPA-VIDAL', name: 'Vidal Health Insurance TPA', code: 'VIDAL-TPA', email: 'cashless@vidalhealthtpa.com', phone: '1800-102-4488', portal: 'https://vidalhealthtpa.com', copay: 10 },
+          { id: 'TPA-HDFC', name: 'HDFC ERGO General Insurance', code: 'HDFC-ERGO', email: 'care@hdfcergo.com', phone: '022-6234-6234', portal: 'https://hdfcergo.com', copay: 0 },
+          { id: 'TPA-ICICI', name: 'ICICI Lombard General Insurance', code: 'ICICI-LOMB', email: 'cashless@icicilombard.com', phone: '1800-2666', portal: 'https://icicilombard.com', copay: 0 },
+          { id: 'TPA-PARAMOUNT', name: 'Paramount Health Services TPA', code: 'PARAMOUNT-TPA', email: 'claims@paramounttpa.com', phone: '022-6662-0808', portal: 'https://paramounttpa.com', copay: 10 },
+          { id: 'TPA-MDINDIA', name: 'MDIndia Health Insurance TPA', code: 'MD-INDIA', email: 'customercare@mdindia.com', phone: '1800-233-1166', portal: 'https://mdindiaonline.com', copay: 0 },
+          { id: 'TPA-CARE', name: 'Care Health Insurance', code: 'CARE-HEALTH', email: 'customerfirst@careinsurance.com', phone: '1800-102-4455', portal: 'https://careinsurance.com', copay: 0 }
+        ];
+
+        const insertTpa = db.prepare(`
+          INSERT INTO tpa_providers (id, name, code, contactEmail, contactPhone, portalUrl, defaultCopayPercent, isActive, createdAt, updatedAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+        `);
+
+        for (const t of defaultTpas) {
+          insertTpa.run(t.id, t.name, t.code, t.email, t.phone, t.portal, t.copay, seedNow, seedNow);
+        }
+        console.log('[DB] Pre-seeded 8 standard TPA / Health Insurance Providers');
+      }
+    } catch (e) {
+      console.warn('[DB] Seeding TPA providers failed or skipped:', e);
+    }
+
+    try {
+      const otCount = db.prepare('SELECT COUNT(*) as cnt FROM operation_theatres').get() as { cnt: number };
+      if (otCount && otCount.cnt === 0) {
+        const seedNow = new Date().toISOString();
+        const defaultOts = [
+          { id: 'OT-MAIN-01', name: 'Main Major OT 1 (General & Laparoscopy)', code: 'OT-1', theatreType: 'MAJOR', floor: '1st Floor - Surgical Wing', dailyRate: 5000 },
+          { id: 'OT-MOD-02', name: 'Modular OT 2 (Ortho & Joint Replacement)', code: 'OT-2', theatreType: 'MODULAR', floor: '1st Floor - Surgical Wing', dailyRate: 7500 },
+          { id: 'OT-MIN-03', name: 'Minor OT & Daycare Endoscopy Suite', code: 'OT-3', theatreType: 'MINOR', floor: 'Ground Floor - Daycare', dailyRate: 2500 },
+          { id: 'OT-CATH-04', name: 'Cath Lab & Interventional Suite', code: 'OT-4', theatreType: 'CATH_LAB', floor: 'Basement - Cath Wing', dailyRate: 8000 }
+        ];
+
+        const insertOt = db.prepare(`
+          INSERT INTO operation_theatres (id, name, code, theatreType, floor, dailyRate, status, isActive, createdAt, updatedAt)
+          VALUES (?, ?, ?, ?, ?, ?, 'AVAILABLE', 1, ?, ?)
+        `);
+
+        for (const ot of defaultOts) {
+          insertOt.run(ot.id, ot.name, ot.code, ot.theatreType, ot.floor, ot.dailyRate, seedNow, seedNow);
+        }
+        console.log('[DB] Pre-seeded 4 standard Operating Theatres');
+      }
+    } catch (e) {
+      console.warn('[DB] Seeding operating theatres failed or skipped:', e);
+    }
+
+
     // Migrations
     try {
       db.exec('ALTER TABLE doctors ADD COLUMN printHeader INTEGER DEFAULT 1;');
@@ -694,6 +1013,9 @@ export const database = {
     } catch (e) {}
     try {
       db.exec('ALTER TABLE doctors ADD COLUMN showQrCodeOnReceipt INTEGER DEFAULT 0;');
+    } catch (e) {}
+    try {
+      db.exec('ALTER TABLE doctors ADD COLUMN chamber TEXT;');
     } catch (e) {}
     try {
       db.exec('ALTER TABLE receipts ADD COLUMN showQrCode INTEGER DEFAULT 0;');
@@ -822,6 +1144,21 @@ export const database = {
     try {
       db.exec("ALTER TABLE bed_admissions ADD COLUMN billingStatus TEXT DEFAULT 'NONE';");
     } catch (e) {}
+    try {
+      db.exec('ALTER TABLE bed_admissions ADD COLUMN emarOrdersLog TEXT;');
+    } catch (e) {}
+    try {
+      db.exec('ALTER TABLE bed_admissions ADD COLUMN emarAdminLog TEXT;');
+    } catch (e) {}
+    try {
+      db.exec('ALTER TABLE bed_admissions ADD COLUMN fluidIoLog TEXT;');
+    } catch (e) {}
+    try {
+      db.exec('ALTER TABLE bed_admissions ADD COLUMN nursingNotesLog TEXT;');
+    } catch (e) {}
+    try {
+      db.exec('ALTER TABLE bed_admissions ADD COLUMN insuranceClaimId TEXT;');
+    } catch (e) {}
 
     // Seed default facility items if none exist
     try {
@@ -928,6 +1265,11 @@ export const database = {
     } catch (e) {
       console.error('[DB] Failed to create indexes:', e);
     }
+
+    try {
+      db.prepare("UPDATE emergency_visits SET id = ('ER-' || hex(randomblob(8))) WHERE id IS NULL OR id = ''").run();
+      db.prepare("UPDATE mlc_records SET id = ('MLC-' || hex(randomblob(8))) WHERE id IS NULL OR id = ''").run();
+    } catch (_) {}
   },
 
   getDbPath: () => {
@@ -942,6 +1284,7 @@ export const database = {
     const docs = db.prepare('SELECT * FROM doctors').all() as any[];
     return docs.map(d => ({
       ...d,
+      chamber: d.chamber || '',
       printHeader: d.printHeader === 1 || d.printHeader === null || d.printHeader === undefined ? true : false,
       showQrCodeOnReceipt: d.showQrCodeOnReceipt === 1 ? true : false,
       upiId: d.upiId || '',
@@ -950,11 +1293,12 @@ export const database = {
   },
   saveDoctor: (doctor: any) => {
     const stmt = db.prepare(`
-      INSERT OR REPLACE INTO doctors (id, name, specialization, qualifications, phone, address, printHeader, customTopMargin, customBottomMargin, upiId, qrCodeText, showQrCodeOnReceipt)
-      VALUES (@id, @name, @specialization, @qualifications, @phone, @address, @printHeader, @customTopMargin, @customBottomMargin, @upiId, @qrCodeText, @showQrCodeOnReceipt)
+      INSERT OR REPLACE INTO doctors (id, name, specialization, qualifications, phone, address, printHeader, customTopMargin, customBottomMargin, upiId, qrCodeText, showQrCodeOnReceipt, chamber)
+      VALUES (@id, @name, @specialization, @qualifications, @phone, @address, @printHeader, @customTopMargin, @customBottomMargin, @upiId, @qrCodeText, @showQrCodeOnReceipt, @chamber)
     `);
     return stmt.run({
       ...doctor,
+      chamber: doctor.chamber || '',
       printHeader: doctor.printHeader !== false ? 1 : 0,
       customTopMargin: doctor.customTopMargin || 0,
       customBottomMargin: doctor.customBottomMargin || 0,
@@ -1221,6 +1565,75 @@ export const database = {
       }
     });
     transaction(doctors);
+  },
+
+  // Users & Profiles Persistence
+  getUsers: () => {
+    try {
+      const rows = db.prepare('SELECT * FROM users ORDER BY createdAt ASC, id ASC').all() as any[];
+      return rows.map(r => ({
+        id: r.id,
+        role: r.role || 'reception',
+        doctorId: r.doctorId || undefined,
+        password: r.password || undefined,
+        allowedTabs: r.allowedTabs ? JSON.parse(r.allowedTabs) : undefined,
+        createdAt: r.createdAt
+      }));
+    } catch (e) {
+      console.error('[DB] getUsers error:', e);
+      return [];
+    }
+  },
+  saveUser: (user: { id: string; role: string; doctorId?: string; password?: string; allowedTabs?: string[]; createdAt?: string }) => {
+    try {
+      const stmt = db.prepare(`
+        INSERT INTO users (id, role, doctorId, password, allowedTabs, createdAt)
+        VALUES (@id, @role, @doctorId, @password, @allowedTabs, @createdAt)
+        ON CONFLICT(id) DO UPDATE SET
+          role = excluded.role,
+          doctorId = COALESCE(excluded.doctorId, users.doctorId),
+          password = COALESCE(excluded.password, users.password),
+          allowedTabs = COALESCE(excluded.allowedTabs, users.allowedTabs)
+      `);
+      return stmt.run({
+        id: user.id.toLowerCase().trim(),
+        role: user.role || 'reception',
+        doctorId: user.doctorId || null,
+        password: user.password || null,
+        allowedTabs: user.allowedTabs ? JSON.stringify(user.allowedTabs) : null,
+        createdAt: user.createdAt || new Date().toISOString()
+      });
+    } catch (e) {
+      console.error('[DB] saveUser error:', e);
+      throw e;
+    }
+  },
+  deleteUser: (id: string) => {
+    try {
+      const stmt = db.prepare('DELETE FROM users WHERE id = ?');
+      return stmt.run(id.toLowerCase().trim());
+    } catch (e) {
+      console.error('[DB] deleteUser error:', e);
+      throw e;
+    }
+  },
+  setUserPassword: (id: string, passwordHash: string) => {
+    try {
+      const stmt = db.prepare('UPDATE users SET password = ? WHERE id = ?');
+      return stmt.run(passwordHash || null, id.toLowerCase().trim());
+    } catch (e) {
+      console.error('[DB] setUserPassword error:', e);
+      throw e;
+    }
+  },
+  updateUserTabs: (id: string, allowedTabs: string[]) => {
+    try {
+      const stmt = db.prepare('UPDATE users SET allowedTabs = ? WHERE id = ?');
+      return stmt.run(allowedTabs ? JSON.stringify(allowedTabs) : null, id.toLowerCase().trim());
+    } catch (e) {
+      console.error('[DB] updateUserTabs error:', e);
+      throw e;
+    }
   },
 
   // Prescriptions
@@ -2220,6 +2633,180 @@ export const database = {
     }
   },
 
+  addEmarOrder: (admissionId: string, order: any) => {
+    try {
+      const admission = db.prepare('SELECT emarOrdersLog FROM bed_admissions WHERE id = ?').get(admissionId) as any;
+      if (!admission) throw new Error(`Admission ${admissionId} not found`);
+
+      let log: any[] = [];
+      try {
+        log = JSON.parse(admission.emarOrdersLog || '[]');
+      } catch (_) {}
+
+      const newOrder = {
+        id: `EMAR-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        status: 'ACTIVE',
+        createdAt: new Date().toISOString(),
+        scheduleTimes: order.scheduleTimes || ['08:00', '20:00'],
+        startDate: order.startDate || new Date().toISOString().split('T')[0],
+        ...order
+      };
+
+      log.unshift(newOrder);
+      db.prepare('UPDATE bed_admissions SET emarOrdersLog = ?, updatedAt = ? WHERE id = ?')
+        .run(JSON.stringify(log), new Date().toISOString(), admissionId);
+
+      return { success: true, order: newOrder };
+    } catch (e) {
+      console.error('[Database] addEmarOrder error:', e);
+      throw e;
+    }
+  },
+
+  updateEmarOrderStatus: (admissionId: string, orderId: string, status: string) => {
+    try {
+      const admission = db.prepare('SELECT emarOrdersLog FROM bed_admissions WHERE id = ?').get(admissionId) as any;
+      if (!admission) throw new Error(`Admission ${admissionId} not found`);
+
+      let log: any[] = [];
+      try {
+        log = JSON.parse(admission.emarOrdersLog || '[]');
+      } catch (_) {}
+
+      log = log.map((o: any) => o.id === orderId ? { ...o, status } : o);
+      db.prepare('UPDATE bed_admissions SET emarOrdersLog = ?, updatedAt = ? WHERE id = ?')
+        .run(JSON.stringify(log), new Date().toISOString(), admissionId);
+
+      return { success: true };
+    } catch (e) {
+      console.error('[Database] updateEmarOrderStatus error:', e);
+      throw e;
+    }
+  },
+
+  recordEmarAdministration: (admissionId: string, record: any) => {
+    try {
+      const admission = db.prepare('SELECT emarAdminLog FROM bed_admissions WHERE id = ?').get(admissionId) as any;
+      if (!admission) throw new Error(`Admission ${admissionId} not found`);
+
+      let log: any[] = [];
+      try {
+        log = JSON.parse(admission.emarAdminLog || '[]');
+      } catch (_) {}
+
+      const newAdminRecord = {
+        id: `ADM-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        administeredAt: new Date().toISOString(),
+        ...record
+      };
+
+      log.unshift(newAdminRecord);
+      db.prepare('UPDATE bed_admissions SET emarAdminLog = ?, updatedAt = ? WHERE id = ?')
+        .run(JSON.stringify(log), new Date().toISOString(), admissionId);
+
+      return { success: true, adminRecord: newAdminRecord };
+    } catch (e) {
+      console.error('[Database] recordEmarAdministration error:', e);
+      throw e;
+    }
+  },
+
+  addFluidIoEntry: (admissionId: string, entry: any) => {
+    try {
+      const admission = db.prepare('SELECT fluidIoLog FROM bed_admissions WHERE id = ?').get(admissionId) as any;
+      if (!admission) throw new Error(`Admission ${admissionId} not found`);
+
+      let log: any[] = [];
+      try {
+        log = JSON.parse(admission.fluidIoLog || '[]');
+      } catch (_) {}
+
+      const newEntry = {
+        id: `FIO-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        recordedAt: new Date().toISOString(),
+        ...entry
+      };
+
+      log.unshift(newEntry);
+      db.prepare('UPDATE bed_admissions SET fluidIoLog = ?, updatedAt = ? WHERE id = ?')
+        .run(JSON.stringify(log), new Date().toISOString(), admissionId);
+
+      return { success: true, entry: newEntry };
+    } catch (e) {
+      console.error('[Database] addFluidIoEntry error:', e);
+      throw e;
+    }
+  },
+
+  deleteFluidIoEntry: (admissionId: string, entryId: string) => {
+    try {
+      const admission = db.prepare('SELECT fluidIoLog FROM bed_admissions WHERE id = ?').get(admissionId) as any;
+      if (!admission) throw new Error(`Admission ${admissionId} not found`);
+
+      let log: any[] = [];
+      try {
+        log = JSON.parse(admission.fluidIoLog || '[]');
+      } catch (_) {}
+
+      log = log.filter((e: any) => e.id !== entryId);
+      db.prepare('UPDATE bed_admissions SET fluidIoLog = ?, updatedAt = ? WHERE id = ?')
+        .run(JSON.stringify(log), new Date().toISOString(), admissionId);
+
+      return { success: true };
+    } catch (e) {
+      console.error('[Database] deleteFluidIoEntry error:', e);
+      throw e;
+    }
+  },
+
+  addNursingShiftNote: (admissionId: string, note: any) => {
+    try {
+      const admission = db.prepare('SELECT nursingNotesLog FROM bed_admissions WHERE id = ?').get(admissionId) as any;
+      if (!admission) throw new Error(`Admission ${admissionId} not found`);
+
+      let log: any[] = [];
+      try {
+        log = JSON.parse(admission.nursingNotesLog || '[]');
+      } catch (_) {}
+
+      const newNote = {
+        id: `NOTE-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        recordedAt: new Date().toISOString(),
+        ...note
+      };
+
+      log.unshift(newNote);
+      db.prepare('UPDATE bed_admissions SET nursingNotesLog = ?, updatedAt = ? WHERE id = ?')
+        .run(JSON.stringify(log), new Date().toISOString(), admissionId);
+
+      return { success: true, note: newNote };
+    } catch (e) {
+      console.error('[Database] addNursingShiftNote error:', e);
+      throw e;
+    }
+  },
+
+  deleteNursingShiftNote: (admissionId: string, noteId: string) => {
+    try {
+      const admission = db.prepare('SELECT nursingNotesLog FROM bed_admissions WHERE id = ?').get(admissionId) as any;
+      if (!admission) throw new Error(`Admission ${admissionId} not found`);
+
+      let log: any[] = [];
+      try {
+        log = JSON.parse(admission.nursingNotesLog || '[]');
+      } catch (_) {}
+
+      log = log.filter((n: any) => n.id !== noteId);
+      db.prepare('UPDATE bed_admissions SET nursingNotesLog = ?, updatedAt = ? WHERE id = ?')
+        .run(JSON.stringify(log), new Date().toISOString(), admissionId);
+
+      return { success: true };
+    } catch (e) {
+      console.error('[Database] deleteNursingShiftNote error:', e);
+      throw e;
+    }
+  },
+
   getIpdDashboardMetrics: () => {
     try {
       const today = new Date().toISOString().split('T')[0];
@@ -2551,6 +3138,1276 @@ export const database = {
         inAnalysisCount: 0,
         completedTodayCount: 0
       };
+    }
+  },
+
+  // TPA & Health Insurance Methods
+  getTpaProviders: () => {
+    try {
+      return db.prepare('SELECT * FROM tpa_providers WHERE isActive = 1 ORDER BY name ASC').all();
+    } catch (e) {
+      console.error('[Database] getTpaProviders error:', e);
+      return [];
+    }
+  },
+
+  saveTpaProvider: (provider: any) => {
+    try {
+      const now = new Date().toISOString();
+      const id = provider.id || `TPA-${Date.now()}`;
+      const name = provider.name || 'Insurance Provider';
+      const code = provider.code || name.substring(0, 4).toUpperCase();
+      const contactEmail = provider.contactEmail || '';
+      const contactPhone = provider.contactPhone || '';
+      const portalUrl = provider.portalUrl || '';
+      const defaultCopayPercent = Number(provider.defaultCopayPercent) || 0;
+      const isActive = provider.isActive !== undefined ? (provider.isActive ? 1 : 0) : 1;
+
+      const existing = db.prepare('SELECT id FROM tpa_providers WHERE id = ?').get(id);
+      if (existing) {
+        db.prepare(`
+          UPDATE tpa_providers SET
+            name = ?, code = ?, contactEmail = ?, contactPhone = ?, portalUrl = ?,
+            defaultCopayPercent = ?, isActive = ?, updatedAt = ?
+          WHERE id = ?
+        `).run(name, code, contactEmail, contactPhone, portalUrl, defaultCopayPercent, isActive, now, id);
+      } else {
+        db.prepare(`
+          INSERT INTO tpa_providers (id, name, code, contactEmail, contactPhone, portalUrl, defaultCopayPercent, isActive, createdAt, updatedAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(id, name, code, contactEmail, contactPhone, portalUrl, defaultCopayPercent, isActive, now, now);
+      }
+      return { success: true, id };
+    } catch (e) {
+      console.error('[Database] saveTpaProvider error:', e);
+      throw e;
+    }
+  },
+
+  deleteTpaProvider: (id: string) => {
+    try {
+      db.prepare('DELETE FROM tpa_providers WHERE id = ?').run(id);
+      return { success: true };
+    } catch (e) {
+      console.error('[Database] deleteTpaProvider error:', e);
+      throw e;
+    }
+  },
+
+  getInsuranceClaims: (options?: { status?: string; admissionId?: string }) => {
+    try {
+      let query = 'SELECT * FROM insurance_claims WHERE 1=1';
+      const params: any[] = [];
+      if (options?.status) {
+        query += ' AND status = ?';
+        params.push(options.status);
+      }
+      if (options?.admissionId) {
+        query += ' AND admissionId = ?';
+        params.push(options.admissionId);
+      }
+      query += ' ORDER BY createdAt DESC';
+      return db.prepare(query).all(...params);
+    } catch (e) {
+      console.error('[Database] getInsuranceClaims error:', e);
+      return [];
+    }
+  },
+
+  getInsuranceClaimById: (id: string) => {
+    try {
+      return db.prepare('SELECT * FROM insurance_claims WHERE id = ?').get(id) || null;
+    } catch (e) {
+      console.error('[Database] getInsuranceClaimById error:', e);
+      return null;
+    }
+  },
+
+  saveInsuranceClaim: (claim: any) => {
+    try {
+      const now = new Date().toISOString();
+      const id = claim.id || `CLM-${Date.now()}`;
+      const claimNumber = claim.claimNumber || `CLM-${Math.floor(100000 + Math.random() * 900000)}`;
+      const admissionId = claim.admissionId || null;
+      const patientId = claim.patientId || null;
+      const patientUhid = claim.patientUhid || null;
+      const patientName = claim.patientName || 'Patient';
+      const patientPhone = claim.patientPhone || '';
+      const tpaProviderId = claim.tpaProviderId || '';
+      const tpaProviderName = claim.tpaProviderName || '';
+      const insurerName = claim.insurerName || '';
+      const policyNumber = claim.policyNumber || '';
+      const cardId = claim.cardId || '';
+      const corporateName = claim.corporateName || '';
+      const sumInsured = Number(claim.sumInsured) || 0;
+      const initialPreAuthAmount = Number(claim.initialPreAuthAmount) || 0;
+      const approvedAmount = Number(claim.approvedAmount) || 0;
+      const finalSettledAmount = Number(claim.finalSettledAmount) || 0;
+      const copayPercent = Number(claim.copayPercent) || 0;
+      const nonPayableDeductions = Number(claim.nonPayableDeductions) || 0;
+      const status = claim.status || 'PREAUTH_DRAFT';
+      const queriesLog = typeof claim.queriesLog === 'string' ? claim.queriesLog : JSON.stringify(claim.queriesLog || []);
+      const preAuthLetterRef = claim.preAuthLetterRef || '';
+      const settlementDate = claim.settlementDate || null;
+      const notes = claim.notes || '';
+
+      const existing = db.prepare('SELECT id FROM insurance_claims WHERE id = ?').get(id);
+      if (existing) {
+        db.prepare(`
+          UPDATE insurance_claims SET
+            claimNumber = ?, admissionId = ?, patientId = ?, patientUhid = ?, patientName = ?,
+            patientPhone = ?, tpaProviderId = ?, tpaProviderName = ?, insurerName = ?,
+            policyNumber = ?, cardId = ?, corporateName = ?, sumInsured = ?,
+            initialPreAuthAmount = ?, approvedAmount = ?, finalSettledAmount = ?,
+            copayPercent = ?, nonPayableDeductions = ?, status = ?, queriesLog = ?,
+            preAuthLetterRef = ?, settlementDate = ?, notes = ?, updatedAt = ?
+          WHERE id = ?
+        `).run(
+          claimNumber, admissionId, patientId, patientUhid, patientName,
+          patientPhone, tpaProviderId, tpaProviderName, insurerName,
+          policyNumber, cardId, corporateName, sumInsured,
+          initialPreAuthAmount, approvedAmount, finalSettledAmount,
+          copayPercent, nonPayableDeductions, status, queriesLog,
+          preAuthLetterRef, settlementDate, notes, now, id
+        );
+      } else {
+        db.prepare(`
+          INSERT INTO insurance_claims (
+            id, claimNumber, admissionId, patientId, patientUhid, patientName,
+            patientPhone, tpaProviderId, tpaProviderName, insurerName,
+            policyNumber, cardId, corporateName, sumInsured,
+            initialPreAuthAmount, approvedAmount, finalSettledAmount,
+            copayPercent, nonPayableDeductions, status, queriesLog,
+            preAuthLetterRef, settlementDate, notes, createdAt, updatedAt
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          id, claimNumber, admissionId, patientId, patientUhid, patientName,
+          patientPhone, tpaProviderId, tpaProviderName, insurerName,
+          policyNumber, cardId, corporateName, sumInsured,
+          initialPreAuthAmount, approvedAmount, finalSettledAmount,
+          copayPercent, nonPayableDeductions, status, queriesLog,
+          preAuthLetterRef, settlementDate, notes, now, now
+        );
+      }
+
+      // Link to admission if present
+      if (admissionId) {
+        try {
+          db.prepare('UPDATE bed_admissions SET insuranceClaimId = ?, updatedAt = ? WHERE id = ?').run(id, now, admissionId);
+        } catch (_) {}
+      }
+
+      return { success: true, id, claimNumber };
+    } catch (e) {
+      console.error('[Database] saveInsuranceClaim error:', e);
+      throw e;
+    }
+  },
+
+  updateClaimStatus: (id: string, status: string, notes?: string) => {
+    try {
+      const now = new Date().toISOString();
+      const settlementDate = status === 'SETTLED' ? now.split('T')[0] : null;
+      db.prepare(`
+        UPDATE insurance_claims SET
+          status = ?,
+          notes = CASE WHEN ? IS NOT NULL THEN ? ELSE notes END,
+          settlementDate = CASE WHEN ? IS NOT NULL THEN ? ELSE settlementDate END,
+          updatedAt = ?
+        WHERE id = ?
+      `).run(status, notes || null, notes || null, settlementDate, settlementDate, now, id);
+      return { success: true };
+    } catch (e) {
+      console.error('[Database] updateClaimStatus error:', e);
+      throw e;
+    }
+  },
+
+  addClaimQuery: (claimId: string, query: any) => {
+    try {
+      const now = new Date().toISOString();
+      const claim = db.prepare('SELECT queriesLog FROM insurance_claims WHERE id = ?').get(claimId) as any;
+      if (!claim) throw new Error('Claim not found');
+      let queries: any[] = [];
+      try {
+        queries = claim.queriesLog ? JSON.parse(claim.queriesLog) : [];
+      } catch (_) {}
+      const newQuery = {
+        id: `QRY-${Date.now()}`,
+        queryReceivedAt: query.queryReceivedAt || now,
+        queryDetails: query.queryDetails || '',
+        replySentAt: query.replySentAt,
+        replyDetails: query.replyDetails,
+        repliedBy: query.repliedBy
+      };
+      queries.push(newQuery);
+      db.prepare(`
+        UPDATE insurance_claims SET
+          queriesLog = ?,
+          status = 'QUERY_RAISED',
+          updatedAt = ?
+        WHERE id = ?
+      `).run(JSON.stringify(queries), now, claimId);
+      return { success: true };
+    } catch (e) {
+      console.error('[Database] addClaimQuery error:', e);
+      throw e;
+    }
+  },
+
+  getInsuranceDashboardMetrics: () => {
+    try {
+      const totalRow = db.prepare('SELECT COUNT(*) as total FROM insurance_claims').get() as any;
+      const activeRow = db.prepare("SELECT COUNT(*) as active FROM insurance_claims WHERE status NOT IN ('REJECTED', 'SETTLED')").get() as any;
+      const pendingRow = db.prepare("SELECT COUNT(*) as pending FROM insurance_claims WHERE status IN ('PREAUTH_DRAFT', 'SUBMITTED', 'QUERY_RAISED', 'ENHANCEMENT_REQUESTED')").get() as any;
+      const approvedRow = db.prepare("SELECT SUM(approvedAmount) as sumApproved FROM insurance_claims WHERE status NOT IN ('REJECTED')").get() as any;
+      const settledRow = db.prepare("SELECT SUM(finalSettledAmount) as sumSettled FROM insurance_claims WHERE status = 'SETTLED'").get() as any;
+
+      return {
+        totalClaims: totalRow?.total || 0,
+        activeClaims: activeRow?.active || 0,
+        pendingApprovals: pendingRow?.pending || 0,
+        approvedTotalAmount: approvedRow?.sumApproved || 0,
+        settledTotalAmount: settledRow?.sumSettled || 0
+      };
+    } catch (e) {
+      console.error('[Database] getInsuranceDashboardMetrics error:', e);
+      return {
+        totalClaims: 0,
+        activeClaims: 0,
+        pendingApprovals: 0,
+        approvedTotalAmount: 0,
+        settledTotalAmount: 0
+      };
+    }
+  },
+
+  // Discharge Summary Methods
+  saveDischargeSummary: (admissionId: string, summary: any) => {
+    try {
+      const now = new Date().toISOString();
+      const summaryJson = typeof summary === 'string' ? summary : JSON.stringify(summary);
+      db.prepare(`
+        UPDATE bed_admissions SET
+          dischargeSummary = ?,
+          updatedAt = ?
+        WHERE id = ?
+      `).run(summaryJson, now, admissionId);
+      return { success: true };
+    } catch (e) {
+      console.error('[Database] saveDischargeSummary error:', e);
+      throw e;
+    }
+  },
+
+  getDischargeSummary: (admissionId: string) => {
+    try {
+      const row = db.prepare('SELECT dischargeSummary FROM bed_admissions WHERE id = ?').get(admissionId) as any;
+      if (!row || !row.dischargeSummary) return null;
+      try {
+        return JSON.parse(row.dischargeSummary);
+      } catch (_) {
+        return row.dischargeSummary;
+      }
+    } catch (e) {
+      console.error('[Database] getDischargeSummary error:', e);
+      return null;
+    }
+  },
+
+  // ── Operation Theatre (OT) Methods ──────────────────────────────────────────
+  getOperationTheatres: () => {
+    try {
+      return db.prepare('SELECT * FROM operation_theatres ORDER BY name ASC').all().map((r: any) => ({
+        ...r,
+        isActive: Boolean(r.isActive)
+      }));
+    } catch (e) {
+      console.error('[Database] getOperationTheatres error:', e);
+      return [];
+    }
+  },
+
+  saveOperationTheatre: (ot: any) => {
+    try {
+      const now = new Date().toISOString();
+      const existing = db.prepare('SELECT id FROM operation_theatres WHERE id = ?').get(ot.id);
+      if (existing) {
+        db.prepare(`
+          UPDATE operation_theatres SET
+            name = ?, code = ?, theatreType = ?, floor = ?, dailyRate = ?, status = ?, isActive = ?, updatedAt = ?
+          WHERE id = ?
+        `).run(ot.name, ot.code, ot.theatreType || 'MAJOR', ot.floor || '', ot.dailyRate || 0, ot.status || 'AVAILABLE', ot.isActive !== false ? 1 : 0, now, ot.id);
+      } else {
+        db.prepare(`
+          INSERT INTO operation_theatres (id, name, code, theatreType, floor, dailyRate, status, isActive, createdAt, updatedAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(ot.id, ot.name, ot.code, ot.theatreType || 'MAJOR', ot.floor || '', ot.dailyRate || 0, ot.status || 'AVAILABLE', ot.isActive !== false ? 1 : 0, now, now);
+      }
+      return { success: true, id: ot.id };
+    } catch (e) {
+      console.error('[Database] saveOperationTheatre error:', e);
+      throw e;
+    }
+  },
+
+  deleteOperationTheatre: (id: string) => {
+    try {
+      db.prepare('DELETE FROM operation_theatres WHERE id = ?').run(id);
+      return { success: true };
+    } catch (e) {
+      console.error('[Database] deleteOperationTheatre error:', e);
+      throw e;
+    }
+  },
+
+  // ── Surgical Cases Methods ──────────────────────────────────────────────────
+  getSurgicalCases: (options?: { date?: string; status?: string; theatreId?: string }) => {
+    try {
+      let query = 'SELECT * FROM surgical_cases WHERE 1=1';
+      const params: any[] = [];
+      if (options?.date) {
+        query += ' AND scheduledDate = ?';
+        params.push(options.date);
+      }
+      if (options?.status && options.status !== 'ALL') {
+        query += ' AND status = ?';
+        params.push(options.status);
+      }
+      if (options?.theatreId && options.theatreId !== 'ALL') {
+        query += ' AND theatreId = ?';
+        params.push(options.theatreId);
+      }
+      query += ' ORDER BY scheduledDate DESC, startTime ASC';
+      return db.prepare(query).all(...params).map((r: any) => ({
+        ...r,
+        pacData: r.pacData ? JSON.parse(r.pacData) : null,
+        whoChecklistData: r.whoChecklistData ? JSON.parse(r.whoChecklistData) : null,
+        intraOpNotes: r.intraOpNotes ? JSON.parse(r.intraOpNotes) : null,
+        pacuData: r.pacuData ? JSON.parse(r.pacuData) : null,
+        chargesLogged: r.chargesLogged ? JSON.parse(r.chargesLogged) : []
+      }));
+    } catch (e) {
+      console.error('[Database] getSurgicalCases error:', e);
+      return [];
+    }
+  },
+
+  getSurgicalCaseById: (id: string) => {
+    try {
+      const r = db.prepare('SELECT * FROM surgical_cases WHERE id = ?').get(id) as any;
+      if (!r) return null;
+      return {
+        ...r,
+        pacData: r.pacData ? JSON.parse(r.pacData) : null,
+        whoChecklistData: r.whoChecklistData ? JSON.parse(r.whoChecklistData) : null,
+        intraOpNotes: r.intraOpNotes ? JSON.parse(r.intraOpNotes) : null,
+        pacuData: r.pacuData ? JSON.parse(r.pacuData) : null,
+        chargesLogged: r.chargesLogged ? JSON.parse(r.chargesLogged) : []
+      };
+    } catch (e) {
+      console.error('[Database] getSurgicalCaseById error:', e);
+      return null;
+    }
+  },
+
+  saveSurgicalCase: (sc: any) => {
+    try {
+      const now = new Date().toISOString();
+      const existing = db.prepare('SELECT id, caseNumber FROM surgical_cases WHERE id = ?').get(sc.id) as any;
+      let caseNumber = sc.caseNumber;
+      if (!caseNumber && !existing) {
+        const year = new Date().getFullYear();
+        const countRow = db.prepare("SELECT COUNT(*) as cnt FROM surgical_cases WHERE caseNumber LIKE ?").get(`OT-${year}-%`) as any;
+        const nextNum = (countRow?.cnt || 0) + 1;
+        caseNumber = `OT-${year}-${String(nextNum).padStart(4, '0')}`;
+      } else if (existing) {
+        caseNumber = existing.caseNumber;
+      }
+
+      const pacDataStr = sc.pacData ? JSON.stringify(sc.pacData) : null;
+      const whoChecklistDataStr = sc.whoChecklistData ? JSON.stringify(sc.whoChecklistData) : null;
+      const intraOpNotesStr = sc.intraOpNotes ? JSON.stringify(sc.intraOpNotes) : null;
+      const pacuDataStr = sc.pacuData ? JSON.stringify(sc.pacuData) : null;
+      const chargesLoggedStr = sc.chargesLogged ? JSON.stringify(sc.chargesLogged) : null;
+
+      if (existing) {
+        db.prepare(`
+          UPDATE surgical_cases SET
+            patientId = ?, patientUhid = ?, patientName = ?, patientPhone = ?, patientAge = ?, patientGender = ?,
+            admissionId = ?, theatreId = ?, theatreName = ?, surgeryName = ?, surgeryCategory = ?, urgency = ?,
+            primarySurgeonId = ?, primarySurgeonName = ?, assistantSurgeonName = ?, anesthetistName = ?,
+            scrubNurseName = ?, circulatingNurseName = ?, scheduledDate = ?, startTime = ?, endTime = ?,
+            status = ?, pacData = ?, whoChecklistData = ?, intraOpNotes = ?, pacuData = ?, chargesLogged = ?, notes = ?, updatedAt = ?
+          WHERE id = ?
+        `).run(
+          sc.patientId || null, sc.patientUhid || null, sc.patientName, sc.patientPhone || null, sc.patientAge || null, sc.patientGender || null,
+          sc.admissionId || null, sc.theatreId, sc.theatreName, sc.surgeryName, sc.surgeryCategory || 'GENERAL', sc.urgency || 'ELECTIVE',
+          sc.primarySurgeonId, sc.primarySurgeonName, sc.assistantSurgeonName || null, sc.anesthetistName || null,
+          sc.scrubNurseName || null, sc.circulatingNurseName || null, sc.scheduledDate, sc.startTime, sc.endTime || null,
+          sc.status || 'SCHEDULED', pacDataStr, whoChecklistDataStr, intraOpNotesStr, pacuDataStr, chargesLoggedStr, sc.notes || null, now, sc.id
+        );
+      } else {
+        db.prepare(`
+          INSERT INTO surgical_cases (
+            id, caseNumber, patientId, patientUhid, patientName, patientPhone, patientAge, patientGender,
+            admissionId, theatreId, theatreName, surgeryName, surgeryCategory, urgency,
+            primarySurgeonId, primarySurgeonName, assistantSurgeonName, anesthetistName,
+            scrubNurseName, circulatingNurseName, scheduledDate, startTime, endTime,
+            status, pacData, whoChecklistData, intraOpNotes, pacuData, chargesLogged, notes, createdAt, updatedAt
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          sc.id, caseNumber, sc.patientId || null, sc.patientUhid || null, sc.patientName, sc.patientPhone || null, sc.patientAge || null, sc.patientGender || null,
+          sc.admissionId || null, sc.theatreId, sc.theatreName, sc.surgeryName, sc.surgeryCategory || 'GENERAL', sc.urgency || 'ELECTIVE',
+          sc.primarySurgeonId, sc.primarySurgeonName, sc.assistantSurgeonName || null, sc.anesthetistName || null,
+          sc.scrubNurseName || null, sc.circulatingNurseName || null, sc.scheduledDate, sc.startTime, sc.endTime || null,
+          sc.status || 'SCHEDULED', pacDataStr, whoChecklistDataStr, intraOpNotesStr, pacuDataStr, chargesLoggedStr, sc.notes || null, now, now
+        );
+      }
+      return { success: true, id: sc.id, caseNumber };
+    } catch (e) {
+      console.error('[Database] saveSurgicalCase error:', e);
+      throw e;
+    }
+  },
+
+  updateSurgicalCaseStatus: (id: string, status: string, notes?: string) => {
+    try {
+      const now = new Date().toISOString();
+      if (notes) {
+        db.prepare('UPDATE surgical_cases SET status = ?, notes = ?, updatedAt = ? WHERE id = ?').run(status, notes, now, id);
+      } else {
+        db.prepare('UPDATE surgical_cases SET status = ?, updatedAt = ? WHERE id = ?').run(status, now, id);
+      }
+      return { success: true };
+    } catch (e) {
+      console.error('[Database] updateSurgicalCaseStatus error:', e);
+      throw e;
+    }
+  },
+
+  getOtDashboardMetrics: () => {
+    try {
+      const totalTheatres = db.prepare('SELECT COUNT(*) as c FROM operation_theatres WHERE isActive = 1').get() as any;
+      const today = new Date().toISOString().split('T')[0];
+      const todayCases = db.prepare('SELECT COUNT(*) as c FROM surgical_cases WHERE scheduledDate = ?').get(today) as any;
+      const inSurgery = db.prepare("SELECT COUNT(*) as c FROM surgical_cases WHERE status = 'IN_THEATRE'").get() as any;
+      const pacuCases = db.prepare("SELECT COUNT(*) as c FROM surgical_cases WHERE status = 'RECOVERY_PACU'").get() as any;
+      const completedMonth = db.prepare("SELECT COUNT(*) as c FROM surgical_cases WHERE status = 'COMPLETED'").get() as any;
+      return {
+        totalTheatres: totalTheatres?.c || 0,
+        todayCases: todayCases?.c || 0,
+        inSurgery: inSurgery?.c || 0,
+        inPacu: pacuCases?.c || 0,
+        completedSurgeries: completedMonth?.c || 0
+      };
+    } catch (e) {
+      console.error('[Database] getOtDashboardMetrics error:', e);
+      return { totalTheatres: 0, todayCases: 0, inSurgery: 0, inPacu: 0, completedSurgeries: 0 };
+    }
+  },
+
+  // ── Emergency & Triage Methods ──────────────────────────────────────────────
+  getEmergencyVisits: (options?: { status?: string; isMlc?: boolean; date?: string }) => {
+    try {
+      let query = 'SELECT * FROM emergency_visits WHERE 1=1';
+      const params: any[] = [];
+      if (options?.status && options.status !== 'ALL') {
+        query += ' AND disposition = ?';
+        params.push(options.status);
+      }
+      if (options?.isMlc !== undefined) {
+        query += ' AND isMlc = ?';
+        params.push(options.isMlc ? 1 : 0);
+      }
+      if (options?.date) {
+        query += ' AND arrivedAt LIKE ?';
+        params.push(`${options.date}%`);
+      }
+      query += ' ORDER BY triageLevel ASC, arrivedAt DESC';
+      return db.prepare(query).all(...params).map((r: any) => ({
+        ...r,
+        isMlc: Boolean(r.isMlc),
+        triageVitals: r.triageVitals ? JSON.parse(r.triageVitals) : null,
+        mlcData: r.mlcData ? JSON.parse(r.mlcData) : null
+      }));
+    } catch (e) {
+      console.error('[Database] getEmergencyVisits error:', e);
+      return [];
+    }
+  },
+
+  getEmergencyVisitById: (id: string) => {
+    try {
+      const r = db.prepare('SELECT * FROM emergency_visits WHERE id = ?').get(id) as any;
+      if (!r) return null;
+      return {
+        ...r,
+        isMlc: Boolean(r.isMlc),
+        triageVitals: r.triageVitals ? JSON.parse(r.triageVitals) : null,
+        mlcData: r.mlcData ? JSON.parse(r.mlcData) : null
+      };
+    } catch (e) {
+      console.error('[Database] getEmergencyVisitById error:', e);
+      return null;
+    }
+  },
+
+  saveEmergencyVisit: (ev: any) => {
+    try {
+      const now = new Date().toISOString();
+      const id = ev.id || ('ER-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7));
+      const existing = db.prepare('SELECT id, emergencyNumber FROM emergency_visits WHERE id = ?').get(id) as any;
+      let emergencyNumber = ev.emergencyNumber;
+      if (!emergencyNumber && !existing) {
+        const year = new Date().getFullYear();
+        const countRow = db.prepare("SELECT COUNT(*) as cnt FROM emergency_visits WHERE emergencyNumber LIKE ?").get(`ER-${year}-%`) as any;
+        const nextNum = (countRow?.cnt || 0) + 1;
+        emergencyNumber = `ER-${year}-${String(nextNum).padStart(4, '0')}`;
+      } else if (existing) {
+        emergencyNumber = existing.emergencyNumber;
+      }
+
+      const triageVitalsStr = ev.triageVitals ? JSON.stringify(ev.triageVitals) : null;
+      const mlcDataStr = ev.mlcData ? JSON.stringify(ev.mlcData) : null;
+
+      if (existing) {
+        db.prepare(`
+          UPDATE emergency_visits SET
+            patientId = ?, patientUhid = ?, patientName = ?, patientPhone = ?, patientAge = ?, patientGender = ?,
+            triageLevel = ?, triageCategory = ?, chiefComplaint = ?, triageVitals = ?, triageNurseName = ?,
+            attendingDoctorId = ?, attendingDoctorName = ?, arrivedAt = ?, disposition = ?, dispositionNotes = ?,
+            dischargedAt = ?, admittedBedId = ?, admittedAdmissionId = ?, isMlc = ?, mlcNumber = ?, mlcData = ?, notes = ?, updatedAt = ?
+          WHERE id = ?
+        `).run(
+          ev.patientId || null, ev.patientUhid || null, ev.patientName, ev.patientPhone || null, ev.patientAge || null, ev.patientGender || null,
+          ev.triageLevel || 3, ev.triageCategory || 'YELLOW', ev.chiefComplaint, triageVitalsStr, ev.triageNurseName || null,
+          ev.attendingDoctorId || null, ev.attendingDoctorName || null, ev.arrivedAt || now, ev.disposition || 'UNDER_TREATMENT',
+          ev.dispositionNotes || null, ev.dischargedAt || null, ev.admittedBedId || null, ev.admittedAdmissionId || null,
+          ev.isMlc ? 1 : 0, ev.mlcNumber || null, mlcDataStr, ev.notes || null, now, id
+        );
+      } else {
+        db.prepare(`
+          INSERT INTO emergency_visits (
+            id, emergencyNumber, patientId, patientUhid, patientName, patientPhone, patientAge, patientGender,
+            triageLevel, triageCategory, chiefComplaint, triageVitals, triageNurseName, attendingDoctorId,
+            attendingDoctorName, arrivedAt, disposition, dispositionNotes, dischargedAt, admittedBedId,
+            admittedAdmissionId, isMlc, mlcNumber, mlcData, notes, createdAt, updatedAt
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          id, emergencyNumber, ev.patientId || null, ev.patientUhid || null, ev.patientName, ev.patientPhone || null, ev.patientAge || null, ev.patientGender || null,
+          ev.triageLevel || 3, ev.triageCategory || 'YELLOW', ev.chiefComplaint, triageVitalsStr, ev.triageNurseName || null,
+          ev.attendingDoctorId || null, ev.attendingDoctorName || null, ev.arrivedAt || now, ev.disposition || 'UNDER_TREATMENT',
+          ev.dispositionNotes || null, ev.dischargedAt || null, ev.admittedBedId || null, ev.admittedAdmissionId || null,
+          ev.isMlc ? 1 : 0, ev.mlcNumber || null, mlcDataStr, ev.notes || null, now, now
+        );
+      }
+      return { success: true, id, emergencyNumber };
+    } catch (e) {
+      console.error('[Database] saveEmergencyVisit error:', e);
+      throw e;
+    }
+  },
+
+  updateEmergencyDisposition: (id: string, disposition: string, details?: any) => {
+    try {
+      const now = new Date().toISOString();
+      db.prepare(`
+        UPDATE emergency_visits SET
+          disposition = ?,
+          dispositionNotes = ?,
+          admittedBedId = ?,
+          admittedAdmissionId = ?,
+          dischargedAt = ?,
+          updatedAt = ?
+        WHERE id = ? OR emergencyNumber = ?
+      `).run(
+        disposition,
+        details?.notes || null,
+        details?.admittedBedId || null,
+        details?.admittedAdmissionId || null,
+        disposition === 'DISCHARGED' || disposition === 'LAMA' ? now : null,
+        now,
+        id,
+        id
+      );
+      return { success: true };
+    } catch (e) {
+      console.error('[Database] updateEmergencyDisposition error:', e);
+      throw e;
+    }
+  },
+
+  // ── Medico-Legal Cases (MLC) Registry Methods ───────────────────────────────
+  getMlcRecords: () => {
+    try {
+      return db.prepare('SELECT * FROM mlc_records ORDER BY createdAt DESC').all().map((r: any) => ({
+        ...r,
+        alcoholSmellDetected: Boolean(r.alcoholSmellDetected),
+        dyingDeclarationRequired: Boolean(r.dyingDeclarationRequired)
+      }));
+    } catch (e) {
+      console.error('[Database] getMlcRecords error:', e);
+      return [];
+    }
+  },
+
+  getMlcRecordById: (id: string) => {
+    try {
+      const r = db.prepare('SELECT * FROM mlc_records WHERE id = ?').get(id) as any;
+      if (!r) return null;
+      return {
+        ...r,
+        alcoholSmellDetected: Boolean(r.alcoholSmellDetected),
+        dyingDeclarationRequired: Boolean(r.dyingDeclarationRequired)
+      };
+    } catch (e) {
+      console.error('[Database] getMlcRecordById error:', e);
+      return null;
+    }
+  },
+
+  saveMlcRecord: (mlc: any) => {
+    try {
+      const now = new Date().toISOString();
+      const id = mlc.id || ('MLC-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7));
+      const existing = db.prepare('SELECT id, mlcNumber FROM mlc_records WHERE id = ?').get(id) as any;
+      let mlcNumber = mlc.mlcNumber;
+      if (!mlcNumber && !existing) {
+        const year = new Date().getFullYear();
+        const countRow = db.prepare("SELECT COUNT(*) as cnt FROM mlc_records WHERE mlcNumber LIKE ?").get(`MLC-${year}-%`) as any;
+        const nextNum = (countRow?.cnt || 0) + 1;
+        mlcNumber = `MLC-${year}-${String(nextNum).padStart(4, '0')}`;
+      } else if (existing) {
+        mlcNumber = existing.mlcNumber;
+      }
+
+      if (existing) {
+        db.prepare(`
+          UPDATE mlc_records SET
+            emergencyVisitId = ?, patientId = ?, patientName = ?, patientAge = ?, patientGender = ?,
+            policeStation = ?, policeOfficerName = ?, policeBadgeNumber = ?, incidentDate = ?,
+            incidentPlace = ?, incidentType = ?, broughtByName = ?, broughtByPhone = ?, broughtByRelation = ?,
+            injuryDescription = ?, injuryType = ?, weaponType = ?, alcoholSmellDetected = ?,
+            dyingDeclarationRequired = ?, intimationSentAt = ?, certificateIssuedAt = ?,
+            doctorSignatureName = ?, status = ?, updatedAt = ?
+          WHERE id = ?
+        `).run(
+          mlc.emergencyVisitId || null, mlc.patientId || null, mlc.patientName, mlc.patientAge || null, mlc.patientGender || null,
+          mlc.policeStation, mlc.policeOfficerName || null, mlc.policeBadgeNumber || null, mlc.incidentDate,
+          mlc.incidentPlace || null, mlc.incidentType || 'RTA', mlc.broughtByName, mlc.broughtByPhone || null, mlc.broughtByRelation || null,
+          mlc.injuryDescription, mlc.injuryType || 'SIMPLE', mlc.weaponType || null, mlc.alcoholSmellDetected ? 1 : 0,
+          mlc.dyingDeclarationRequired ? 1 : 0, mlc.intimationSentAt || null, mlc.certificateIssuedAt || null,
+          mlc.doctorSignatureName, mlc.status || 'REGISTERED', now, id
+        );
+      } else {
+        db.prepare(`
+          INSERT INTO mlc_records (
+            id, mlcNumber, emergencyVisitId, patientId, patientName, patientAge, patientGender,
+            policeStation, policeOfficerName, policeBadgeNumber, incidentDate, incidentPlace, incidentType,
+            broughtByName, broughtByPhone, broughtByRelation, injuryDescription, injuryType, weaponType,
+            alcoholSmellDetected, dyingDeclarationRequired, intimationSentAt, certificateIssuedAt,
+            doctorSignatureName, status, createdAt, updatedAt
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          id, mlcNumber, mlc.emergencyVisitId || null, mlc.patientId || null, mlc.patientName, mlc.patientAge || null, mlc.patientGender || null,
+          mlc.policeStation, mlc.policeOfficerName || null, mlc.policeBadgeNumber || null, mlc.incidentDate, mlc.incidentPlace || null, mlc.incidentType || 'RTA',
+          mlc.broughtByName, mlc.broughtByPhone || null, mlc.broughtByRelation || null, mlc.injuryDescription, mlc.injuryType || 'SIMPLE', mlc.weaponType || null,
+          mlc.alcoholSmellDetected ? 1 : 0, mlc.dyingDeclarationRequired ? 1 : 0, mlc.intimationSentAt || null, mlc.certificateIssuedAt || null,
+          mlc.doctorSignatureName, mlc.status || 'REGISTERED', now, now
+        );
+      }
+
+      if (mlc.emergencyVisitId) {
+        db.prepare('UPDATE emergency_visits SET isMlc = 1, mlcNumber = ?, updatedAt = ? WHERE id = ?').run(mlcNumber, now, mlc.emergencyVisitId);
+      }
+
+      return { success: true, id: mlc.id, mlcNumber };
+    } catch (e) {
+      console.error('[Database] saveMlcRecord error:', e);
+      throw e;
+    }
+  },
+
+  getEmergencyDashboardMetrics: () => {
+    try {
+      const activeVisits = db.prepare("SELECT COUNT(*) as c FROM emergency_visits WHERE disposition = 'UNDER_TREATMENT'").get() as any;
+      const redCases = db.prepare("SELECT COUNT(*) as c FROM emergency_visits WHERE disposition = 'UNDER_TREATMENT' AND triageLevel = 1").get() as any;
+      const orangeCases = db.prepare("SELECT COUNT(*) as c FROM emergency_visits WHERE disposition = 'UNDER_TREATMENT' AND triageLevel = 2").get() as any;
+      const yellowCases = db.prepare("SELECT COUNT(*) as c FROM emergency_visits WHERE disposition = 'UNDER_TREATMENT' AND triageLevel = 3").get() as any;
+      const greenBlueCases = db.prepare("SELECT COUNT(*) as c FROM emergency_visits WHERE disposition = 'UNDER_TREATMENT' AND triageLevel >= 4").get() as any;
+      const totalMlc = db.prepare("SELECT COUNT(*) as c FROM mlc_records").get() as any;
+      return {
+        activeVisits: activeVisits?.c || 0,
+        redResuscitation: redCases?.c || 0,
+        orangeEmergent: orangeCases?.c || 0,
+        yellowUrgent: yellowCases?.c || 0,
+        greenNonUrgent: greenBlueCases?.c || 0,
+        totalMlcCases: totalMlc?.c || 0
+      };
+    } catch (e) {
+      console.error('[Database] getEmergencyDashboardMetrics error:', e);
+      return { activeVisits: 0, redResuscitation: 0, orangeEmergent: 0, yellowUrgent: 0, greenNonUrgent: 0, totalMlcCases: 0 };
+    }
+  },
+
+  // ── Module 3: Doctor Revenue Share & Payouts Engine ────────────────────────
+  getDoctorCommissionRules: () => {
+    try {
+      return db.prepare('SELECT * FROM doctor_commission_rules ORDER BY doctorName ASC').all();
+    } catch (e) {
+      console.error('[Database] getDoctorCommissionRules error:', e);
+      return [];
+    }
+  },
+
+  getDoctorCommissionRuleByDoctorId: (doctorId: string) => {
+    try {
+      return db.prepare('SELECT * FROM doctor_commission_rules WHERE doctorId = ?').get(doctorId) || null;
+    } catch (e) {
+      console.error('[Database] getDoctorCommissionRuleByDoctorId error:', e);
+      return null;
+    }
+  },
+
+  saveDoctorCommissionRule: (rule: any) => {
+    try {
+      const now = new Date().toISOString();
+      const existing = db.prepare('SELECT id FROM doctor_commission_rules WHERE doctorId = ?').get(rule.doctorId) as any;
+      if (existing) {
+        db.prepare(`
+          UPDATE doctor_commission_rules
+          SET doctorName = ?, opdType = ?, opdValue = ?, ipdVisitRate = ?, surgerySharePercent = ?,
+              assistantSurgeonPercent = ?, anesthetistPercent = ?, labReferralPercent = ?,
+              pharmacyReferralPercent = ?, tdsPercent = ?, hospitalFacilityRetentionPercent = ?,
+              isActive = ?, updatedAt = ?
+          WHERE doctorId = ?
+        `).run(
+          rule.doctorName, rule.opdType || 'PERCENT', rule.opdValue ?? 70, rule.ipdVisitRate ?? 800,
+          rule.surgerySharePercent ?? 60, rule.assistantSurgeonPercent ?? 15, rule.anesthetistPercent ?? 25,
+          rule.labReferralPercent ?? 10, rule.pharmacyReferralPercent ?? 0, rule.tdsPercent ?? 10,
+          rule.hospitalFacilityRetentionPercent ?? 0, rule.isActive ?? 1, now, rule.doctorId
+        );
+        return { success: true, id: existing.id };
+      } else {
+        const id = rule.id || `COMM-${Date.now()}`;
+        db.prepare(`
+          INSERT INTO doctor_commission_rules (
+            id, doctorId, doctorName, opdType, opdValue, ipdVisitRate, surgerySharePercent,
+            assistantSurgeonPercent, anesthetistPercent, labReferralPercent, pharmacyReferralPercent,
+            tdsPercent, hospitalFacilityRetentionPercent, isActive, createdAt, updatedAt
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          id, rule.doctorId, rule.doctorName, rule.opdType || 'PERCENT', rule.opdValue ?? 70,
+          rule.ipdVisitRate ?? 800, rule.surgerySharePercent ?? 60, rule.assistantSurgeonPercent ?? 15,
+          rule.anesthetistPercent ?? 25, rule.labReferralPercent ?? 10, rule.pharmacyReferralPercent ?? 0,
+          rule.tdsPercent ?? 10, rule.hospitalFacilityRetentionPercent ?? 0, rule.isActive ?? 1, now, now
+        );
+        return { success: true, id };
+      }
+    } catch (e) {
+      console.error('[Database] saveDoctorCommissionRule error:', e);
+      throw e;
+    }
+  },
+
+  calculateDoctorAccruedEarnings: (doctorId: string, startDate?: string, endDate?: string) => {
+    try {
+      const doc = db.prepare('SELECT * FROM doctors WHERE id = ?').get(doctorId) as any;
+      if (!doc) return null;
+
+      const rule = (db.prepare('SELECT * FROM doctor_commission_rules WHERE doctorId = ?').get(doctorId) || {
+        opdType: 'PERCENT',
+        opdValue: 70,
+        ipdVisitRate: 800,
+        surgerySharePercent: 60,
+        assistantSurgeonPercent: 15,
+        anesthetistPercent: 25,
+        labReferralPercent: 10,
+        tdsPercent: 10,
+        hospitalFacilityRetentionPercent: 0
+      }) as any;
+
+      // 1. OPD Receipts
+      let opdQuery = 'SELECT total FROM receipts WHERE doctorId = ?';
+      const opdParams: any[] = [doctorId];
+      if (startDate) { opdQuery += ' AND date >= ?'; opdParams.push(startDate); }
+      if (endDate) { opdQuery += ' AND date <= ?'; opdParams.push(endDate); }
+      const opdReceipts = db.prepare(opdQuery).all(...opdParams) as any[];
+      const opdRevenue = opdReceipts.reduce((sum, r) => sum + (Number(r.total) || 0), 0);
+      const opdEarnings = rule.opdType === 'FLAT'
+        ? opdReceipts.length * (Number(rule.opdValue) || 0)
+        : (opdRevenue * ((Number(rule.opdValue) || 70) / 100));
+
+      // 2. IPD Bed Rounds
+      const ipdQuery = 'SELECT admittedAt, dischargedAt, wardChargesLog FROM bed_admissions WHERE doctorId = ?';
+      const ipdParams: any[] = [doctorId];
+      const ipdAdmissions = db.prepare(ipdQuery).all(...ipdParams) as any[];
+      let ipdVisitsCount = 0;
+      ipdAdmissions.forEach(adm => {
+        try {
+          const admDate = adm.admittedAt ? adm.admittedAt.split('T')[0] : '';
+          if (startDate && admDate < startDate) return;
+          if (endDate && admDate > endDate) return;
+          ipdVisitsCount += 1;
+        } catch (_) {}
+      });
+      const ipdEarnings = ipdVisitsCount * (Number(rule.ipdVisitRate) || 0);
+
+      // 3. Surgical Cases (OT)
+      let surgQuery = "SELECT chargesLogged, primarySurgeonId, assistantSurgeonName, anesthetistName FROM surgical_cases WHERE status IN ('COMPLETED', 'IN_THEATRE')";
+      const surgParams: any[] = [];
+      if (startDate) { surgQuery += ' AND scheduledDate >= ?'; surgParams.push(startDate); }
+      if (endDate) { surgQuery += ' AND scheduledDate <= ?'; surgParams.push(endDate); }
+      const surgicalCases = db.prepare(surgQuery).all(...surgParams) as any[];
+      let surgeryEarnings = 0;
+      let surgeryCount = 0;
+      surgicalCases.forEach(sc => {
+        let fee = 0;
+        try {
+          if (sc.chargesLogged) {
+            const parsed = typeof sc.chargesLogged === 'string' ? JSON.parse(sc.chargesLogged) : sc.chargesLogged;
+            if (Array.isArray(parsed)) {
+              fee = parsed.reduce((sum: number, c: any) => sum + (Number(c.amount) || (Number(c.rate) * Number(c.quantity || 1)) || 0), 0);
+            }
+          }
+        } catch (_) {}
+        if (sc.primarySurgeonId === doctorId) {
+          surgeryEarnings += fee * ((Number(rule.surgerySharePercent) || 60) / 100);
+          surgeryCount += 1;
+        } else if (sc.assistantSurgeonName === doc.name) {
+          surgeryEarnings += fee * ((Number(rule.assistantSurgeonPercent) || 15) / 100);
+          surgeryCount += 1;
+        } else if (sc.anesthetistName === doc.name) {
+          surgeryEarnings += fee * ((Number(rule.anesthetistPercent) || 25) / 100);
+          surgeryCount += 1;
+        }
+      });
+
+      // 4. Diagnostic Lab Referral Orders
+      let labQuery = "SELECT totalAmount FROM lab_orders WHERE doctorId = ? AND status = 'COMPLETED'";
+      const labParams: any[] = [doctorId];
+      if (startDate) { labQuery += ' AND orderDate >= ?'; labParams.push(startDate); }
+      if (endDate) { labQuery += ' AND orderDate <= ?'; labParams.push(endDate); }
+      const labOrders = db.prepare(labQuery).all(...labParams) as any[];
+      const labRevenue = labOrders.reduce((sum, l) => sum + (Number(l.totalAmount) || 0), 0);
+      const labEarnings = labRevenue * ((Number(rule.labReferralPercent) || 10) / 100);
+
+      // 5. Total Gross & Deductions
+      const grossEarnings = Number((opdEarnings + ipdEarnings + surgeryEarnings + labEarnings).toFixed(2));
+      const tdsDeduction = Number((grossEarnings * ((Number(rule.tdsPercent) || 10) / 100)).toFixed(2));
+      const hospitalFacilityDeduction = Number((grossEarnings * ((Number(rule.hospitalFacilityRetentionPercent) || 0) / 100)).toFixed(2));
+      const netPayable = Math.max(0, Number((grossEarnings - tdsDeduction - hospitalFacilityDeduction).toFixed(2)));
+
+      // 6. Existing Payouts for this Doctor
+      const paidTx = db.prepare("SELECT SUM(netPayoutAmount) as totalPaid FROM doctor_payout_transactions WHERE doctorId = ? AND status = 'PAID'").get(doctorId) as any;
+      const totalPaidAlready = Number(paidTx?.totalPaid) || 0;
+
+      return {
+        doctorId,
+        doctorName: doc.name,
+        periodStart: startDate || 'All Time',
+        periodEnd: endDate || 'Present',
+        opdReceiptsCount: opdReceipts.length,
+        opdRevenue,
+        opdEarnings: Number(opdEarnings.toFixed(2)),
+        ipdVisitsCount,
+        ipdEarnings: Number(ipdEarnings.toFixed(2)),
+        surgeryCount,
+        surgeryEarnings: Number(surgeryEarnings.toFixed(2)),
+        labOrdersCount: labOrders.length,
+        labRevenue,
+        labEarnings: Number(labEarnings.toFixed(2)),
+        grossEarnings,
+        tdsDeduction,
+        hospitalFacilityDeduction,
+        netPayable,
+        totalPaidAlready,
+        balanceOutstanding: Math.max(0, Number((netPayable - totalPaidAlready).toFixed(2))),
+        rule
+      };
+    } catch (e) {
+      console.error('[Database] calculateDoctorAccruedEarnings error:', e);
+      return null;
+    }
+  },
+
+  getDoctorPayoutTransactions: (doctorId?: string) => {
+    try {
+      if (doctorId) {
+        return db.prepare('SELECT * FROM doctor_payout_transactions WHERE doctorId = ? ORDER BY payoutDate DESC, createdAt DESC').all(doctorId);
+      }
+      return db.prepare('SELECT * FROM doctor_payout_transactions ORDER BY payoutDate DESC, createdAt DESC').all();
+    } catch (e) {
+      console.error('[Database] getDoctorPayoutTransactions error:', e);
+      return [];
+    }
+  },
+
+  saveDoctorPayoutTransaction: (payout: any) => {
+    try {
+      const now = new Date().toISOString();
+      const count = (db.prepare('SELECT COUNT(*) as c FROM doctor_payout_transactions').get() as any).c + 1;
+      const payoutNumber = payout.payoutNumber || `PAY-${new Date().getFullYear()}-${String(count).padStart(4, '0')}`;
+      const id = payout.id || `PAYOUT-${Date.now()}`;
+
+      db.prepare(`
+        INSERT INTO doctor_payout_transactions (
+          id, payoutNumber, doctorId, doctorName, periodStart, periodEnd,
+          opdConsultationEarnings, ipdVisitsEarnings, surgeryEarnings, labReferralEarnings,
+          grossEarnings, tdsDeduction, hospitalFacilityDeduction, otherDeductions,
+          netPayoutAmount, paymentMode, paymentReference, status, notes, payoutDate,
+          createdAt, updatedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id, payoutNumber, payout.doctorId, payout.doctorName, payout.periodStart, payout.periodEnd,
+        payout.opdConsultationEarnings || 0, payout.ipdVisitsEarnings || 0, payout.surgeryEarnings || 0,
+        payout.labReferralEarnings || 0, payout.grossEarnings || 0, payout.tdsDeduction || 0,
+        payout.hospitalFacilityDeduction || 0, payout.otherDeductions || 0, payout.netPayoutAmount || 0,
+        payout.paymentMode || 'BANK_TRANSFER', payout.paymentReference || null, payout.status || 'PAID',
+        payout.notes || null, payout.payoutDate || now.split('T')[0], now, now
+      );
+
+      return { success: true, id, payoutNumber };
+    } catch (e) {
+      console.error('[Database] saveDoctorPayoutTransaction error:', e);
+      throw e;
+    }
+  },
+
+  // ── Module 3: Hospital Ward & OT to Pharmacy Stock Indenting ───────────────
+  getHospitalIndents: (filter?: any) => {
+    try {
+      let query = 'SELECT * FROM hospital_indents WHERE 1=1';
+      const params: any[] = [];
+      if (filter?.status && filter.status !== 'ALL') {
+        query += ' AND status = ?';
+        params.push(filter.status);
+      }
+      if (filter?.departmentType && filter.departmentType !== 'ALL') {
+        query += ' AND departmentType = ?';
+        params.push(filter.departmentType);
+      }
+      if (filter?.priority && filter.priority !== 'ALL') {
+        query += ' AND priority = ?';
+        params.push(filter.priority);
+      }
+      query += ' ORDER BY requestedAt DESC';
+      const indents = db.prepare(query).all(...params) as any[];
+
+      const getItemStmt = db.prepare('SELECT * FROM hospital_indent_items WHERE indentId = ?');
+      return indents.map(ind => ({
+        ...ind,
+        items: getItemStmt.all(ind.id)
+      }));
+    } catch (e) {
+      console.error('[Database] getHospitalIndents error:', e);
+      return [];
+    }
+  },
+
+  getHospitalIndentById: (id: string) => {
+    try {
+      const indent = db.prepare('SELECT * FROM hospital_indents WHERE id = ?').get(id) as any;
+      if (!indent) return null;
+      const items = db.prepare('SELECT * FROM hospital_indent_items WHERE indentId = ?').all(id);
+      return { ...indent, items };
+    } catch (e) {
+      console.error('[Database] getHospitalIndentById error:', e);
+      return null;
+    }
+  },
+
+  saveHospitalIndent: (indent: any, items: any[]) => {
+    try {
+      const now = new Date().toISOString();
+      const count = (db.prepare('SELECT COUNT(*) as c FROM hospital_indents').get() as any).c + 1;
+      const indentNumber = indent.indentNumber || `IND-${new Date().getFullYear()}-${String(count).padStart(4, '0')}`;
+      const indentId = indent.id || `IND-${Date.now()}`;
+
+      const insertIndent = db.transaction(() => {
+        db.prepare(`
+          INSERT INTO hospital_indents (
+            id, indentNumber, departmentType, sourceLocation, targetDepartment,
+            requestedBy, priority, status, notes, requestedAt, createdAt, updatedAt
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          indentId, indentNumber, indent.departmentType || 'WARD', indent.sourceLocation || 'General Ward',
+          indent.targetDepartment || 'PHARMACY', indent.requestedBy || 'Staff Nurse',
+          indent.priority || 'ROUTINE', 'PENDING', indent.notes || null, now, now, now
+        );
+
+        const insertItem = db.prepare(`
+          INSERT INTO hospital_indent_items (
+            id, indentId, medicineId, itemName, itemCategory, requestedQuantity, issuedQuantity, batchNumber, notes
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+
+        if (Array.isArray(items)) {
+          for (let i = 0; i < items.length; i++) {
+            const it = items[i];
+            insertItem.run(
+              it.id || `ITEM-${Date.now()}-${i}`,
+              indentId,
+              it.medicineId || null,
+              it.itemName,
+              it.itemCategory || 'Medicine',
+              Number(it.requestedQuantity) || 1,
+              0,
+              null,
+              it.notes || null
+            );
+          }
+        }
+      });
+
+      insertIndent();
+      return { success: true, id: indentId, indentNumber };
+    } catch (e) {
+      console.error('[Database] saveHospitalIndent error:', e);
+      throw e;
+    }
+  },
+
+  issueHospitalIndent: (indentId: string, itemsIssued: any[], fulfilledBy: string) => {
+    try {
+      const now = new Date().toISOString();
+      const executeIssue = db.transaction(() => {
+        const updateItemStmt = db.prepare(`
+          UPDATE hospital_indent_items
+          SET issuedQuantity = ?, batchNumber = ?
+          WHERE id = ?
+        `);
+
+        // Atomic decrement from pharmacy batches if batchNumber is provided
+        const decrementBatchStmt = db.prepare(`
+          UPDATE medicine_batches
+          SET quantity = MAX(0, quantity - ?)
+          WHERE batchNumber = ? AND medicineId = ?
+        `);
+
+        const decrementMasterStmt = db.prepare(`
+          UPDATE medicines
+          SET minStockAlert = minStockAlert
+          WHERE id = ?
+        `);
+
+        for (const it of itemsIssued) {
+          updateItemStmt.run(Number(it.issuedQuantity) || 0, it.batchNumber || null, it.itemId);
+
+          if (it.medicineId && it.batchNumber && Number(it.issuedQuantity) > 0) {
+            decrementBatchStmt.run(Number(it.issuedQuantity), it.batchNumber, it.medicineId);
+            decrementMasterStmt.run(it.medicineId);
+          }
+        }
+
+        // Determine if all items are fully issued or partially issued
+        const allItems = db.prepare('SELECT requestedQuantity, issuedQuantity FROM hospital_indent_items WHERE indentId = ?').all(indentId) as any[];
+        const totalReq = allItems.reduce((s, i) => s + (Number(i.requestedQuantity) || 0), 0);
+        const totalIss = allItems.reduce((s, i) => s + (Number(i.issuedQuantity) || 0), 0);
+
+        const newStatus = totalIss >= totalReq ? 'COMPLETED' : totalIss > 0 ? 'PARTIALLY_ISSUED' : 'PENDING';
+
+        db.prepare(`
+          UPDATE hospital_indents
+          SET status = ?, fulfilledAt = ?, fulfilledBy = ?, updatedAt = ?
+          WHERE id = ?
+        `).run(newStatus, now, fulfilledBy || 'Pharmacist In-Charge', now, indentId);
+      });
+
+      executeIssue();
+      return { success: true, id: indentId };
+    } catch (e) {
+      console.error('[Database] issueHospitalIndent error:', e);
+      throw e;
+    }
+  },
+
+  completeHospitalIndent: (indentId: string, fulfilledBy?: string) => {
+    try {
+      const now = new Date().toISOString();
+      const execute = db.transaction(() => {
+        // Mark all items as issued with full requested quantity
+        db.prepare(`
+          UPDATE hospital_indent_items
+          SET issuedQuantity = requestedQuantity,
+              batchNumber = COALESCE(batchNumber, 'DIRECT-DISPATCH')
+          WHERE indentId = ?
+        `).run(indentId);
+
+        // Update indent status to COMPLETED
+        db.prepare(`
+          UPDATE hospital_indents
+          SET status = 'COMPLETED', fulfilledAt = ?, fulfilledBy = ?, updatedAt = ?
+          WHERE id = ?
+        `).run(now, fulfilledBy || 'Pharmacist In-Charge', now, indentId);
+      });
+      execute();
+      return { success: true, id: indentId };
+    } catch (e) {
+      console.error('[Database] completeHospitalIndent error:', e);
+      throw e;
+    }
+  },
+
+  cancelHospitalIndent: (indentId: string, reason?: string) => {
+    try {
+      const now = new Date().toISOString();
+      db.prepare(`
+        UPDATE hospital_indents
+        SET status = 'CANCELLED', notes = COALESCE(notes || ' - ' || ?, ?), updatedAt = ?
+        WHERE id = ?
+      `).run(reason || 'Cancelled by staff', reason || 'Cancelled by staff', now, indentId);
+      return { success: true, id: indentId };
+    } catch (e) {
+      console.error('[Database] cancelHospitalIndent error:', e);
+      throw e;
+    }
+  },
+
+  getHospitalTier3Metrics: () => {
+    try {
+      const totalPayouts = db.prepare("SELECT SUM(netPayoutAmount) as total, COUNT(*) as count FROM doctor_payout_transactions WHERE status = 'PAID'").get() as any;
+      const pendingIndents = db.prepare("SELECT COUNT(*) as count FROM hospital_indents WHERE status = 'PENDING'").get() as any;
+      const completedIndents = db.prepare("SELECT COUNT(*) as count FROM hospital_indents WHERE status = 'COMPLETED'").get() as any;
+      const activeDoctorsWithRules = db.prepare('SELECT COUNT(*) as count FROM doctor_commission_rules WHERE isActive = 1').get() as any;
+
+      return {
+        totalDoctorPayoutsAmount: Number(totalPayouts?.total) || 0,
+        totalDoctorPayoutsCount: Number(totalPayouts?.count) || 0,
+        pendingIndentsCount: Number(pendingIndents?.count) || 0,
+        completedIndentsCount: Number(completedIndents?.count) || 0,
+        activeDoctorsConfigured: Number(activeDoctorsWithRules?.count) || 0
+      };
+    } catch (e) {
+      console.error('[Database] getHospitalTier3Metrics error:', e);
+      return {
+        totalDoctorPayoutsAmount: 0,
+        totalDoctorPayoutsCount: 0,
+        pendingIndentsCount: 0,
+        completedIndentsCount: 0,
+        activeDoctorsConfigured: 0
+      };
+    }
+  },
+
+  // ── Unified Global Patient Lookup & Smart Prefill Across All Departments ────
+  searchGlobalPatients: (query: string) => {
+    try {
+      if (!query || !query.trim()) return [];
+      const q = `%${query.trim()}%`;
+      const patientsMap = new Map<string, any>();
+
+      // 1. Search in receipts
+      const receiptRows = db.prepare(`
+        SELECT patientId, patientName, patientPhone, patientAge, patientGender, doctorName, date as lastVisitDate
+        FROM receipts
+        WHERE patientName LIKE ? OR patientPhone LIKE ? OR patientId LIKE ?
+        ORDER BY date DESC, rowid DESC
+        LIMIT 25
+      `).all(q, q, q) as any[];
+
+      receiptRows.forEach(r => {
+        const key = (r.patientPhone?.trim() || r.patientId?.trim() || r.patientName.trim()).toLowerCase();
+        if (!patientsMap.has(key)) {
+          patientsMap.set(key, {
+            patientId: r.patientId || '',
+            patientUhid: r.patientId || '',
+            patientName: r.patientName,
+            patientPhone: r.patientPhone || '',
+            patientAge: r.patientAge || '',
+            patientGender: r.patientGender || '',
+            lastVisitDate: r.lastVisitDate,
+            previousDoctorName: r.doctorName || '',
+            source: 'OPD'
+          });
+        }
+      });
+
+      // 2. Search in bed admissions
+      const admissionRows = db.prepare(`
+        SELECT patientId, patientUhid, patientName, patientPhone, patientAge, patientGender, doctorName, admittedAt as lastVisitDate, diagnosis
+        FROM bed_admissions
+        WHERE patientName LIKE ? OR patientPhone LIKE ? OR patientUhid LIKE ? OR patientId LIKE ?
+        ORDER BY admittedAt DESC, createdAt DESC
+        LIMIT 25
+      `).all(q, q, q, q) as any[];
+
+      admissionRows.forEach(a => {
+        const key = (a.patientPhone?.trim() || a.patientUhid?.trim() || a.patientId?.trim() || a.patientName.trim()).toLowerCase();
+        if (!patientsMap.has(key)) {
+          patientsMap.set(key, {
+            patientId: a.patientId || a.patientUhid || '',
+            patientUhid: a.patientUhid || a.patientId || '',
+            patientName: a.patientName,
+            patientPhone: a.patientPhone || '',
+            patientAge: a.patientAge || '',
+            patientGender: a.patientGender || '',
+            lastVisitDate: a.lastVisitDate ? a.lastVisitDate.split('T')[0] : '',
+            previousDoctorName: a.doctorName || '',
+            recentDiagnosis: a.diagnosis || '',
+            source: 'IPD'
+          });
+        }
+      });
+
+      // 3. Search in emergency visits
+      const emergencyRows = db.prepare(`
+        SELECT patientId, patientUhid, patientName, patientPhone, patientAge, patientGender, attendingDoctorName as doctorName, arrivedAt as lastVisitDate, chiefComplaint
+        FROM emergency_visits
+        WHERE patientName LIKE ? OR patientPhone LIKE ? OR patientUhid LIKE ?
+        ORDER BY arrivedAt DESC, createdAt DESC
+        LIMIT 25
+      `).all(q, q, q) as any[];
+
+      emergencyRows.forEach(e => {
+        const key = (e.patientPhone?.trim() || e.patientUhid?.trim() || e.patientName.trim()).toLowerCase();
+        if (!patientsMap.has(key)) {
+          patientsMap.set(key, {
+            patientId: e.patientId || e.patientUhid || '',
+            patientUhid: e.patientUhid || e.patientId || '',
+            patientName: e.patientName,
+            patientPhone: e.patientPhone || '',
+            patientAge: e.patientAge || '',
+            patientGender: e.patientGender || '',
+            lastVisitDate: e.lastVisitDate ? e.lastVisitDate.split('T')[0] : '',
+            previousDoctorName: e.doctorName || '',
+            recentDiagnosis: e.chiefComplaint || '',
+            source: 'EMERGENCY'
+          });
+        }
+      });
+
+      // 4. Search in appointments
+      const appointmentRows = db.prepare(`
+        SELECT patientName, patientPhone, patientAge, patientGender, doctorName, appointmentDate as lastVisitDate
+        FROM appointments
+        WHERE patientName LIKE ? OR patientPhone LIKE ?
+        ORDER BY appointmentDate DESC
+        LIMIT 25
+      `).all(q, q) as any[];
+
+      appointmentRows.forEach(apt => {
+        const key = (apt.patientPhone?.trim() || apt.patientName.trim()).toLowerCase();
+        if (!patientsMap.has(key)) {
+          patientsMap.set(key, {
+            patientId: '',
+            patientUhid: '',
+            patientName: apt.patientName,
+            patientPhone: apt.patientPhone || '',
+            patientAge: apt.patientAge || '',
+            patientGender: apt.patientGender || '',
+            lastVisitDate: apt.lastVisitDate,
+            previousDoctorName: apt.doctorName || '',
+            source: 'APPOINTMENT'
+          });
+        }
+      });
+
+      return Array.from(patientsMap.values()).slice(0, 20);
+    } catch (e) {
+      console.error('[Database] searchGlobalPatients error:', e);
+      return [];
     }
   }
 };

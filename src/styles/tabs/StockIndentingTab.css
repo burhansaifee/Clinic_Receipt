@@ -1,0 +1,355 @@
+/* ==========================================================================
+   StockIndentingTab Stylesheet (Ward & OT Consumables Requisition to Pharmacy)
+   ========================================================================== */
+
+.indenting-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding-bottom: 2.5rem;
+}
+
+/* ── KPI Summary Cards ─────────────────────────────────────────────────────── */
+.indenting-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 1rem;
+}
+
+.indenting-stat-card {
+  background: white;
+  border-radius: 12px;
+  padding: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.indenting-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.indenting-stat-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.indenting-stat-icon.amber {
+  background: #fffbeb;
+  color: #d97706;
+}
+
+.indenting-stat-icon.emerald {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.indenting-stat-icon.rose {
+  background: #fff1f2;
+  color: #e11d48;
+}
+
+.indenting-stat-icon.blue {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.indenting-stat-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.indenting-stat-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.indenting-stat-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-top: 0.15rem;
+}
+
+/* ── Filter Bar ────────────────────────────────────────────────────────────── */
+.indenting-filter-bar {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.6rem 0.9rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.indenting-filter-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.indenting-search-box {
+  position: relative;
+  width: 220px;
+  min-width: 170px;
+}
+
+.indenting-search-box input.indenting-filter-input {
+  width: 100% !important;
+  padding-left: 30px !important;
+  padding-right: 26px !important;
+  height: 32px !important;
+  font-size: 0.82rem !important;
+}
+
+.indenting-search-icon {
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.indenting-clear-search {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+}
+
+.indenting-filter-select,
+.indenting-filter-input {
+  width: auto !important;
+  height: 32px !important;
+  padding: 0 0.6rem !important;
+  font-size: 0.82rem !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 6px !important;
+  background: white !important;
+  color: var(--text-primary) !important;
+  box-sizing: border-box !important;
+}
+
+.indenting-filter-select:focus,
+.indenting-filter-input:focus {
+  border-color: var(--primary) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1) !important;
+}
+
+.indent-btn-primary {
+  height: 32px !important;
+  padding: 0 0.85rem !important;
+  font-size: 0.82rem !important;
+  font-weight: 600 !important;
+  border-radius: 6px !important;
+  background: var(--primary) !important;
+  color: white !important;
+  border: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.4rem !important;
+  cursor: pointer !important;
+  transition: opacity 0.15s ease !important;
+}
+
+.indent-btn-primary:hover {
+  opacity: 0.9 !important;
+}
+
+/* ── Badges ────────────────────────────────────────────────────────────────── */
+.badge-priority-routine {
+  background: #f1f5f9;
+  color: #475569;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.badge-priority-urgent {
+  background: #ffedd5;
+  color: #c2410c;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.badge-priority-stat {
+  background: #fee2e2;
+  color: #b91c1c;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  animation: pulse-red 2s infinite ease-in-out;
+}
+
+.badge-indent-pending {
+  background: #fef3c7;
+  color: #b45309;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.badge-indent-partial {
+  background: #e0f2fe;
+  color: #0369a1;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.badge-indent-completed {
+  background: #dcfce7;
+  color: #15803d;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+/* ── Indents Table & Collapsible Item Breakdown ───────────────────────────── */
+.indent-table-container {
+  background: white;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.indent-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  text-align: left;
+}
+
+.indent-table th {
+  background: #f8fafc;
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.indent-table td {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid #f1f5f9;
+  color: var(--text-primary);
+}
+
+.indent-table tr.expanded-header td {
+  background: #f8fafc;
+  border-bottom: none;
+}
+
+.indent-items-subtable {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.5rem 0;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.indent-items-subtable th {
+  background: #edf2f7;
+  padding: 0.5rem 0.85rem;
+  font-size: 0.74rem;
+  color: #4a5568;
+}
+
+.indent-items-subtable td {
+  padding: 0.55rem 0.85rem;
+  font-size: 0.8rem;
+  border-bottom: 1px solid #edf2f7;
+}
+
+/* ── Modal Forms ───────────────────────────────────────────────────────────── */
+.indent-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.indent-modal-box {
+  background: white;
+  border-radius: 14px;
+  width: 100%;
+  max-width: 680px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+.indent-modal-header {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.indent-modal-header h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.indent-modal-body {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.indent-modal-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  background: #f8fafc;
+}
+
+@keyframes pulse-red {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}

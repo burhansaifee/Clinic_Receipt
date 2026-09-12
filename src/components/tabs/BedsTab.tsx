@@ -5,14 +5,17 @@ import {
   CheckCircle, RefreshCw, Activity,
   ArrowRightLeft, LogOut,
   Heart, Sparkles, Building2, User, Check, Stethoscope,
-  DollarSign, ChevronDown, X, Trash2, PlusCircle, PackageCheck,
-  Lock, Receipt as ReceiptIcon
+  DollarSign, ChevronDown, X, Trash2, PackageCheck,
+  Receipt as ReceiptIcon, Pill, FileText
 } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 import { useConfirm } from '../ui/ConfirmDialog';
 import '../../styles/tabs/BedsTab.css';
+import { EmarNursingModal } from './inpatient/EmarNursingModal';
+import { DischargeSummaryModal } from './inpatient/DischargeSummaryModal';
 import {
   storage,
+  notifyDataChanged,
   formatAgeGender,
   type Ward,
   type HospitalBed,
@@ -65,6 +68,9 @@ export const BedsTab: React.FC<BedsTabProps> = ({
   const [selectedBedForDetails, setSelectedBedForDetails] = useState<HospitalBed | null>(null);
   const [activeAdmissionRecord, setActiveAdmissionRecord] = useState<BedAdmission | null>(null);
   const [detailsActiveTab, setDetailsActiveTab] = useState<'overview' | 'vitals' | 'transfer' | 'discharge'>('overview');
+  const [selectedBedForEmar, setSelectedBedForEmar] = useState<HospitalBed | null>(null);
+  const [activeAdmissionForEmar, setActiveAdmissionForEmar] = useState<BedAdmission | null>(null);
+  const [admissionForDischargeSummary, setAdmissionForDischargeSummary] = useState<BedAdmission | null>(null);
 
   // Ward / Bed Config Modal State
   const [showWardModal, setShowWardModal] = useState(false);
@@ -114,18 +120,6 @@ export const BedsTab: React.FC<BedsTabProps> = ({
   const [patientSearchQuery, setPatientSearchQuery] = useState('');
   const [existingPatientsSuggestions, setExistingPatientsSuggestions] = useState<any[]>([]);
 
-  // Vitals Form State
-  const [vitalForm, setVitalForm] = useState({
-    bpSystolic: '120',
-    bpDiastolic: '80',
-    pulse: '75',
-    temp: '98.6',
-    spo2: '99',
-    respiratoryRate: '18',
-    bloodSugar: '',
-    urineOutput: '',
-    notes: ''
-  });
 
   // Hospital Central Master Tariff Catalog
   const [hospitalServices, setHospitalServices] = useState<Service[]>([]);
@@ -288,6 +282,15 @@ export const BedsTab: React.FC<BedsTabProps> = ({
 
   useEffect(() => {
     loadData();
+    const handleSync = () => {
+      loadData();
+    };
+    window.addEventListener('buvora-data-updated', handleSync);
+    const interval = setInterval(loadData, 5000);
+    return () => {
+      window.removeEventListener('buvora-data-updated', handleSync);
+      clearInterval(interval);
+    };
   }, []);
 
   // Update default doctor if doctors list arrives
@@ -304,7 +307,7 @@ export const BedsTab: React.FC<BedsTabProps> = ({
     }
   }, [wards]);
 
-  // Patient Autocomplete Search Handler
+  // Unified Global Patient Autocomplete Search Handler
   useEffect(() => {
     if (!patientSearchQuery.trim() || patientSearchQuery.length < 2) {
       setExistingPatientsSuggestions([]);
@@ -312,21 +315,8 @@ export const BedsTab: React.FC<BedsTabProps> = ({
     }
     const timer = setTimeout(async () => {
       try {
-        const receipts = await storage.getReceipts({ search: patientSearchQuery, limit: 10 });
-        const uniquePatientsMap = new Map<string, any>();
-        receipts.forEach(r => {
-          const key = (r.patientId || r.patientName).toLowerCase();
-          if (!uniquePatientsMap.has(key)) {
-            uniquePatientsMap.set(key, {
-              patientId: r.patientId || '',
-              patientName: r.patientName,
-              patientPhone: r.patientPhone || '',
-              patientAge: r.patientAge || '',
-              patientGender: r.patientGender || 'Male'
-            });
-          }
-        });
-        setExistingPatientsSuggestions(Array.from(uniquePatientsMap.values()));
+        const suggestions = await storage.searchGlobalPatients(patientSearchQuery);
+        setExistingPatientsSuggestions(suggestions);
       } catch (err) {
         console.error('Failed to autocomplete patient:', err);
       }
@@ -493,6 +483,8 @@ export const BedsTab: React.FC<BedsTabProps> = ({
       });
 
       toast(`Patient ${admission.patientName} admitted to Bed ${admission.bedNumber}!${advanceReceiptNumber ? ` (Advance Receipt #${advanceReceiptNumber} issued)` : ''}`, { type: 'success' });
+      notifyDataChanged('bed');
+      notifyDataChanged('admission');
       setShowAdmissionModal(false);
       await loadData(true);
     } catch (err) {
@@ -505,6 +497,7 @@ export const BedsTab: React.FC<BedsTabProps> = ({
   const handleUpdateBedStatus = async (bedId: string, newStatus: 'available' | 'occupied' | 'cleaning' | 'maintenance') => {
     try {
       await storage.updateBedStatus(bedId, newStatus);
+      notifyDataChanged('bed');
       toast(`Bed status updated to ${newStatus}`, { type: 'success' });
       await loadData(true);
       if (selectedBedForDetails && selectedBedForDetails.id === bedId) {
@@ -516,45 +509,6 @@ export const BedsTab: React.FC<BedsTabProps> = ({
     }
   };
 
-  // Record Vital Reading
-  const handleRecordVital = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!activeAdmissionRecord) return;
-    try {
-      const vitalData = {
-        bpSystolic: vitalForm.bpSystolic,
-        bpDiastolic: vitalForm.bpDiastolic,
-        pulse: vitalForm.pulse,
-        temp: vitalForm.temp,
-        spo2: vitalForm.spo2,
-        respiratoryRate: vitalForm.respiratoryRate,
-        bloodSugar: vitalForm.bloodSugar,
-        urineOutput: vitalForm.urineOutput,
-        notes: vitalForm.notes
-      };
-
-      await storage.addAdmissionVital(activeAdmissionRecord.id, vitalData);
-      toast('Vitals recorded successfully', { type: 'success' });
-      
-      // Update local state
-      let currentLog: any[] = [];
-      try {
-        currentLog = JSON.parse(activeAdmissionRecord.vitalsLog || '[]');
-      } catch (_) {}
-      const updatedLog = [
-        { id: `VIT-${Date.now()}`, recordedAt: new Date().toISOString(), ...vitalData },
-        ...currentLog
-      ];
-      setActiveAdmissionRecord({
-        ...activeAdmissionRecord,
-        vitalsLog: JSON.stringify(updatedLog)
-      });
-      await loadData(true);
-    } catch (err) {
-      console.error('Failed to record vitals:', err);
-      toast('Failed to record vitals', { type: 'error' });
-    }
-  };
 
   // Add Billable Ward Consumable / Procedure / Care Charge
   const handleAddCharge = async (chargeData: {
@@ -671,10 +625,14 @@ export const BedsTab: React.FC<BedsTabProps> = ({
       try {
         await storage.updateAdmissionBillingStatus(activeAdmissionRecord.id, 'QUEUED', dischargeSummaryNotes);
         toast(`Patient ${patientName} added to Facility Billing Queue. Billing desk can now settle invoice.`, { type: 'success' });
+        const admissionForBilling = activeAdmissionRecord;
         setSelectedBedForDetails(null);
         setActiveAdmissionRecord(null);
         setDischargeSummaryNotes('');
         await loadData(true);
+        if (onNavigateToBilling) {
+          onNavigateToBilling(admissionForBilling);
+        }
       } catch (err: any) {
         console.error('Failed to queue admission for billing:', err);
         toast('Failed to add patient to billing queue', { type: 'error' });
@@ -1055,6 +1013,29 @@ export const BedsTab: React.FC<BedsTabProps> = ({
             <Building2 size={16} />
             Wards &amp; Rates ({wards.length})
           </button>
+
+          {onNavigateToCensus && (
+            <button
+              onClick={onNavigateToCensus}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '0.45rem 1rem',
+                borderRadius: '8px',
+                border: 'none',
+                fontSize: '0.825rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                background: 'transparent',
+                color: '#64748b'
+              }}
+              title="Open full Inpatient Census Register"
+            >
+              <FileText size={16} />
+              Inpatient Census
+            </button>
+          )}
         </div>
 
         {/* Right CTA buttons */}
@@ -1356,7 +1337,7 @@ export const BedsTab: React.FC<BedsTabProps> = ({
                     style={{
                       padding: '1.25rem',
                       display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))',
                       gap: '1rem'
                     }}
                   >
@@ -1371,12 +1352,13 @@ export const BedsTab: React.FC<BedsTabProps> = ({
                           key={bed.id}
                           style={{
                             borderRadius: '12px',
-                            border: `2px solid ${
-                              isOccupied ? '#fca5a5' : isAvailable ? '#86efac' : isCleaning ? '#fcd34d' : '#cbd5e1'
+                            border: '1px solid var(--border)',
+                            borderTop: `3px solid ${
+                              isOccupied ? '#0284c7' : isAvailable ? '#10b981' : isCleaning ? '#f59e0b' : '#94a3b8'
                             }`,
-                            background: isOccupied ? '#fffaf9' : isAvailable ? '#fcfdfb' : isCleaning ? '#fffdf7' : '#f8fafc',
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
-                            transition: 'all 0.15s ease',
+                            background: '#ffffff',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)',
+                            transition: 'all 0.2s ease',
                             display: 'flex',
                             flexDirection: 'column',
                             overflow: 'hidden'
@@ -1386,18 +1368,16 @@ export const BedsTab: React.FC<BedsTabProps> = ({
                           <div
                             style={{
                               padding: '0.75rem 1rem',
-                              background: isOccupied ? '#fee2e2' : isAvailable ? '#dcfce7' : isCleaning ? '#fef3c7' : '#f1f5f9',
-                              borderBottom: `1px solid ${
-                                isOccupied ? '#fecaca' : isAvailable ? '#bbf7d0' : isCleaning ? '#fde68a' : '#e2e8f0'
-                              }`,
+                              background: '#f8fafc',
+                              borderBottom: '1px solid #f1f5f9',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'space-between'
                             }}
                           >
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <Bed size={17} color={isOccupied ? '#dc2626' : isAvailable ? '#16a34a' : isCleaning ? '#d97706' : '#64748b'} />
-                              <strong style={{ fontSize: '0.95rem', color: isOccupied ? '#991b1b' : isAvailable ? '#14532d' : isCleaning ? '#92400e' : '#334155' }}>
+                              <Bed size={17} color={isOccupied ? '#0284c7' : isAvailable ? '#059669' : isCleaning ? '#d97706' : '#64748b'} />
+                              <strong style={{ fontSize: '0.95rem', color: '#0f172a' }}>
                                 {bed.bedNumber}
                               </strong>
                             </div>
@@ -1411,15 +1391,18 @@ export const BedsTab: React.FC<BedsTabProps> = ({
                                       style={{
                                         fontSize: '0.68rem',
                                         fontWeight: 800,
-                                        padding: '2px 6px',
-                                        borderRadius: '4px',
+                                        padding: '2px 7px',
+                                        borderRadius: '6px',
                                         background: '#fef3c7',
                                         color: '#92400e',
-                                        border: '1px solid #fde68a'
+                                        border: '1px solid #fde68a',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '3px'
                                       }}
                                       title="Patient queued at Facility Billing desk"
                                     >
-                                      ⚡ Billing Queued
+                                      ⚡ Queued
                                     </span>
                                   );
                                 }
@@ -1428,16 +1411,29 @@ export const BedsTab: React.FC<BedsTabProps> = ({
 
                               <span
                                 style={{
-                                  fontSize: '0.7rem',
-                                  fontWeight: 800,
-                                  textTransform: 'uppercase',
-                                  padding: '3px 8px',
-                                  borderRadius: '6px',
-                                  background: isOccupied ? '#dc2626' : isAvailable ? '#16a34a' : isCleaning ? '#d97706' : '#64748b',
-                                  color: 'white',
-                                  letterSpacing: '0.5px'
+                                  fontSize: '0.68rem',
+                                  fontWeight: 700,
+                                  padding: '2px 8px',
+                                  borderRadius: '9999px',
+                                  background: isOccupied ? '#eff6ff' : isAvailable ? '#ecfdf5' : isCleaning ? '#fffbeb' : '#f1f5f9',
+                                  color: isOccupied ? '#1d4ed8' : isAvailable ? '#059669' : isCleaning ? '#b45309' : '#475569',
+                                  border: `1px solid ${
+                                    isOccupied ? '#dbeafe' : isAvailable ? '#a7f3d0' : isCleaning ? '#fde68a' : '#e2e8f0'
+                                  }`,
+                                  letterSpacing: '0.3px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
                                 }}
                               >
+                                <span
+                                  style={{
+                                    width: '6px',
+                                    height: '6px',
+                                    borderRadius: '50%',
+                                    background: isOccupied ? '#2563eb' : isAvailable ? '#10b981' : isCleaning ? '#f59e0b' : '#94a3b8'
+                                  }}
+                                />
                                 {isOccupied ? 'Occupied' : isAvailable ? 'Vacant' : isCleaning ? 'Cleaning' : 'Maintenance'}
                               </span>
                             </div>
@@ -1449,11 +1445,11 @@ export const BedsTab: React.FC<BedsTabProps> = ({
                               <div>
                                 {/* Patient particulars */}
                                 <div style={{ marginBottom: '0.5rem' }}>
-                                  <div style={{ fontSize: '1rem', fontWeight: 800, color: '#1e293b' }}>
+                                  <div style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>
                                     {bed.patientName || 'Admitted Patient'}
                                   </div>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                                    <span style={{ fontWeight: 700, color: '#0369a1' }}>{bed.patientUhid || bed.patientId || 'UHID'}</span>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
+                                    <span style={{ fontWeight: 700, color: '#0284c7' }}>{bed.patientUhid || bed.patientId || 'UHID'}</span>
                                     <span>•</span>
                                     <span>{formatAgeGender(bed.patientAge, bed.patientGender)}</span>
                                     {bed.patientPhone && (
@@ -1466,17 +1462,17 @@ export const BedsTab: React.FC<BedsTabProps> = ({
                                 </div>
 
                                 {/* Clinical Meta */}
-                                <div style={{ fontSize: '0.78rem', color: '#475569', marginBottom: '0.5rem', background: '#f8fafc', padding: '6px 8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                                <div style={{ fontSize: '0.78rem', color: '#475569', marginBottom: '0.5rem', background: '#f8fafc', padding: '6px 9px', borderRadius: '7px', border: '1px solid #e2e8f0' }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                                     <Stethoscope size={13} color="#0284c7" />
                                     <strong style={{ color: '#0f172a' }}>
                                       {bed.doctorName 
-                                        ? (/^dr\.?\s*/i.test(bed.doctorName) ? bed.doctorName : `Dr. ${bed.doctorName}`)
+                                        ? (/^dr\.?\s*/i.test(bed.doctorName) ? bed.doctorName : ` ${bed.doctorName}`)
                                         : 'Attending Physician'}
                                     </strong>
                                   </div>
                                   {bed.diagnosis && (
-                                    <div style={{ color: '#0f172a', marginTop: '2px', fontWeight: 600 }}>
+                                    <div style={{ color: '#334155', marginTop: '2px', fontWeight: 600 }}>
                                       Dx: {bed.diagnosis}
                                     </div>
                                   )}
@@ -1484,96 +1480,154 @@ export const BedsTab: React.FC<BedsTabProps> = ({
 
                                 {/* Stay timer & advance paid pill */}
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '0.75rem' }}>
-                                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#b91c1c', fontWeight: 700, background: '#fef2f2', padding: '3px 7px', borderRadius: '6px' }}>
-                                    <Clock size={12} />
+                                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#334155', fontWeight: 600, background: '#f1f5f9', padding: '3px 8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                                    <Clock size={12} color="#64748b" />
                                     {getStayDurationString(bed.admittedAt)}
                                   </span>
                                   {bed.advancePaid ? (
-                                    <span style={{ color: '#047857', fontWeight: 700, background: '#ecfdf5', padding: '3px 7px', borderRadius: '6px' }}>
-                                      Adv: ₹{bed.advancePaid}
+                                    <span style={{ color: '#047857', fontWeight: 700, background: '#ecfdf5', padding: '3px 8px', borderRadius: '6px', border: '1px solid #d1fae5' }}>
+                                      Adv: ₹{bed.advancePaid.toLocaleString('en-IN')}
                                     </span>
                                   ) : null}
                                 </div>
                               </div>
                             ) : isAvailable ? (
-                              <div style={{ padding: '0.75rem 0', textAlign: 'center' }}>
-                                <div style={{ fontSize: '0.825rem', color: '#059669', fontWeight: 700, marginBottom: '4px' }}>
+                              <div style={{ padding: '0.85rem 0', textAlign: 'center' }}>
+                                <div style={{ fontSize: '0.85rem', color: '#059669', fontWeight: 700, marginBottom: '3px' }}>
                                   Ready for Admission
                                 </div>
-                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                  {bed.bedType} • ₹{bed.dailyRate}/day
+                                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                                  {bed.bedType} • ₹{bed.dailyRate.toLocaleString('en-IN')}/day
                                 </div>
                               </div>
                             ) : isCleaning ? (
-                              <div style={{ padding: '0.75rem 0', textAlign: 'center' }}>
-                                <div style={{ fontSize: '0.825rem', color: '#b45309', fontWeight: 700, marginBottom: '4px' }}>
+                              <div style={{ padding: '0.85rem 0', textAlign: 'center' }}>
+                                <div style={{ fontSize: '0.85rem', color: '#b45309', fontWeight: 700, marginBottom: '3px' }}>
                                   Disinfection &amp; Linen Change
                                 </div>
-                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
                                   Post-discharge sanitization in progress
                                 </div>
                               </div>
                             ) : (
-                              <div style={{ padding: '0.75rem 0', textAlign: 'center' }}>
-                                <div style={{ fontSize: '0.825rem', color: '#475569', fontWeight: 700, marginBottom: '4px' }}>
+                              <div style={{ padding: '0.85rem 0', textAlign: 'center' }}>
+                                <div style={{ fontSize: '0.85rem', color: '#475569', fontWeight: 700, marginBottom: '3px' }}>
                                   Under Maintenance
                                 </div>
-                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
                                   {bed.notes || 'Temporarily out of service'}
                                 </div>
                               </div>
                             )}
 
                             {/* Card Action Buttons */}
-                            <div style={{ marginTop: 'auto', paddingTop: '0.5rem', borderTop: '1px solid #f1f5f9', display: 'flex', gap: '6px' }}>
+                            <div style={{ marginTop: 'auto', paddingTop: '0.6rem', borderTop: '1px solid #f1f5f9' }}>
                               {isOccupied && (
-                                <>
-                                  <button
-                                    onClick={() => handleOpenBedDetails(bed)}
-                                    style={{
-                                      flex: 1,
-                                      padding: '0.45rem',
-                                      background: '#0284c7',
-                                      color: 'white',
-                                      border: 'none',
-                                      borderRadius: '6px',
-                                      fontSize: '0.78rem',
-                                      fontWeight: 700,
-                                      cursor: 'pointer',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                      gap: '4px'
-                                    }}
-                                  >
-                                    <Activity size={14} />
-                                    Chart &amp; Vitals
-                                  </button>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                  {/* Row 1: Clinical Operations */}
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                                    <button
+                                      onClick={() => handleOpenBedDetails(bed)}
+                                      style={{
+                                        padding: '0.45rem 0.5rem',
+                                        background: '#0284c7',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '7px',
+                                        fontSize: '0.78rem',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '5px'
+                                      }}
+                                      title="Open Clinical Folio & Bed Details"
+                                    >
+                                      <Activity size={13} />
+                                      Chart
+                                    </button>
 
-                                  <button
-                                    onClick={() => {
-                                      handleOpenBedDetails(bed);
-                                      setDetailsActiveTab('discharge');
-                                    }}
-                                    style={{
-                                      padding: '0.45rem 0.65rem',
-                                      background: '#fee2e2',
-                                      color: '#991b1b',
-                                      border: '1px solid #fca5a5',
-                                      borderRadius: '6px',
-                                      fontSize: '0.78rem',
-                                      fontWeight: 700,
-                                      cursor: 'pointer',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: '4px'
-                                    }}
-                                    title="Discharge & Settle Bill"
-                                  >
-                                    <LogOut size={14} />
-                                    Discharge
-                                  </button>
-                                </>
+                                    <button
+                                      onClick={() => {
+                                        setSelectedBedForEmar(bed);
+                                        const adm = admissions.find(a => a.id === bed.currentAdmissionId);
+                                        setActiveAdmissionForEmar(adm || null);
+                                      }}
+                                      style={{
+                                        padding: '0.45rem 0.5rem',
+                                        background: '#f0f9ff',
+                                        color: '#0369a1',
+                                        border: '1px solid #bae6fd',
+                                        borderRadius: '7px',
+                                        fontSize: '0.78rem',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '5px'
+                                      }}
+                                      title="Bedside eMAR & Nursing Station"
+                                    >
+                                      <Pill size={13} />
+                                      eMAR
+                                    </button>
+                                  </div>
+
+                                  {/* Row 2: Documentation & Discharge */}
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                                    <button
+                                      onClick={() => {
+                                        const adm = admissions.find(a => a.id === bed.currentAdmissionId);
+                                        if (adm) setAdmissionForDischargeSummary(adm);
+                                      }}
+                                      style={{
+                                        padding: '0.42rem 0.5rem',
+                                        background: '#fff7ed',
+                                        color: '#c2410c',
+                                        border: '1px solid #fed7aa',
+                                        borderRadius: '7px',
+                                        fontSize: '0.76rem',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '5px'
+                                      }}
+                                      title="Structured Discharge Summary & A4 Print"
+                                    >
+                                      <FileText size={13} />
+                                      Summary
+                                    </button>
+
+                                    <button
+                                      onClick={() => {
+                                        handleOpenBedDetails(bed);
+                                        setDetailsActiveTab('discharge');
+                                      }}
+                                      style={{
+                                        padding: '0.42rem 0.5rem',
+                                        background: '#f8fafc',
+                                        color: '#475569',
+                                        border: '1px solid #cbd5e1',
+                                        borderRadius: '7px',
+                                        fontSize: '0.76rem',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '5px'
+                                      }}
+                                      title="Discharge & Queue for Billing"
+                                    >
+                                      <LogOut size={13} />
+                                      Discharge
+                                    </button>
+                                  </div>
+                                </div>
                               )}
 
                               {isAvailable && (
@@ -1581,18 +1635,19 @@ export const BedsTab: React.FC<BedsTabProps> = ({
                                   onClick={() => handleQuickAdmitClick(bed)}
                                   style={{
                                     width: '100%',
-                                    padding: '0.5rem',
+                                    padding: '0.55rem',
                                     background: '#10b981',
                                     color: 'white',
                                     border: 'none',
-                                    borderRadius: '6px',
-                                    fontSize: '0.8rem',
+                                    borderRadius: '7px',
+                                    fontSize: '0.82rem',
                                     fontWeight: 700,
                                     cursor: 'pointer',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    gap: '6px'
+                                    gap: '6px',
+                                    boxShadow: '0 1px 2px rgba(16,185,129,0.2)'
                                   }}
                                 >
                                   <Plus size={15} />
@@ -1605,12 +1660,12 @@ export const BedsTab: React.FC<BedsTabProps> = ({
                                   onClick={() => handleUpdateBedStatus(bed.id, 'available')}
                                   style={{
                                     width: '100%',
-                                    padding: '0.5rem',
+                                    padding: '0.55rem',
                                     background: '#f59e0b',
                                     color: 'white',
                                     border: 'none',
-                                    borderRadius: '6px',
-                                    fontSize: '0.8rem',
+                                    borderRadius: '7px',
+                                    fontSize: '0.82rem',
                                     fontWeight: 700,
                                     cursor: 'pointer',
                                     display: 'flex',
@@ -1629,12 +1684,12 @@ export const BedsTab: React.FC<BedsTabProps> = ({
                                   onClick={() => handleUpdateBedStatus(bed.id, 'available')}
                                   style={{
                                     width: '100%',
-                                    padding: '0.5rem',
-                                    background: '#475569',
+                                    padding: '0.55rem',
+                                    background: '#64748b',
                                     color: 'white',
                                     border: 'none',
-                                    borderRadius: '6px',
-                                    fontSize: '0.8rem',
+                                    borderRadius: '7px',
+                                    fontSize: '0.82rem',
                                     fontWeight: 700,
                                     cursor: 'pointer',
                                     display: 'flex',
@@ -2147,7 +2202,7 @@ export const BedsTab: React.FC<BedsTabProps> = ({
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem', marginBottom: '1rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: '#fee2e2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: '#eff6ff', color: '#0284c7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Bed size={22} />
                 </div>
                 <div>
@@ -2195,8 +2250,54 @@ export const BedsTab: React.FC<BedsTabProps> = ({
                   gap: '4px'
                 }}
               >
-                <Activity size={14} />
-                Vitals Monitoring
+                <PackageCheck size={14} />
+                Ward Consumables &amp; Care
+              </button>
+
+              <button
+                onClick={() => {
+                  setSelectedBedForEmar(selectedBedForDetails);
+                  setActiveAdmissionForEmar(activeAdmissionRecord);
+                }}
+                style={{
+                  padding: '0.45rem 0.85rem',
+                  borderRadius: '6px',
+                  border: '1px solid #bae6fd',
+                  fontSize: '0.825rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  background: '#e0f2fe',
+                  color: '#0369a1',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+              >
+                <Pill size={14} />
+                eMAR &amp; Nursing Station
+              </button>
+
+              <button
+                onClick={() => {
+                  if (activeAdmissionRecord) setAdmissionForDischargeSummary(activeAdmissionRecord);
+                }}
+                style={{
+                  padding: '0.45rem 0.85rem',
+                  borderRadius: '6px',
+                  border: '1px solid #fed7aa',
+                  fontSize: '0.825rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  background: '#fff7ed',
+                  color: '#c2410c',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+                title="Structured Clinical Discharge Summary & A4 Print Engine"
+              >
+                <FileText size={14} />
+                Discharge Summary
               </button>
               <button
                 onClick={() => setDetailsActiveTab('transfer')}
@@ -2253,8 +2354,8 @@ export const BedsTab: React.FC<BedsTabProps> = ({
                         {selectedBedForDetails.patientPhone && ` • Phone: ${selectedBedForDetails.patientPhone}`}
                       </div>
                     </div>
-                    <span style={{ fontSize: '0.75rem', fontWeight: 800, background: '#fee2e2', color: '#b91c1c', padding: '4px 10px', borderRadius: '8px' }}>
-                      ⏱️ {getStayDurationString(selectedBedForDetails.admittedAt)}
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, background: '#f1f5f9', color: '#334155', border: '1px solid #e2e8f0', padding: '4px 10px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <Clock size={12} color="#64748b" /> {getStayDurationString(selectedBedForDetails.admittedAt)}
                     </span>
                   </div>
 
@@ -2265,7 +2366,7 @@ export const BedsTab: React.FC<BedsTabProps> = ({
                     </div>
                     <div>
                       <div style={{ color: 'var(--text-muted)' }}>Attending Physician:</div>
-                      <strong>{selectedBedForDetails.doctorName ? (/^dr\.?\s*/i.test(selectedBedForDetails.doctorName) ? selectedBedForDetails.doctorName : `Dr. ${selectedBedForDetails.doctorName}`) : 'Attending Physician'}</strong>
+                      <strong>{selectedBedForDetails.doctorName ? (/^dr\.?\s*/i.test(selectedBedForDetails.doctorName) ? selectedBedForDetails.doctorName : ` ${selectedBedForDetails.doctorName}`) : 'Attending Physician'}</strong>
                     </div>
                     <div>
                       <div style={{ color: 'var(--text-muted)' }}>Admitted On:</div>
@@ -2454,232 +2555,9 @@ export const BedsTab: React.FC<BedsTabProps> = ({
               </div>
             )}
 
-            {/* Tab 2: Vitals Monitoring Station & Ward Billing Tracker */}
+            {/* Tab 2: Ward Billing Tracker (Consumables & Care) */}
             {detailsActiveTab === 'vitals' && (
               <div>
-                {/* Form to log new vital */}
-                <form onSubmit={handleRecordVital} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '1rem', marginBottom: '1.25rem' }}>
-                  <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Heart size={16} color="#ef4444" />
-                    Record New Nursing Vitals:
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                    <div>
-                      <label className="form-label" style={{ fontSize: '0.725rem' }}>BP (Sys / Dia)</label>
-                      <div style={{ display: 'flex', gap: '2px', alignItems: 'center' }}>
-                        <input
-                          type="text"
-                          placeholder="120"
-                          value={vitalForm.bpSystolic}
-                          onChange={e => setVitalForm({ ...vitalForm, bpSystolic: e.target.value })}
-                          className="input-field"
-                          style={{ textAlign: 'center', padding: '0.25rem' }}
-                        />
-                        <span>/</span>
-                        <input
-                          type="text"
-                          placeholder="80"
-                          value={vitalForm.bpDiastolic}
-                          onChange={e => setVitalForm({ ...vitalForm, bpDiastolic: e.target.value })}
-                          className="input-field"
-                          style={{ textAlign: 'center', padding: '0.25rem' }}
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="form-label" style={{ fontSize: '0.725rem' }}>Pulse (bpm)</label>
-                      <input
-                        type="text"
-                        placeholder="72"
-                        value={vitalForm.pulse}
-                        onChange={e => setVitalForm({ ...vitalForm, pulse: e.target.value })}
-                        className="input-field"
-                        style={{ textAlign: 'center' }}
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label" style={{ fontSize: '0.725rem' }}>Temp (°F)</label>
-                      <input
-                        type="text"
-                        placeholder="98.6"
-                        value={vitalForm.temp}
-                        onChange={e => setVitalForm({ ...vitalForm, temp: e.target.value })}
-                        className="input-field"
-                        style={{ textAlign: 'center' }}
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label" style={{ fontSize: '0.725rem' }}>SpO2 (%)</label>
-                      <input
-                        type="text"
-                        placeholder="99"
-                        value={vitalForm.spo2}
-                        onChange={e => setVitalForm({ ...vitalForm, spo2: e.target.value })}
-                        className="input-field"
-                        style={{ textAlign: 'center' }}
-                      />
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1.5fr auto', gap: '0.75rem', alignItems: 'flex-end' }}>
-                    <div>
-                      <label className="form-label" style={{ fontSize: '0.725rem' }}>Resp. Rate (/min)</label>
-                      <input
-                        type="text"
-                        placeholder="18"
-                        value={vitalForm.respiratoryRate}
-                        onChange={e => setVitalForm({ ...vitalForm, respiratoryRate: e.target.value })}
-                        className="input-field"
-                        style={{ textAlign: 'center' }}
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label" style={{ fontSize: '0.725rem' }}>Blood Sugar (mg/dL)</label>
-                      <input
-                        type="text"
-                        placeholder="Optional"
-                        value={vitalForm.bloodSugar}
-                        onChange={e => setVitalForm({ ...vitalForm, bloodSugar: e.target.value })}
-                        className="input-field"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label" style={{ fontSize: '0.725rem' }}>Urine Output (ml)</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. 400"
-                        value={vitalForm.urineOutput}
-                        onChange={e => setVitalForm({ ...vitalForm, urineOutput: e.target.value })}
-                        className="input-field"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label" style={{ fontSize: '0.725rem' }}>Observation Notes</label>
-                      <input
-                        type="text"
-                        placeholder="Patient alert and comfortable..."
-                        value={vitalForm.notes}
-                        onChange={e => setVitalForm({ ...vitalForm, notes: e.target.value })}
-                        className="input-field"
-                      />
-                    </div>
-                    <button
-                      type="submit"
-                      className="btn-primary"
-                      style={{ height: '40px', padding: '0 1rem', fontSize: '0.8rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}
-                    >
-                      <PlusCircle size={14} /> Log Vitals
-                    </button>
-                  </div>
-                </form>
-
-                {/* Vitals Log Timeline / Table */}
-                <div style={{ marginBottom: '1.75rem' }}>
-                  <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem', color: '#1e293b' }}>Historical Vitals Chart:</h4>
-                  {(() => {
-                    let logArray: any[] = [];
-                    try {
-                      logArray = JSON.parse(activeAdmissionRecord?.vitalsLog || '[]');
-                    } catch (_) {}
-
-                    if (logArray.length === 0) {
-                      return (
-                        <div style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)', fontSize: '0.85rem', background: '#f8fafc', borderRadius: '8px', border: '1px dashed var(--border)' }}>
-                          No vitals recorded yet during this stay.
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div style={{ border: '1px solid var(--border)', borderRadius: '8px', overflowX: 'auto', background: 'white' }}>
-                        <table className="data-table" style={{ width: '100%', minWidth: '860px', margin: 0, fontSize: '0.825rem' }}>
-                          <thead>
-                            <tr>
-                              <th className="text-center" style={{ width: '140px', textAlign: 'center', whiteSpace: 'nowrap' }}>Timestamp</th>
-                              <th className="text-center" style={{ width: '110px', textAlign: 'center', whiteSpace: 'nowrap' }}>BP</th>
-                              <th className="text-center" style={{ width: '85px', textAlign: 'center', whiteSpace: 'nowrap' }}>Pulse</th>
-                              <th className="text-center" style={{ width: '85px', textAlign: 'center', whiteSpace: 'nowrap' }}>Temp</th>
-                              <th className="text-center" style={{ width: '80px', textAlign: 'center', whiteSpace: 'nowrap' }}>SpO2</th>
-                              <th className="text-center" style={{ width: '85px', textAlign: 'center', whiteSpace: 'nowrap' }}>Resp</th>
-                              <th className="text-center" style={{ width: '110px', textAlign: 'center', whiteSpace: 'nowrap' }}>Blood Sugar</th>
-                              <th className="text-center" style={{ width: '90px', textAlign: 'center', whiteSpace: 'nowrap' }}>Urine</th>
-                              <th className="text-left" style={{ minWidth: '160px', textAlign: 'left', whiteSpace: 'nowrap' }}>Notes</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {logArray.map((v, i) => (
-                              <tr key={i}>
-                                <td className="text-center" style={{ whiteSpace: 'nowrap', textAlign: 'center', color: '#475569', fontWeight: 500 }}>
-                                  {v.recordedAt ? format(parseISO(v.recordedAt), 'dd MMM, hh:mm a') : 'Now'}
-                                </td>
-                                <td className="text-center" style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                                  {v.bpSystolic && v.bpDiastolic ? (
-                                    <>
-                                      <strong style={{ color: '#0f172a' }}>{v.bpSystolic}/{v.bpDiastolic}</strong>{' '}
-                                      <span style={{ fontSize: '0.72rem', color: '#64748b' }}>mmHg</span>
-                                    </>
-                                  ) : '—'}
-                                </td>
-                                <td className="text-center" style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                                  {v.pulse ? (
-                                    <>
-                                      <strong style={{ color: '#0f172a' }}>{v.pulse}</strong>{' '}
-                                      <span style={{ fontSize: '0.72rem', color: '#64748b' }}>bpm</span>
-                                    </>
-                                  ) : '—'}
-                                </td>
-                                <td className="text-center" style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                                  {v.temp ? (
-                                    <>
-                                      <strong style={{ color: '#0f172a' }}>{v.temp}</strong>{' '}
-                                      <span style={{ fontSize: '0.72rem', color: '#64748b' }}>°F</span>
-                                    </>
-                                  ) : '—'}
-                                </td>
-                                <td className="text-center" style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                                  {v.spo2 ? (
-                                    <strong style={{ color: Number(v.spo2) < 95 ? '#dc2626' : '#16a34a', background: Number(v.spo2) < 95 ? '#fef2f2' : '#f0fdf4', padding: '2px 8px', borderRadius: '4px' }}>
-                                      {v.spo2}%
-                                    </strong>
-                                  ) : '—'}
-                                </td>
-                                <td className="text-center" style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                                  {v.respiratoryRate ? (
-                                    <>
-                                      <strong style={{ color: '#0f172a' }}>{v.respiratoryRate}</strong>{' '}
-                                      <span style={{ fontSize: '0.72rem', color: '#64748b' }}>/min</span>
-                                    </>
-                                  ) : '—'}
-                                </td>
-                                <td className="text-center" style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                                  {v.bloodSugar ? (
-                                    <>
-                                      <strong style={{ color: '#0f172a' }}>{v.bloodSugar}</strong>{' '}
-                                      <span style={{ fontSize: '0.72rem', color: '#64748b' }}>mg/dL</span>
-                                    </>
-                                  ) : '—'}
-                                </td>
-                                <td className="text-center" style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                                  {v.urineOutput ? (
-                                    <>
-                                      <strong style={{ color: '#0f172a' }}>{v.urineOutput}</strong>{' '}
-                                      <span style={{ fontSize: '0.72rem', color: '#64748b' }}>ml</span>
-                                    </>
-                                  ) : '—'}
-                                </td>
-                                <td className="text-left" style={{ textAlign: 'left', color: '#475569', fontSize: '0.8rem' }}>
-                                  {v.notes || '—'}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    );
-                  })()}
-                </div>
-
                 {/* ── Ward Care & Consumables Tracker (Auto-Billed at Discharge) ─── */}
                 <div style={{ background: '#f8fafc', border: '1.5px solid #0284c7', borderRadius: '12px', padding: '1.2rem', marginBottom: '1rem' }}>
                   {/* Header & Running Total Banner */}
@@ -3480,6 +3358,45 @@ export const BedsTab: React.FC<BedsTabProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Hospital Inpatient Nursing & eMAR Suite Modal */}
+      {selectedBedForEmar && activeAdmissionForEmar && (
+        <EmarNursingModal
+          bed={selectedBedForEmar}
+          admission={activeAdmissionForEmar}
+          onClose={() => {
+            setSelectedBedForEmar(null);
+            setActiveAdmissionForEmar(null);
+          }}
+          onAdmissionUpdated={async () => {
+            await loadData(true);
+            if (selectedBedForEmar?.currentAdmissionId) {
+              const freshAdms = await storage.getBedAdmissions({ limit: 100 });
+              const updated = freshAdms.find(a => a.id === selectedBedForEmar.currentAdmissionId);
+              if (updated) {
+                setActiveAdmissionForEmar(updated);
+                setActiveAdmissionRecord(updated);
+              }
+            }
+          }}
+        />
+      )}
+
+      {/* Structured Clinical Discharge Summary Modal */}
+      {admissionForDischargeSummary && (
+        <DischargeSummaryModal
+          admission={admissionForDischargeSummary}
+          onClose={() => setAdmissionForDischargeSummary(null)}
+          onSaved={async () => {
+            await loadData(true);
+            if (activeAdmissionRecord && activeAdmissionRecord.id === admissionForDischargeSummary.id) {
+              const freshAdms = await storage.getBedAdmissions({ limit: 100 });
+              const updated = freshAdms.find(a => a.id === admissionForDischargeSummary.id);
+              if (updated) setActiveAdmissionRecord(updated);
+            }
+          }}
+        />
       )}
     </div>
   );

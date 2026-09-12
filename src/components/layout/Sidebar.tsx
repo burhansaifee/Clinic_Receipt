@@ -3,7 +3,8 @@ import {
   LayoutDashboard, Users, Receipt, PlusCircle, Settings,
   Calendar, FileText, Briefcase, LogOut, KeyRound, X,
   CalendarClock, Bed, BedDouble, Pill, FlaskConical,
-  Stethoscope, Wallet
+  Stethoscope, Wallet, ShieldCheck, Scissors, AlertOctagon,
+  Tv, DollarSign, PackagePlus
 } from 'lucide-react';
 
 export type Tab =
@@ -14,14 +15,21 @@ export type Tab =
   | 'users'
   | 'new-receipt'
   | 'facility-billing'
+  | 'insurance'
   | 'beds'
   | 'inpatient-census'
+  | 'nursing-station'
+  | 'ot-management'
+  | 'emergency'
   | 'history'
   | 'prescriptions'
   | 'pharmacy'
   | 'lab'
   | 'appointments'
   | 'follow-ups'
+  | 'doctor-payouts'
+  | 'queue-display'
+  | 'stock-indenting'
   | 'settings';
 
 interface NavItemConfig {
@@ -70,22 +78,26 @@ const Sidebar: React.FC<SidebarProps> = ({
   allowedTabs,
 }) => {
   const isTabAllowed = (tab: Tab): boolean => {
+    const isUserAdmin = currentUser?.toLowerCase() === 'admin';
+    if (isUserAdmin) return true;
     if (allowedTabs && allowedTabs.length > 0) {
       return allowedTabs.includes(tab);
     }
-    const isUserAdmin = currentUser.toLowerCase() === 'admin';
-    if (isUserAdmin) return true;
+    if (currentUserRole === 'nurse') {
+      return ['nursing-station', 'inpatient-census', 'beds', 'emergency', 'ot-management', 'stock-indenting'].includes(tab);
+    }
     if (currentUserRole === 'reception') {
       return [
-        'dashboard', 'new-receipt', 'facility-billing', 'beds',
-        'inpatient-census', 'history', 'prescriptions', 'pharmacy',
-        'lab', 'appointments', 'follow-ups'
+        'dashboard', 'new-receipt', 'facility-billing', 'insurance', 'nursing-station', 'beds',
+        'inpatient-census', 'emergency', 'ot-management', 'history', 'prescriptions', 'pharmacy',
+        'lab', 'appointments', 'follow-ups', 'queue-display', 'stock-indenting'
       ].includes(tab);
     }
     if (currentUserRole === 'management') {
       return [
-        'doctors', 'services', 'expenses', 'pharmacy', 'beds',
-        'inpatient-census', 'lab', 'users', 'settings'
+        'doctors', 'services', 'expenses', 'pharmacy', 'insurance', 'nursing-station', 'beds',
+        'inpatient-census', 'emergency', 'ot-management', 'lab', 'users', 'doctor-payouts',
+        'queue-display', 'stock-indenting', 'settings'
       ].includes(tab);
     }
     return true;
@@ -125,6 +137,11 @@ const Sidebar: React.FC<SidebarProps> = ({
           icon: CalendarClock,
           badgeCount: dueFollowUpsCount,
           badgeColor: '#0284c7',
+        },
+        {
+          tab: 'queue-display',
+          label: 'Queue Display & QDS',
+          icon: Tv,
         }
       ]
     },
@@ -144,6 +161,11 @@ const Sidebar: React.FC<SidebarProps> = ({
           icon: Bed,
         },
         {
+          tab: 'insurance',
+          label: 'TPA / Cashless Claims',
+          icon: ShieldCheck,
+        },
+        {
           tab: 'history',
           label: 'Invoices & History',
           icon: Receipt,
@@ -155,6 +177,11 @@ const Sidebar: React.FC<SidebarProps> = ({
       title: 'INPATIENT CARE (IPD)',
       items: [
         {
+          tab: 'nursing-station',
+          label: 'Nursing & eMAR Station',
+          icon: Stethoscope,
+        },
+        {
           tab: 'inpatient-census',
           label: 'Inpatient Census',
           icon: Users,
@@ -163,6 +190,22 @@ const Sidebar: React.FC<SidebarProps> = ({
           tab: 'beds',
           label: 'Beds & Wards Matrix',
           icon: BedDouble,
+        }
+      ]
+    },
+    {
+      id: 'emergency-ot',
+      title: 'EMERGENCY & SURGERY',
+      items: [
+        {
+          tab: 'emergency',
+          label: 'Emergency & Triage',
+          icon: AlertOctagon,
+        },
+        {
+          tab: 'ot-management',
+          label: 'Operation Theatre (OT)',
+          icon: Scissors,
         }
       ]
     },
@@ -179,6 +222,11 @@ const Sidebar: React.FC<SidebarProps> = ({
           tab: 'lab',
           label: 'Diagnostics & Lab',
           icon: FlaskConical,
+        },
+        {
+          tab: 'stock-indenting',
+          label: 'Internal Stock Indents',
+          icon: PackagePlus,
         }
       ]
     },
@@ -200,6 +248,11 @@ const Sidebar: React.FC<SidebarProps> = ({
           tab: 'expenses',
           label: 'Clinic Expenses',
           icon: Wallet,
+        },
+        {
+          tab: 'doctor-payouts',
+          label: 'Doctor Revenue & Payouts',
+          icon: DollarSign,
         },
         {
           tab: 'users',

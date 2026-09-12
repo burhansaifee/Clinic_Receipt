@@ -40,6 +40,7 @@ interface DashboardProps {
   workstationMode?: 'standalone' | 'host' | 'client';
   currentUser?: string | null;
   currentUserRole?: string;
+  allowedTabs?: Tab[];
   onNavigate: (tab: Tab) => void;
   onNewReceipt: () => void;
 }
@@ -55,6 +56,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   botStatus = { status: 'DISCONNECTED' },
   workstationMode = 'standalone',
   currentUser = 'admin',
+  allowedTabs,
   onNavigate,
   onNewReceipt,
 }) => {
@@ -222,13 +224,15 @@ const Dashboard: React.FC<DashboardProps> = ({
             <Pill size={18} style={{ color: '#34d399' }} />
             <span>Pharmacy &amp; POS</span>
           </button>
-          <button className="btn-hero-secondary" onClick={() => onNavigate('appointments')}>
-            <Calendar size={18} />
-            <span>Appointments</span>
-            {pendingAppointmentsCount > 0 && (
-              <span className="hero-alert-pill">{pendingAppointmentsCount}</span>
-            )}
-          </button>
+          {(!allowedTabs || allowedTabs.includes('appointments')) && (
+            <button className="btn-hero-secondary" onClick={() => onNavigate('appointments')}>
+              <Calendar size={18} />
+              <span>Appointments</span>
+              {pendingAppointmentsCount > 0 && (
+                <span className="hero-alert-pill">{pendingAppointmentsCount}</span>
+              )}
+            </button>
+          )}
         </div>
 
         <div className="hero-content">
@@ -374,28 +378,30 @@ const Dashboard: React.FC<DashboardProps> = ({
         </div>
 
         {/* Card 5: Appointments & Queue */}
-        <div className="stat-box stat-amber" onClick={() => onNavigate('appointments')} style={{ cursor: 'pointer' }}>
-          <div className="stat-box-top">
-            <div className="stat-icon-wrapper amber-icon">
-              <Calendar size={22} />
+        {(!allowedTabs || allowedTabs.includes('appointments')) && (
+          <div className="stat-box stat-amber" onClick={() => onNavigate('appointments')} style={{ cursor: 'pointer' }}>
+            <div className="stat-box-top">
+              <div className="stat-icon-wrapper amber-icon">
+                <Calendar size={22} />
+              </div>
+              {pendingAppointmentsCount > 0 ? (
+                <span className="stat-pill-trend alert-pulse">{pendingAppointmentsCount} Pending</span>
+              ) : (
+                <span className="stat-pill-trend neutral">All Clear</span>
+              )}
             </div>
-            {pendingAppointmentsCount > 0 ? (
-              <span className="stat-pill-trend alert-pulse">{pendingAppointmentsCount} Pending</span>
-            ) : (
-              <span className="stat-pill-trend neutral">All Clear</span>
-            )}
-          </div>
-          <div className="stat-box-body">
-            <span className="stat-label-text">Pending Appointments</span>
-            <div className="stat-number-text">{pendingAppointmentsCount}</div>
-          </div>
-          <div className="stat-footer-bar">
-            <div className="stat-progress-bg">
-              <div className="stat-progress-fill amber-fill" style={{ width: `${Math.min(100, pendingAppointmentsCount * 25)}%` }} />
+            <div className="stat-box-body">
+              <span className="stat-label-text">Pending Appointments</span>
+              <div className="stat-number-text">{pendingAppointmentsCount}</div>
             </div>
-            <span className="stat-subtext">WhatsApp booking desk queue</span>
+            <div className="stat-footer-bar">
+              <div className="stat-progress-bg">
+                <div className="stat-progress-fill amber-fill" style={{ width: `${Math.min(100, pendingAppointmentsCount * 25)}%` }} />
+              </div>
+              <span className="stat-subtext">WhatsApp booking desk queue</span>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Card 6: Follow-Ups Due Today */}
         <div className="stat-box stat-cyan" onClick={() => onNavigate('follow-ups')} style={{ cursor: 'pointer' }}>

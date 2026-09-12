@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { Menu } from 'lucide-react';
 
-import { storage, type Doctor, type Receipt as ReceiptType, type Service, type Prescription, type ReceiptPaperType, type PrescriptionPaperType } from './lib/storage';
+import { storage, playReceptionChime, type Doctor, type Receipt as ReceiptType, type Service, type Prescription, type ReceiptPaperType, type PrescriptionPaperType, type DoctorNextCallEvent } from './lib/storage';
 import './index.css';
 import './App.css';
 
@@ -31,7 +31,14 @@ const FacilityBillingTab = React.lazy(() => import('./components/tabs/FacilityBi
 const PharmacyTab = React.lazy(() => import('./components/tabs/PharmacyTab').then(m => ({ default: m.PharmacyTab })));
 const BedsTab = React.lazy(() => import('./components/tabs/BedsTab').then(m => ({ default: m.BedsTab })));
 const InpatientCensusTab = React.lazy(() => import('./components/tabs/InpatientCensusTab').then(m => ({ default: m.InpatientCensusTab })));
+const NursingStationTab = React.lazy(() => import('./components/tabs/NursingStationTab').then(m => ({ default: m.NursingStationTab })));
 const LaboratoryTab = React.lazy(() => import('./components/tabs/LaboratoryTab').then(m => ({ default: m.LaboratoryTab })));
+const InsuranceTab = React.lazy(() => import('./components/tabs/InsuranceTab').then(m => ({ default: m.InsuranceTab })));
+const OtManagementTab = React.lazy(() => import('./components/tabs/OtManagementTab'));
+const EmergencyTab = React.lazy(() => import('./components/tabs/EmergencyTab'));
+const DoctorPayoutsTab = React.lazy(() => import('./components/tabs/DoctorPayoutsTab').then(m => ({ default: m.DoctorPayoutsTab })));
+const QueueDisplayTab = React.lazy(() => import('./components/tabs/QueueDisplayTab').then(m => ({ default: m.QueueDisplayTab })));
+const StockIndentingTab = React.lazy(() => import('./components/tabs/StockIndentingTab').then(m => ({ default: m.StockIndentingTab })));
 
 import { ConfirmProvider, useConfirm } from './components/ui/ConfirmDialog';
 import { ToastProvider, useToast } from './components/ui/Toast';
@@ -72,6 +79,7 @@ const MainApp: React.FC = () => {
   const [dashboardMetrics, setDashboardMetrics] = useState({ totalReceipts: 0, totalRevenue: 0, avgPerReceipt: 0 });
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [pendingAppointmentsCount, setPendingAppointmentsCount] = useState(0);
+  const [doctorCallNotification, setDoctorCallNotification] = useState<DoctorNextCallEvent | null>(null);
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -138,22 +146,51 @@ const MainApp: React.FC = () => {
     return followUps.filter(f => f.status === 'PENDING' && f.scheduledDate === todayDateStr).length;
   }, [followUps, todayDateStr]);
 
+  const ALL_SYSTEM_TABS: Tab[] = [
+    'dashboard',
+    'appointments',
+    'prescriptions',
+    'follow-ups',
+    'new-receipt',
+    'facility-billing',
+    'insurance',
+    'history',
+    'nursing-station',
+    'inpatient-census',
+    'beds',
+    'emergency',
+    'ot-management',
+    'pharmacy',
+    'lab',
+    'doctors',
+    'services',
+    'expenses',
+    'doctor-payouts',
+    'queue-display',
+    'stock-indenting',
+    'users',
+    'settings'
+  ];
+
   const allowedTabs = React.useMemo(() => {
-    if (!currentUser) return [];
+    if (!currentUser) return ALL_SYSTEM_TABS;
     const isUserAdmin = currentUser.toLowerCase() === 'admin';
     if (isUserAdmin) {
-      return ['dashboard', 'doctors', 'services', 'expenses', 'users', 'new-receipt', 'facility-billing', 'beds', 'inpatient-census', 'history', 'prescriptions', 'pharmacy', 'lab', 'appointments', 'follow-ups', 'settings'];
+      return ALL_SYSTEM_TABS;
     }
-    if (currentUserTabs && currentUserTabs.length > 0) {
+    if (currentUserTabs !== null && Array.isArray(currentUserTabs)) {
       return currentUserTabs;
     }
+    if (currentUserRole === 'nurse') {
+      return ['nursing-station', 'inpatient-census', 'beds', 'emergency', 'ot-management', 'stock-indenting'];
+    }
     if (currentUserRole === 'management') {
-      return ['doctors', 'services', 'expenses', 'pharmacy', 'beds', 'inpatient-census', 'lab', 'users', 'settings'];
+      return ['dashboard', 'doctors', 'services', 'expenses', 'pharmacy', 'insurance', 'nursing-station', 'beds', 'inpatient-census', 'emergency', 'ot-management', 'lab', 'doctor-payouts', 'queue-display', 'stock-indenting', 'users', 'settings'];
     }
     if (currentUserRole === 'reception') {
-      return ['dashboard', 'new-receipt', 'facility-billing', 'beds', 'inpatient-census', 'history', 'prescriptions', 'pharmacy', 'lab', 'appointments', 'follow-ups'];
+      return ['dashboard', 'new-receipt', 'facility-billing', 'insurance', 'nursing-station', 'beds', 'inpatient-census', 'emergency', 'ot-management', 'history', 'prescriptions', 'pharmacy', 'lab', 'appointments', 'follow-ups', 'queue-display', 'stock-indenting'];
     }
-    return [];
+    return ALL_SYSTEM_TABS;
   }, [currentUser, currentUserRole, currentUserTabs]);
 
   useEffect(() => {
@@ -168,14 +205,16 @@ const MainApp: React.FC = () => {
 
     (async () => {
       try {
-            const user = await window.users.getCurrentUser();
+        const user = await window.users.getCurrentUser();
         if (user) {
+          const [role, doctorId, tabs] = await Promise.all([
+            window.users.getCurrentUserRole(),
+            window.users.getCurrentUserDoctorId(),
+            window.users.getCurrentUserTabs()
+          ]);
           setCurrentUser(user);
-                 const role = await window.users.getCurrentUserRole();
-          setCurrentUserRole(role);
-                 const doctorId = await window.users.getCurrentUserDoctorId();
+          setCurrentUserRole(role || 'reception');
           setCurrentUserDoctorId(doctorId || null);
-          const tabs = await window.users.getCurrentUserTabs();
           setCurrentUserTabs(tabs || null);
           
           if (user.toLowerCase() === 'admin') {
@@ -228,18 +267,35 @@ const MainApp: React.FC = () => {
     return () => unsub();
   }, []);
 
-  // Live Appointment Refresh Listener from WhatsApp / DB
+  // Live Appointment & System Refresh Listener from WhatsApp / DB / Broadcast Bus
   useEffect(() => {
+    const handleSync = () => {
+      refreshData(true);
+    };
+    window.addEventListener('buvora-data-updated', handleSync);
+
     if (window.ipcRenderer?.on) {
-      const listener = () => {
-        refreshData();
-      };
-        window.ipcRenderer.on('appointment-updated', listener);
-      return () => {
-            if (window.ipcRenderer?.off) window.ipcRenderer.off('appointment-updated', listener);
-      };
+      window.ipcRenderer.on('appointment-updated', handleSync);
     }
+    return () => {
+      window.removeEventListener('buvora-data-updated', handleSync);
+      if (window.ipcRenderer?.off) window.ipcRenderer.off('appointment-updated', handleSync);
+    };
   }, [refreshData]);
+
+  // Listen for doctor calling next patient from consultation room
+  useEffect(() => {
+    const handleDoctorCall = (e: any) => {
+      const data: DoctorNextCallEvent = e.detail;
+      if (data && data.token) {
+        setDoctorCallNotification(data);
+        playReceptionChime();
+        toast.show(`🔔 Dr. ${data.doctorName} called Token #${data.token} (${data.patientName}) to ${data.chamberName}!`, 'info');
+      }
+    };
+    window.addEventListener('buvora-doctor-called-next', handleDoctorCall as EventListener);
+    return () => window.removeEventListener('buvora-doctor-called-next', handleDoctorCall as EventListener);
+  }, [toast]);
 
   // Load data once user is known
   useEffect(() => {
@@ -284,13 +340,15 @@ const MainApp: React.FC = () => {
   };
 
   const handlePrint = (input: ReceiptType | ReceiptType[]) => {
+    setActivePrintPrescription(null);
     setReceiptsToPrint(Array.isArray(input) ? input : [input]);
-    setTimeout(() => window.print(), 150);
+    setTimeout(() => window.print(), 250);
   };
 
   const handlePrintRx = (rx: Prescription) => {
+    setReceiptsToPrint([]);
     setActivePrintPrescription(rx);
-    setTimeout(() => window.print(), 150);
+    setTimeout(() => window.print(), 250);
   };
 
   const handleEditReceipt = (receipt: ReceiptType) => {
@@ -336,6 +394,15 @@ const MainApp: React.FC = () => {
     return <div className="loading-screen">Loading Buvora...</div>;
   }
 
+  // Dedicated Standalone TV Display Window (launched for TV / secondary monitor)
+  if (typeof window !== 'undefined' && window.location.search.includes('mode=tv-display')) {
+    return (
+      <React.Suspense fallback={<TabFallback />}>
+        <QueueDisplayTab doctors={doctors} isDirectTvMode={true} />
+      </React.Suspense>
+    );
+  }
+
   if (activationStatus.status !== 'ACTIVATED') {
     return (
       <ActivationScreen
@@ -360,6 +427,8 @@ const MainApp: React.FC = () => {
             setActiveTab('dashboard');
           } else if (role === 'management') {
             setActiveTab('doctors');
+          } else if (role === 'nurse') {
+            setActiveTab('nursing-station');
           } else {
             setActiveTab('dashboard');
           }
@@ -421,6 +490,9 @@ const MainApp: React.FC = () => {
             <h1 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.01em' }}>
               {activeTab === 'dashboard' && 'Executive Dashboard'}
               {activeTab === 'new-receipt' && 'Create Patient Receipt'}
+              {activeTab === 'nursing-station' && 'Nursing & eMAR Station'}
+              {activeTab === 'emergency' && 'Emergency Department & Casualty Triage (ER)'}
+              {activeTab === 'ot-management' && 'Operation Theatre (OT) Management Suite'}
               {activeTab === 'beds' && 'Inpatient Bed & Ward Occupancy Matrix (IPD)'}
               {activeTab === 'inpatient-census' && 'Inpatient Census & Clinical Registry'}
               {activeTab === 'facility-billing' && 'Inpatient & Facility Billing'}
@@ -432,12 +504,18 @@ const MainApp: React.FC = () => {
               {activeTab === 'doctors' && 'Doctors Registry'}
               {activeTab === 'services' && 'Clinic Services Catalog'}
               {activeTab === 'expenses' && 'Clinic Expenses'}
+              {activeTab === 'doctor-payouts' && 'Doctor Revenue Share & Disbursements Engine'}
+              {activeTab === 'queue-display' && 'OPD Waiting Area Token Caller & Queue Display (QDS)'}
+              {activeTab === 'stock-indenting' && 'Hospital Ward & OT Stock Requisition Indents'}
               {activeTab === 'users' && 'Clinic Profiles & Users'}
               {activeTab === 'settings' && 'System Control Center'}
             </h1>
             <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
               {activeTab === 'dashboard' && 'Overview of clinic operations, revenue, and live queue'}
               {activeTab === 'new-receipt' && 'Generate and print patient consultation invoices'}
+              {activeTab === 'nursing-station' && 'Bedside clinical surveillance, medication administration, vitals flowsheet & shift handover (iPad/Mobile)'}
+              {activeTab === 'emergency' && 'ESI Triage (Levels 1-5), acute resuscitation, Medico-Legal Cases (MLC) & fast-track IPD admissions'}
+              {activeTab === 'ot-management' && 'Live OT schedule, WHO surgical safety checklist, intra-operative records & PACU recovery'}
               {activeTab === 'beds' && 'Visual floor plan, 1-click admissions, vitals surveillance, bed transfers & facility billing integration'}
               {activeTab === 'inpatient-census' && 'Live roster of active inpatients, stay duration, clinical vitals surveillance & financial folios'}
               {activeTab === 'facility-billing' && 'Itemized billing for room rent, oxygen supply, nursing care & procedures'}
@@ -449,6 +527,9 @@ const MainApp: React.FC = () => {
               {activeTab === 'doctors' && 'Manage consulting physicians, qualifications & UPI QR setups'}
               {activeTab === 'services' && 'Standard consultation and treatment fee pricing'}
               {activeTab === 'expenses' && 'Track operational expenses, utility bills, clinic supplies & cashflow'}
+              {activeTab === 'doctor-payouts' && 'Custom commissions (OPD %, IPD visit fee, OT surgery cut, Lab cut), TDS deduction & disbursement vouchers'}
+              {activeTab === 'queue-display' && 'Multi-chamber live queue status, Web Speech API voice token caller & high-visibility 1080p TV projection'}
+              {activeTab === 'stock-indenting' && 'Departmental pharmacy requisitions, STAT/urgent priority tracking & atomic batch fulfillment'}
               {activeTab === 'users' && 'Manage authorized staff accounts, doctor linking & modular screen permissions'}
               {activeTab === 'settings' && 'Backups, printer paper presets, network sync & licensing'}
             </p>
@@ -474,6 +555,73 @@ const MainApp: React.FC = () => {
         </header>
 
         <div className="content-inner">
+          {/* Doctor Called Next Patient alert banner for Reception */}
+          {doctorCallNotification && (
+            <div
+              className="no-print"
+              style={{
+                background: 'linear-gradient(135deg, #1e3a8a, #0284c7)',
+                color: 'white',
+                padding: '0.85rem 1.25rem',
+                borderRadius: '12px',
+                marginBottom: '1.25rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                boxShadow: '0 6px 16px rgba(2, 132, 199, 0.3)',
+                gap: '1rem',
+                flexWrap: 'wrap'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                <span style={{ fontSize: '1.4rem', background: 'rgba(255,255,255,0.2)', padding: '6px 10px', borderRadius: '10px' }}>🔔</span>
+                <div>
+                  <div style={{ fontSize: '0.98rem', fontWeight: 800, letterSpacing: '0.2px' }}>
+                    Doctor Calling Next: Send Token #{doctorCallNotification.token} — {doctorCallNotification.patientName}
+                  </div>
+                  <div style={{ fontSize: '0.82rem', opacity: 0.95, marginTop: '2px' }}>
+                    Please direct patient to: <strong style={{ color: '#fef08a' }}>{doctorCallNotification.chamberName}</strong> ({doctorCallNotification.doctorName})
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  onClick={() => setDoctorCallNotification(null)}
+                  style={{
+                    background: '#22c55e',
+                    color: 'white',
+                    padding: '0.5rem 1.1rem',
+                    borderRadius: '8px',
+                    fontWeight: 700,
+                    fontSize: '0.85rem',
+                    border: 'none',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    boxShadow: '0 2px 6px rgba(34, 197, 94, 0.4)'
+                  }}
+                >
+                  ✓ Patient Sent In
+                </button>
+                <button
+                  onClick={() => setDoctorCallNotification(null)}
+                  style={{
+                    background: 'rgba(255,255,255,0.2)',
+                    color: 'white',
+                    padding: '0.5rem 0.85rem',
+                    borderRadius: '8px',
+                    fontWeight: 600,
+                    fontSize: '0.85rem',
+                    border: '1px solid rgba(255,255,255,0.3)',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Pending appointments alert banner */}
           {pendingAppointmentsCount > 0 && activeTab !== 'appointments' && allowedTabs.includes('appointments') && (
             <div
@@ -520,6 +668,7 @@ const MainApp: React.FC = () => {
               workstationMode={workstationMode}
               currentUser={currentUser}
               currentUserRole={currentUserRole}
+              allowedTabs={allowedTabs as Tab[]}
               onNavigate={(tab) => setActiveTab(tab)}
               onNewReceipt={() => setActiveTab('new-receipt')}
             />
@@ -549,6 +698,11 @@ const MainApp: React.FC = () => {
                 onNavigateToCensus={() => setActiveTab('inpatient-census')}
               />
             )}
+            {activeTab === 'nursing-station' && (
+              <NursingStationTab
+                currentUser={currentUser || 'Duty Nurse'}
+              />
+            )}
             {activeTab === 'inpatient-census' && (
               <InpatientCensusTab
                 doctors={doctors}
@@ -569,6 +723,23 @@ const MainApp: React.FC = () => {
                   setReceiptsToPrint([receipt]);
                   setTimeout(() => window.print(), 150);
                 }}
+              />
+            )}
+            {activeTab === 'insurance' && (
+              <InsuranceTab />
+            )}
+            {activeTab === 'emergency' && (
+              <EmergencyTab
+                doctors={doctors}
+                onNavigateToBed={() => setActiveTab('beds')}
+                onNavigateToBilling={() => setActiveTab('facility-billing')}
+              />
+            )}
+            {activeTab === 'ot-management' && (
+              <OtManagementTab
+                doctors={doctors}
+                onNavigateToBed={() => setActiveTab('beds')}
+                onNavigateToBilling={() => setActiveTab('facility-billing')}
               />
             )}
             {activeTab === 'history' && (
@@ -640,6 +811,15 @@ const MainApp: React.FC = () => {
                   setActiveTab('new-receipt');
                 }}
               />
+            )}
+            {activeTab === 'doctor-payouts' && (
+              <DoctorPayoutsTab doctors={doctors} />
+            )}
+            {activeTab === 'queue-display' && (
+              <QueueDisplayTab doctors={doctors} />
+            )}
+            {activeTab === 'stock-indenting' && (
+              <StockIndentingTab />
             )}
             {activeTab === 'users' && (
               <UsersTab

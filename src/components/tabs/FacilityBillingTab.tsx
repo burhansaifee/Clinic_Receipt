@@ -2,15 +2,16 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Bed, Plus, Trash2, Printer, Share2, Save, RotateCcw,
   User, Activity, Sparkles, PlusCircle, X, QrCode,
-  Clock, FileText, CheckCircle, AlertCircle, Search
+  Clock, FileText, CheckCircle, Search, ShieldCheck
 } from 'lucide-react';
 import { format, differenceInCalendarDays } from 'date-fns';
-import type { Doctor, Receipt, ReceiptItem, Service, ClinicProfile, BedAdmission } from '../../lib/storage';
+import type { Doctor, Receipt, ReceiptItem, Service, ClinicProfile, BedAdmission, InsuranceClaim } from '../../lib/storage';
 import { storage } from '../../lib/storage';
 import { sendReceiptViaWhatsApp } from '../../lib/whatsappReceipt';
 import { useToast } from '../ui/Toast';
 import { useConfirm } from '../ui/ConfirmDialog';
 import '../../styles/tabs/FacilityBillingTab.css';
+import { DischargeSummaryModal } from './inpatient/DischargeSummaryModal';
 
 interface FacilityBillingTabProps {
   doctors: Doctor[];
@@ -55,6 +56,8 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
 
   // Inpatient Bed Admission linkage & Billing Queue
   const [activeLinkedAdmission, setActiveLinkedAdmission] = useState<BedAdmission | null>(null);
+  const [linkedClaim, setLinkedClaim] = useState<InsuranceClaim | null>(null);
+  const [showDischargeSummaryModal, setShowDischargeSummaryModal] = useState(false);
   const [showInpatientSelector, setShowInpatientSelector] = useState(false);
   const [activeInpatientsList, setActiveInpatientsList] = useState<BedAdmission[]>([]);
   const [queuedInpatients, setQueuedInpatients] = useState<BedAdmission[]>([]);
@@ -175,6 +178,15 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
       }
     };
     init();
+    const handleSync = () => {
+      loadQueuedInpatients();
+    };
+    window.addEventListener('buvora-data-updated', handleSync);
+    const interval = setInterval(loadQueuedInpatients, 5000);
+    return () => {
+      window.removeEventListener('buvora-data-updated', handleSync);
+      clearInterval(interval);
+    };
   }, []);
 
   useEffect(() => {
@@ -256,6 +268,19 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
     } catch (_) {}
 
     setItems(billedItems);
+
+    // Look for active TPA / Insurance Claim for this admission
+    try {
+      const claims = await storage.getInsuranceClaims({ admissionId: adm.id });
+      if (claims && claims.length > 0) {
+        setLinkedClaim(claims[0]);
+      } else {
+        setLinkedClaim(null);
+      }
+    } catch (_) {
+      setLinkedClaim(null);
+    }
+
     toast(`Loaded stay for ${adm.patientName} with ${billedItems.length} bill item${billedItems.length > 1 ? 's' : ''}`, { type: 'success' });
   };
 
@@ -451,8 +476,9 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
 
   const netBalance = React.useMemo(() => {
     const afterDiscount = Math.max(0, grossTotal - (Number(discount) || 0));
-    return Math.max(0, afterDiscount - (Number(advancePaid) || 0));
-  }, [grossTotal, discount, advancePaid]);
+    const tpaDeduction = linkedClaim && linkedClaim.status !== 'REJECTED' ? (Number(linkedClaim.approvedAmount) || 0) : 0;
+    return Math.max(0, afterDiscount - (Number(advancePaid) || 0) - tpaDeduction);
+  }, [grossTotal, discount, advancePaid, linkedClaim]);
 
   // Reset form
   const handleReset = async () => {
@@ -467,6 +493,7 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
     setAdvancePaid(0);
     setRemarks('');
     setActiveLinkedAdmission(null);
+    setLinkedClaim(null);
     if (onClearInitialAdmission) onClearInitialAdmission();
     const nextPid = await storage.getNextPatientId();
     setPatientId(nextPid);
@@ -977,27 +1004,59 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            boxShadow: '0 2px 4px rgba(30,64,175,0.05)'
+            boxShadow: '0 2px 4px rgba(30,64,175,0.05)',
+            flexWrap: 'wrap',
+            gap: '0.75rem'
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontSize: '1.25rem' }}>🛏️</span>
             <div>
               <strong style={{ fontSize: '0.95rem' }}>Active Inpatient Stay Linked:</strong> {activeLinkedAdmission.patientName} ({activeLinkedAdmission.patientUhid || activeLinkedAdmission.patientId}) • Bed {activeLinkedAdmission.bedNumber} ({activeLinkedAdmission.wardName})
-              <div style={{ fontSize: '0.78rem', color: '#2563eb', marginTop: '2px' }}>
-                Admission Number: {activeLinkedAdmission.admissionNumber} • Advance Paid: ₹{activeLinkedAdmission.advancePaid || 0} (Settlement will close admission stay)
+              <div style={{ fontSize: '0.78rem', color: '#2563eb', marginTop: '2px', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                <span>Admission Number: <strong>{activeLinkedAdmission.admissionNumber}</strong></span>
+                <span>Advance Paid: <strong>₹{activeLinkedAdmission.advancePaid || 0}</strong></span>
+                {linkedClaim && (
+                  <span style={{ color: '#059669', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                    <ShieldCheck size={13} /> TPA Cashless: {linkedClaim.tpaProviderName} (Approved: ₹{(linkedClaim.approvedAmount || 0).toLocaleString('en-IN')})
+                  </span>
+                )}
               </div>
             </div>
           </div>
-          <button
-            onClick={() => {
-              setActiveLinkedAdmission(null);
-              if (onClearInitialAdmission) onClearInitialAdmission();
-            }}
-            style={{ background: '#dbeafe', border: 'none', color: '#1e40af', padding: '0.35rem 0.75rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700 }}
-          >
-            ✕ Unlink
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <button
+              type="button"
+              onClick={() => setShowDischargeSummaryModal(true)}
+              style={{
+                background: '#fff7ed',
+                border: '1px solid #fed7aa',
+                color: '#c2410c',
+                padding: '0.4rem 0.85rem',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '0.8rem',
+                fontWeight: 700,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+              title="View & Edit Clinical Discharge Summary"
+            >
+              <FileText size={14} /> Discharge Summary
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveLinkedAdmission(null);
+                setLinkedClaim(null);
+                if (onClearInitialAdmission) onClearInitialAdmission();
+              }}
+              style={{ background: '#dbeafe', border: 'none', color: '#1e40af', padding: '0.4rem 0.75rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700 }}
+            >
+              ✕ Unlink
+            </button>
+          </div>
         </div>
       )}
 
@@ -1572,6 +1631,15 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
             />
           </div>
 
+          {linkedClaim && linkedClaim.status !== 'REJECTED' && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0', borderBottom: '1px solid var(--border)', fontSize: '0.9rem', color: '#059669' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <ShieldCheck size={14} /> Less: TPA Cashless Pre-Auth ({linkedClaim.tpaProviderName}):
+              </span>
+              <strong>-₹{(Number(linkedClaim.approvedAmount) || 0).toFixed(2)}</strong>
+            </div>
+          )}
+
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.85rem 0', marginTop: '0.5rem', background: '#e0f2fe', borderRadius: '8px', paddingInline: '1rem' }}>
             <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0369a1' }}>Net Payable Amount:</span>
             <span style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0284c7' }}>
@@ -1822,7 +1890,7 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
                         <span style={{ fontSize: '0.75rem', color: '#64748b' }}>({adm.wardName})</span>
                       </div>
                       <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '3px' }}>
-                        UHID: {adm.patientUhid || adm.patientId} • {adm.doctorName ? (/^dr\.?\s*/i.test(adm.doctorName) ? adm.doctorName : `Dr. ${adm.doctorName}`) : 'Attending Physician'} • Admitted: {adm.admittedAt ? format(new Date(adm.admittedAt), 'dd MMM yyyy') : 'Recently'}
+                        UHID: {adm.patientUhid || adm.patientId} • {adm.doctorName ? (/^dr\.?\s*/i.test(adm.doctorName) ? adm.doctorName : ` ${adm.doctorName}`) : 'Attending Physician'} • Admitted: {adm.admittedAt ? format(new Date(adm.admittedAt), 'dd MMM yyyy') : 'Recently'}
                       </div>
                     </div>
 
@@ -1840,6 +1908,14 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
             )}
           </div>
         </div>
+      )}
+
+      {/* Structured Clinical Discharge Summary Modal */}
+      {showDischargeSummaryModal && activeLinkedAdmission && (
+        <DischargeSummaryModal
+          admission={activeLinkedAdmission}
+          onClose={() => setShowDischargeSummaryModal(false)}
+        />
       )}
     </div>
   );

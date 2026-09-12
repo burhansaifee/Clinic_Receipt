@@ -17,8 +17,12 @@ interface UsersTabProps {
 
 export const AVAILABLE_TABS = [
   { id: 'dashboard', label: 'Dashboard', desk: 'Clinical Desk' },
+  { id: 'nursing-station', label: 'Nursing & eMAR Station', desk: 'Hospital Desk' },
+  { id: 'emergency', label: 'Emergency & Triage (ER)', desk: 'Hospital Desk' },
+  { id: 'ot-management', label: 'Operation Theatre (OT)', desk: 'Hospital Desk' },
   { id: 'new-receipt', label: 'New Receipt', desk: 'Clinical Desk' },
   { id: 'facility-billing', label: 'Facility Billing', desk: 'Clinical Desk' },
+  { id: 'insurance', label: 'TPA & Health Insurance', desk: 'Hospital Desk' },
   { id: 'beds', label: 'IPD Beds & Wards', desk: 'Hospital Desk' },
   { id: 'inpatient-census', label: 'Inpatient Census', desk: 'Hospital Desk' },
   { id: 'history', label: 'Receipt History', desk: 'Clinical Desk' },
@@ -27,9 +31,12 @@ export const AVAILABLE_TABS = [
   { id: 'lab', label: 'Diagnostics & Lab', desk: 'Hospital Desk' },
   { id: 'appointments', label: 'Appointments', desk: 'Clinical Desk' },
   { id: 'follow-ups', label: 'Follow-Ups', desk: 'Clinical Desk' },
+  { id: 'queue-display', label: 'Queue Display & QDS', desk: 'Clinical Desk' },
+  { id: 'stock-indenting', label: 'Internal Stock Indents', desk: 'Hospital Desk' },
   { id: 'doctors', label: 'Doctors Registry', desk: 'Management' },
   { id: 'services', label: 'Clinic Services', desk: 'Management' },
   { id: 'expenses', label: 'Clinic Expenses', desk: 'Management' },
+  { id: 'doctor-payouts', label: 'Doctor Revenue & Payouts', desk: 'Management' },
   { id: 'users', label: 'Profiles & Users', desk: 'Management' },
   { id: 'settings', label: 'Control Center', desk: 'Management' },
 ];
@@ -45,7 +52,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
 
   // Registration form state
   const [newUserIdInput, setNewUserIdInput] = useState('');
-  const [newUserRole, setNewUserRole] = useState<'reception' | 'doctor' | 'management'>('reception');
+  const [newUserRole, setNewUserRole] = useState<'reception' | 'doctor' | 'management' | 'nurse'>('reception');
   const [selectedDoctorIdForUser, setSelectedDoctorIdForUser] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
 
@@ -62,6 +69,15 @@ export const UsersTab: React.FC<UsersTabProps> = ({
   const [newPasswordInput, setNewPasswordInput] = useState('');
 
   const isAdmin = currentUser?.toLowerCase() === 'admin';
+
+  // Automatically refresh known users on mount to ensure fresh state
+  React.useEffect(() => {
+    window.users.getKnownUsers().then(users => {
+      if (users && Array.isArray(users)) {
+        setKnownUsers(users);
+      }
+    }).catch(console.error);
+  }, []);
 
   // Stats calculation
   const totalUsers = knownUsers.length;
@@ -276,7 +292,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
                 <select
                   value={newUserRole}
                   onChange={e => {
-                    const role = e.target.value as 'reception' | 'doctor' | 'management';
+                    const role = e.target.value as 'reception' | 'doctor' | 'management' | 'nurse';
                     setNewUserRole(role);
                     if (role === 'doctor' && doctors.length > 0 && !selectedDoctorIdForUser) {
                       setSelectedDoctorIdForUser(doctors[0].id);
@@ -286,6 +302,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
                   style={{ width: '100%', padding: '0.65rem 0.85rem', fontSize: '0.875rem', borderRadius: '10px', boxSizing: 'border-box' }}
                 >
                   <option value="reception">Receptionist (Clinical Front Desk)</option>
+                  <option value="nurse">Duty Nurse (iPad / Mobile eMAR Station)</option>
                   <option value="doctor">Consulting Doctor (Clinical Pad)</option>
                   <option value="management">Practice Manager (Admin Tools)</option>
                 </select>

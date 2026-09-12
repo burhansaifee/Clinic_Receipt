@@ -165,10 +165,25 @@ if (typeof window !== 'undefined' && !(window as any).ipcRenderer) {
     'getWards', 'saveWard', 'deleteWard', 'getBeds', 'saveBed', 'deleteBed', 'updateBedStatus',
     'getBedAdmissions', 'admitPatientToBed', 'transferPatientBed', 'updateAdmissionBillingStatus',
     'dischargePatientAdmission', 'addAdmissionVital', 'addAdmissionCharge', 'deleteAdmissionCharge',
+    'addEmarOrder', 'updateEmarOrderStatus', 'recordEmarAdministration',
+    'addFluidIoEntry', 'deleteFluidIoEntry', 'addNursingShiftNote', 'deleteNursingShiftNote',
     'getIpdDashboardMetrics',
     'getLabTests', 'saveLabTest', 'deleteLabTest', 'getNextLabOrderNumber', 'getLabOrders',
     'getLabOrderById', 'saveLabOrder', 'updateLabOrderStatus', 'saveLabOrderResults', 'deleteLabOrder',
-    'getLabDashboardMetrics'
+    'getLabDashboardMetrics',
+    'getTpaProviders', 'saveTpaProvider', 'deleteTpaProvider',
+    'getInsuranceClaims', 'getInsuranceClaimById', 'saveInsuranceClaim',
+    'saveDischargeSummary', 'getDischargeSummary',
+    'getOperationTheatres', 'saveOperationTheatre', 'deleteOperationTheatre',
+    'getSurgicalCases', 'getSurgicalCaseById', 'saveSurgicalCase', 'updateSurgicalCaseStatus',
+    'getOtDashboardMetrics',
+    'getEmergencyVisits', 'getEmergencyVisitById', 'saveEmergencyVisit', 'updateEmergencyDisposition',
+    'getMlcRecords', 'getMlcRecordById', 'saveMlcRecord', 'getEmergencyDashboardMetrics',
+    'getDoctorCommissionRules', 'getDoctorCommissionRuleByDoctorId', 'saveDoctorCommissionRule',
+    'calculateDoctorAccruedEarnings', 'getDoctorPayoutTransactions', 'saveDoctorPayoutTransaction',
+    'getHospitalIndents', 'getHospitalIndentById', 'saveHospitalIndent', 'issueHospitalIndent',
+    'completeHospitalIndent', 'cancelHospitalIndent',
+    'getHospitalTier3Metrics', 'searchGlobalPatients'
   ];
 
   const dbPolyfill: any = {};

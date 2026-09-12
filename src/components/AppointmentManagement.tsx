@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { storage, formatAgeGender, type Doctor, type Appointment, type AppointmentStatus } from '../lib/storage';
+import { storage, formatAgeGender, notifyDataChanged, type Doctor, type Appointment, type AppointmentStatus, type GlobalPatientProfile } from '../lib/storage';
 import { Calendar, Search, CheckCircle, XCircle, Clock, Plus, Trash2, MessageSquare, Phone, Tag, Save, Check, CalendarDays, RefreshCw } from 'lucide-react';
 import { useConfirm } from './ui/ConfirmDialog';
 import { useToast } from './ui/Toast';
@@ -41,6 +41,44 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
   const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0]);
   const [newTime, setNewTime] = useState('10:00 AM');
   const [newNotes, setNewNotes] = useState('');
+
+  // Global Patient Autocomplete State
+  const [patientSearchResults, setPatientSearchResults] = useState<GlobalPatientProfile[]>([]);
+  const [showPatientDropdown, setShowPatientDropdown] = useState(false);
+  const [isSearchingPatient, setIsSearchingPatient] = useState(false);
+
+  const handlePatientNameChange = async (val: string) => {
+    setNewPatientName(val);
+    if (val.trim().length >= 2) {
+      setIsSearchingPatient(true);
+      try {
+        const results = await storage.searchGlobalPatients(val.trim());
+        setPatientSearchResults(results || []);
+        setShowPatientDropdown((results || []).length > 0);
+      } catch (_) {}
+      finally {
+        setIsSearchingPatient(false);
+      }
+    } else {
+      setPatientSearchResults([]);
+      setShowPatientDropdown(false);
+    }
+  };
+
+  const handleSelectPatientProfile = (p: GlobalPatientProfile) => {
+    setNewPatientName(p.patientName);
+    if (p.patientPhone) setNewPatientPhone(p.patientPhone);
+    if (p.patientAge) setNewPatientAge(String(p.patientAge));
+    if (p.patientGender) setNewPatientGender(p.patientGender);
+    if (p.lastDoctorId && doctors.some(d => d.id === p.lastDoctorId)) {
+      setNewDoctorId(p.lastDoctorId);
+    }
+    if (p.recentDiagnosis && !newNotes) {
+      setNewNotes(p.recentDiagnosis);
+    }
+    setShowPatientDropdown(false);
+    toast('Auto-filled patient details from records', { type: 'success' });
+  };
 
   // Modal State - WhatsApp Booking Schedule & Time Slots
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
@@ -105,7 +143,18 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
     const interval = setInterval(() => {
       loadAppointments();
     }, 5000);
-    return () => clearInterval(interval);
+
+    const handleLiveSync = (e: CustomEvent) => {
+      if (!e.detail?.dataType || e.detail.dataType === 'appointments') {
+        loadAppointments();
+      }
+    };
+    window.addEventListener('buvora-data-updated', handleLiveSync as EventListener);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('buvora-data-updated', handleLiveSync as EventListener);
+    };
   }, []);
 
   const handleToggleDay = (dayKey: string) => {
@@ -171,6 +220,7 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
   const handleUpdateStatus = async (id: string, status: AppointmentStatus, phone?: string, doctorName?: string, date?: string) => {
     console.log(`handleUpdateStatus: id=${id}, status=${status}, phone=${phone}, bot_exists=${!!(window as any).whatsappBot}`);
     await storage.updateAppointmentStatus(id, status);
+    notifyDataChanged('appointments');
     
     // Notify via WhatsApp if confirmed or cancelled
     if (phone && (window as any).whatsappBot) {
@@ -208,6 +258,7 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
     setIsSubmittingReject(true);
     try {
       await storage.updateAppointmentStatus(rejectingApt.id, 'CANCELLED', finalReason);
+      notifyDataChanged('appointments');
 
       // Send WhatsApp Rejection Notice to Patient
       if (rejectingApt.patientPhone && (window as any).whatsappBot) {
@@ -239,6 +290,7 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
   const handleDelete = async (id: string) => {
     if (await confirm('Are you sure you want to delete this appointment record?', { isDanger: true })) {
       await storage.deleteAppointment(id);
+      notifyDataChanged('appointments');
       loadAppointments();
       toast('Appointment deleted.', { type: 'success' });
     }
@@ -269,6 +321,7 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
     };
 
     await storage.saveAppointment(newApt);
+    notifyDataChanged('appointments');
     setIsModalOpen(false);
     setNewPatientName('');
     setNewPatientPhone('');
@@ -576,11 +629,13 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
                           </>
                         )}
 
-                        {apt.status === 'COMPLETED' ? (
+                        {apt.status === 'COMPLETED' && (
                           <span style={{ background: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd', padding: '0.35rem 0.65rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                             <CheckCircle size={13} /> Receipt Created
                           </span>
-                        ) : apt.status !== 'CANCELLED' ? (
+                        )}
+
+                        {apt.status === 'CONFIRMED' && (
                           <button
                             className="btn-secondary-sm"
                             style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem', color: '#0284c7', borderColor: '#e0f2fe', background: '#f0f9ff' }}
@@ -589,7 +644,7 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
                           >
                             Create Receipt
                           </button>
-                        ) : null}
+                        )}
 
                         <button
                           className="btn-icon-xs delete-btn"
@@ -618,9 +673,81 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
             </div>
 
             <form onSubmit={handleCreateAppointment} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div>
-                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>PATIENT FULL NAME *</label>
-                <input type="text" required placeholder="e.g. Rahul Sharma" value={newPatientName} onChange={(e) => setNewPatientName(e.target.value)} />
+              <div style={{ position: 'relative' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>PATIENT FULL NAME *</label>
+                  {isSearchingPatient && <span style={{ fontSize: '0.7rem', color: 'var(--primary)' }}>Searching...</span>}
+                </div>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Rahul Sharma"
+                  value={newPatientName}
+                  onChange={(e) => handlePatientNameChange(e.target.value)}
+                  onFocus={() => {
+                    if (patientSearchResults.length > 0) setShowPatientDropdown(true);
+                  }}
+                  autoComplete="off"
+                />
+                {showPatientDropdown && patientSearchResults.length > 0 && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      background: 'white',
+                      border: '1px solid #cbd5e1',
+                      borderRadius: '8px',
+                      boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
+                      zIndex: 10600,
+                      maxHeight: '220px',
+                      overflowY: 'auto',
+                      marginTop: '4px'
+                    }}
+                  >
+                    <div style={{ padding: '6px 10px', fontSize: '0.72rem', background: '#f1f5f9', fontWeight: 700, color: '#475569' }}>
+                      MATCHING PATIENTS (CLICK TO AUTO-FILL)
+                    </div>
+                    {patientSearchResults.map((p, idx) => (
+                      <div
+                        key={`${p.patientId || p.patientName}-${idx}`}
+                        onClick={() => handleSelectPatientProfile(p)}
+                        style={{
+                          padding: '8px 10px',
+                          borderBottom: '1px solid #f1f5f9',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          fontSize: '0.8rem'
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f8fafc')}
+                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                      >
+                        <div>
+                          <div style={{ fontWeight: 700, color: '#0f172a' }}>{p.patientName}</div>
+                          <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                            {p.patientAge ? `${p.patientAge} Y` : ''} {p.patientGender || ''} {p.patientPhone ? `• 📞 ${p.patientPhone}` : ''}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <span style={{
+                            fontSize: '0.68rem',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            fontWeight: 700,
+                            background: p.source === 'IPD' ? '#e0f2fe' : p.source === 'EMERGENCY' ? '#fee2e2' : '#f0fdf4',
+                            color: p.source === 'IPD' ? '#0369a1' : p.source === 'EMERGENCY' ? '#b91c1c' : '#15803d'
+                          }}>
+                            {p.source}
+                          </span>
+                          {p.patientUhid && <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: '2px' }}>{p.patientUhid}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div style={{ display: 'flex', gap: '0.75rem' }}>

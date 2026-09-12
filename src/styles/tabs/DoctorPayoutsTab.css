@@ -1,0 +1,436 @@
+/* ==========================================================================
+   DoctorPayoutsTab Stylesheet (Doctor Revenue Share & Disbursements Engine)
+   ========================================================================== */
+
+.payouts-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding-bottom: 2.5rem;
+}
+
+/* ── KPI Summary Cards ─────────────────────────────────────────────────────── */
+.payouts-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.payout-stat-card {
+  background: white;
+  border-radius: 12px;
+  padding: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.payout-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.payout-stat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.payout-stat-icon.blue {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.payout-stat-icon.emerald {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.payout-stat-icon.purple {
+  background: #faf5ff;
+  color: #7c3aed;
+}
+
+.payout-stat-icon.amber {
+  background: #fffbeb;
+  color: #d97706;
+}
+
+.payout-stat-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.payout-stat-label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.payout-stat-value {
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-top: 0.15rem;
+}
+
+.payout-stat-sub {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.1rem;
+}
+
+/* ── Tab Mode Navigation & Compact Filter Bar ─────────────────────────────── */
+.payouts-top-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.payouts-mode-tabs {
+  display: flex;
+  background: #f1f5f9;
+  padding: 0.25rem;
+  border-radius: 10px;
+  gap: 0.25rem;
+}
+
+.payouts-mode-tab {
+  padding: 0.45rem 1rem;
+  font-size: 0.84rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: all 0.15s ease;
+}
+
+.payouts-mode-tab:hover {
+  color: var(--text-primary);
+}
+
+.payouts-mode-tab.active {
+  background: white;
+  color: var(--primary);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.payouts-filter-bar {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.6rem 0.9rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.payouts-filter-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.payouts-filter-select,
+.payouts-filter-input {
+  width: auto !important;
+  height: 32px !important;
+  padding: 0 0.6rem !important;
+  font-size: 0.82rem !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 6px !important;
+  background: white !important;
+  color: var(--text-primary) !important;
+  box-sizing: border-box !important;
+}
+
+.payouts-filter-select:focus,
+.payouts-filter-input:focus {
+  border-color: var(--primary) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1) !important;
+}
+
+.payout-btn-primary {
+  height: 32px !important;
+  padding: 0 0.85rem !important;
+  font-size: 0.82rem !important;
+  font-weight: 600 !important;
+  border-radius: 6px !important;
+  background: var(--primary) !important;
+  color: white !important;
+  border: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.4rem !important;
+  cursor: pointer !important;
+  transition: opacity 0.15s ease !important;
+}
+
+.payout-btn-primary:hover {
+  opacity: 0.9 !important;
+}
+
+.payout-btn-secondary {
+  height: 32px !important;
+  padding: 0 0.75rem !important;
+  font-size: 0.82rem !important;
+  font-weight: 500 !important;
+  border-radius: 6px !important;
+  background: white !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.4rem !important;
+  cursor: pointer !important;
+}
+
+.payout-btn-secondary:hover {
+  background: #f8fafc !important;
+}
+
+/* ── Doctor Settlement Card / Earnings Breakdown ──────────────────────────── */
+.doctor-accrual-overview {
+  background: white;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+
+.doctor-accrual-header {
+  padding: 1.25rem 1.5rem;
+  background: linear-gradient(to right, #f8fafc, #f1f5f9);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.doctor-title-area h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.doctor-title-area p {
+  margin: 0.2rem 0 0 0;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.doctor-accrual-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  padding: 1.5rem;
+}
+
+.accrual-breakdown-card {
+  border-radius: 10px;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  background: #ffffff;
+}
+
+.accrual-breakdown-card.opd { border-left: 4px solid #3b82f6; }
+.accrual-breakdown-card.ipd { border-left: 4px solid #10b981; }
+.accrual-breakdown-card.ot { border-left: 4px solid #8b5cf6; }
+.accrual-breakdown-card.lab { border-left: 4px solid #f59e0b; }
+.accrual-breakdown-card.deductions { border-left: 4px solid #ef4444; }
+.accrual-breakdown-card.net { border-left: 4px solid #059669; background: #f0fdf4; }
+
+.accrual-card-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  display: flex;
+  justify-content: space-between;
+}
+
+.accrual-card-amount {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-top: 0.4rem;
+}
+
+.accrual-card-detail {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+
+/* ── Payouts History & Rules Data Tables ───────────────────────────────────── */
+.payouts-table-wrapper {
+  background: white;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.payouts-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  text-align: left;
+}
+
+.payouts-table th {
+  background: #f8fafc;
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.payouts-table td {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid #f1f5f9;
+  color: var(--text-primary);
+}
+
+.payouts-table tr:hover td {
+  background: #f8fafc;
+}
+
+.badge-paid {
+  background: #dcfce7;
+  color: #15803d;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.badge-mode {
+  background: #f1f5f9;
+  color: #475569;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+/* ── Modal Dialogs ─────────────────────────────────────────────────────────── */
+.payout-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.payout-modal-box {
+  background: white;
+  border-radius: 14px;
+  width: 100%;
+  max-width: 620px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.payout-modal-header {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.payout-modal-header h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.payout-modal-body {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.payout-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.payout-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.payout-form-group label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.payout-modal-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  background: #f8fafc;
+}
+
+/* ── Printable Voucher Styling ─────────────────────────────────────────────── */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .payout-voucher-printable,
+  .payout-voucher-printable * {
+    visibility: visible;
+  }
+  .payout-voucher-printable {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 2rem;
+    font-family: inherit;
+    color: black !important;
+    background: white !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+}

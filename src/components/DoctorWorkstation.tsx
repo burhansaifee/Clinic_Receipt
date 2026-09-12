@@ -1,10 +1,259 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { format, addDays } from 'date-fns';
-import { ClipboardList, FileText, Search, Plus, Trash2, Printer, PlusCircle, AlertCircle, LogOut, CheckCircle, Save, History, KeyRound, Calendar, MessageCircle, FlaskConical, X } from 'lucide-react';
+import { ClipboardList, FileText, Search, Plus, Trash2, Printer, PlusCircle, AlertCircle, LogOut, CheckCircle, Save, History, KeyRound, Calendar, MessageCircle, FlaskConical, X, Volume2, Bell, Pill, Activity, Stethoscope } from 'lucide-react';
 import { useToast } from './ui/Toast';
-import { storage, formatAgeGender, type Doctor, type Receipt, type Prescription, type PrescribedMedicine, type PrescriptionPaperType, type Medicine, type LabTest } from '../lib/storage';
+import { storage, formatAgeGender, notifyDataChanged, broadcastDoctorCallNext, type Doctor, type Receipt, type Prescription, type PrescribedMedicine, type PrescriptionPaperType, type Medicine, type LabTest, type DoctorNextCallEvent } from '../lib/storage';
 import { MedicinesDropdown } from './ui/MedicinesDropdown';
+import { LabOrdersDropdown } from './ui/LabOrdersDropdown';
+import { DiagnosisDropdown } from './ui/DiagnosisDropdown';
 import '../styles/components/DoctorWorkstation.css';
+
+interface MedicineAutocompleteProps {
+  value: string;
+  onChange: (val: string) => void;
+  suggestions: string[];
+  pharmacyMedicines: Medicine[];
+  placeholder?: string;
+  required?: boolean;
+}
+
+const MedicineAutocompleteInput: React.FC<MedicineAutocompleteProps> = ({
+  value,
+  onChange,
+  suggestions,
+  pharmacyMedicines,
+  placeholder,
+  required
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: PointerEvent | MouseEvent | TouchEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', handleClickOutside);
+    return () => {
+      document.removeEventListener('pointerdown', handleClickOutside);
+    };
+  }, []);
+
+  const valClean = (value || '').toLowerCase().trim();
+  const filtered = suggestions
+    .filter(name => {
+      if (!valClean) return true;
+      if (name.toLowerCase().includes(valClean)) return true;
+      const pm = pharmacyMedicines.find(m => m.name.toLowerCase() === name.toLowerCase());
+      if (pm?.genericName?.toLowerCase().includes(valClean)) return true;
+      return false;
+    })
+    .slice(0, 40);
+
+  const matched = pharmacyMedicines.find(pm => pm.name.toLowerCase() === (value || '').trim().toLowerCase());
+  const stock = matched?.currentStock || 0;
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative', width: '100%' }}>
+      <input
+        type="text"
+        placeholder={placeholder || 'Paracetamol 650mg'}
+        value={value}
+        onChange={e => {
+          onChange(e.target.value);
+          setIsOpen(true);
+        }}
+        onFocus={() => setIsOpen(true)}
+        onClick={() => setIsOpen(true)}
+        required={required}
+        style={{ width: '100%', boxSizing: 'border-box', fontSize: '0.88rem', padding: '0.5rem 0.65rem' }}
+        autoComplete="off"
+      />
+      {matched && (
+        <div style={{ fontSize: '0.7rem', fontWeight: 600, marginTop: '3px', color: stock > 0 ? '#15803d' : '#b91c1c', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <span>{stock > 0 ? `🟢 ${stock} in pharmacy` : '🔴 Out of stock'}</span>
+          {matched.genericName && <span style={{ color: '#64748b' }}>({matched.genericName})</span>}
+        </div>
+      )}
+
+      {isOpen && filtered.length > 0 && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 4px)',
+            left: 0,
+            right: 0,
+            minWidth: '240px',
+            maxWidth: '320px',
+            maxHeight: '240px',
+            overflowY: 'auto',
+            WebkitOverflowScrolling: 'touch',
+            background: '#ffffff',
+            border: '1px solid #cbd5e1',
+            borderRadius: '8px',
+            boxShadow: '0 12px 28px -4px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+            zIndex: 99999,
+            padding: '4px 0'
+          }}
+        >
+          {filtered.map((item, idx) => {
+            const pm = pharmacyMedicines.find(m => m.name.toLowerCase() === item.toLowerCase());
+            const itemStock = pm?.currentStock ?? null;
+            return (
+              <div
+                key={idx}
+                onPointerDown={e => {
+                  e.preventDefault();
+                }}
+                onClick={() => {
+                  onChange(item);
+                  setIsOpen(false);
+                }}
+                style={{
+                  padding: '9px 12px',
+                  cursor: 'pointer',
+                  borderBottom: idx < filtered.length - 1 ? '1px solid #f1f5f9' : 'none',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  fontSize: '0.84rem',
+                  touchAction: 'manipulation',
+                  backgroundColor: value === item ? '#eff6ff' : 'transparent'
+                }}
+                onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f8fafc')}
+                onMouseLeave={e => (e.currentTarget.style.backgroundColor = value === item ? '#eff6ff' : 'transparent')}
+              >
+                <div>
+                  <div style={{ fontWeight: 600, color: '#1e293b' }}>{item}</div>
+                  {pm?.genericName && (
+                    <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '1px' }}>{pm.genericName}</div>
+                  )}
+                </div>
+                {itemStock !== null && (
+                  <span
+                    style={{
+                      fontSize: '0.7rem',
+                      fontWeight: 700,
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      background: itemStock > 0 ? '#dcfce7' : '#fee2e2',
+                      color: itemStock > 0 ? '#15803d' : '#b91c1c',
+                      whiteSpace: 'nowrap',
+                      marginLeft: '8px'
+                    }}
+                  >
+                    {itemStock > 0 ? `${itemStock} in stock` : 'Out of stock'}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+interface QuickSuggestProps {
+  value: string;
+  onChange: (val: string) => void;
+  suggestions: string[];
+  placeholder?: string;
+}
+
+const QuickSuggestInput: React.FC<QuickSuggestProps> = ({
+  value,
+  onChange,
+  suggestions,
+  placeholder
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: PointerEvent | MouseEvent | TouchEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', handleClickOutside);
+    return () => {
+      document.removeEventListener('pointerdown', handleClickOutside);
+    };
+  }, []);
+
+  const valClean = (value || '').toLowerCase().trim();
+  const filtered = suggestions
+    .filter(s => !valClean || s.toLowerCase().includes(valClean))
+    .slice(0, 20);
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative', width: '100%' }}>
+      <input
+        type="text"
+        placeholder={placeholder}
+        value={value}
+        onChange={e => {
+          onChange(e.target.value);
+          setIsOpen(true);
+        }}
+        onFocus={() => setIsOpen(true)}
+        onClick={() => setIsOpen(true)}
+        style={{ width: '100%', boxSizing: 'border-box', fontSize: '0.88rem', padding: '0.5rem 0.65rem' }}
+        autoComplete="off"
+      />
+      {isOpen && filtered.length > 0 && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 4px)',
+            left: 0,
+            right: 0,
+            minWidth: '140px',
+            maxWidth: '220px',
+            maxHeight: '200px',
+            overflowY: 'auto',
+            WebkitOverflowScrolling: 'touch',
+            background: '#ffffff',
+            border: '1px solid #cbd5e1',
+            borderRadius: '8px',
+            boxShadow: '0 12px 28px -4px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+            zIndex: 99999,
+            padding: '4px 0'
+          }}
+        >
+          {filtered.map((item, idx) => (
+            <div
+              key={idx}
+              onPointerDown={e => {
+                e.preventDefault();
+              }}
+              onClick={() => {
+                onChange(item);
+                setIsOpen(false);
+              }}
+              style={{
+                padding: '9px 12px',
+                cursor: 'pointer',
+                fontSize: '0.82rem',
+                fontWeight: 600,
+                color: '#1e293b',
+                touchAction: 'manipulation',
+                borderBottom: idx < filtered.length - 1 ? '1px solid #f1f5f9' : 'none',
+                backgroundColor: value === item ? '#eff6ff' : 'transparent'
+              }}
+              onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f8fafc')}
+              onMouseLeave={e => (e.currentTarget.style.backgroundColor = value === item ? '#eff6ff' : 'transparent')}
+            >
+              {item}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 interface DoctorWorkstationProps {
   currentUser: string;
@@ -74,7 +323,19 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
     refreshData();
   }, [refreshData]);
 
-  // Poll ONLY today's queue every 5 seconds
+  // Live real-time broadcast sync across tabs & screens
+  useEffect(() => {
+    const handleSync = (e: any) => {
+      const dt = e?.detail?.dataType;
+      if (!dt || dt === 'receipts' || dt === 'prescriptions' || dt === 'lab' || dt === 'medicines' || dt === 'queue' || dt === 'all') {
+        refreshData();
+      }
+    };
+    window.addEventListener('buvora-data-updated', handleSync);
+    return () => window.removeEventListener('buvora-data-updated', handleSync);
+  }, [refreshData]);
+
+  // Poll today's queue every 5 seconds as network backup
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
@@ -328,6 +589,7 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
         orderDate: new Date().toISOString().split('T')[0]
       });
 
+      notifyDataChanged('lab');
       setLabOrderSent(true);
       toast(`Ordered ${selectedTests.length} tests in Laboratory Desk!`, { type: 'success' });
     } catch (err) {
@@ -415,6 +677,56 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
     };
 
     await storage.savePrescription(prescription);
+    notifyDataChanged('queue');
+
+    // Automatically create & dispatch lab order to Laboratory & Diagnostics Desk if investigations were selected
+    if (selectedLabTestIds.length > 0 && !labOrderSent) {
+      try {
+        const selectedTests = selectedLabTestIds.map(testId => {
+          const t = availableLabTests.find(item => item.id === testId || item.name === testId);
+          return {
+            testId: t ? t.id : testId,
+            testName: t ? t.name : testId,
+            category: t?.category || 'General',
+            sampleType: t?.sampleType || 'Blood (EDTA)',
+            rate: t?.rate || 0,
+            status: 'PENDING' as const,
+            results: (t?.parameters || []).map(p => ({
+              parameterId: p.id,
+              parameterName: p.name,
+              value: '',
+              unit: p.unit,
+              referenceRange: p.defaultRange,
+              isAbnormal: false,
+              flag: 'NORMAL'
+            }))
+          };
+        });
+
+        const total = selectedTests.reduce((sum, t) => sum + t.rate, 0);
+
+        await storage.saveLabOrder({
+          prescriptionId: rxId,
+          patientId: selectedReceipt.patientId,
+          patientName: selectedReceipt.patientName,
+          patientPhone: selectedReceipt.patientPhone || '',
+          patientAge: selectedReceipt.patientAge || '',
+          patientGender: selectedReceipt.patientGender || 'Male',
+          doctorId: selectedReceipt.doctorId,
+          doctorName: selectedReceipt.doctorName,
+          tests: selectedTests,
+          totalAmount: total,
+          paidAmount: 0,
+          paymentMode: 'CASH',
+          status: 'ORDERED',
+          orderDate: new Date().toISOString().split('T')[0]
+        });
+
+        notifyDataChanged('lab');
+      } catch (labErr) {
+        console.error('Failed to auto-dispatch lab order:', labErr);
+      }
+    }
 
     // Save corresponding follow-up tracking record if scheduled
     if (followUpDate) {
@@ -449,7 +761,7 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
     setActivePrintPrescription(prescription);
     setTimeout(() => {
       window.print();
-    }, 150);
+    }, 250);
   };
 
   const handleShareWhatsapp = async (prescription: Prescription) => {
@@ -491,6 +803,73 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
       await storage.deletePrescription(id);
       refreshData();
     }
+  };
+
+  // Call Specific Patient into Doctor's Chamber & Notify Reception
+  const handleDoctorCallSpecificPatient = async (receipt: Receipt) => {
+    const doc = doctors.find(d => d.id === (currentUserDoctorId || receipt.doctorId));
+    const doctorName = doc?.name || receipt.doctorName || 'Doctor';
+    const chamberName = doc?.chamber?.trim() || 'Consultant Chamber';
+    const token = String((receipt as any).tokenNumber || receipt.receiptNumber || '01');
+    const patientName = receipt.patientName;
+
+    const callData: DoctorNextCallEvent = {
+      callId: `call_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      doctorId: doc?.id || receipt.doctorId,
+      doctorName,
+      chamberName,
+      token,
+      patientName,
+      timestamp: Date.now()
+    };
+
+    // 1. Broadcast event to Reception and TV queue screens
+    broadcastDoctorCallNext(callData);
+
+    // 2. Announce audio locally via Web Speech
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(`Token Number ${token}, ${patientName}, please proceed to ${chamberName}`);
+      utterance.rate = 0.85;
+      window.speechSynthesis.speak(utterance);
+    }
+
+    // 3. Save chamber queue state to localStorage so QueueDisplayTab reflects the active token
+    const docId = doc?.id || receipt.doctorId;
+    const remaining = waitingReceipts.filter(r => r.id !== receipt.id).map(r => ({
+      token: String((r as any).tokenNumber || r.receiptNumber || '01'),
+      patientName: r.patientName,
+      time: (r as any).createdAt ? format(new Date((r as any).createdAt), 'hh:mm a') : (r.date || 'Now')
+    }));
+
+    const chamberState = {
+      chamberId: `CH-${docId}`,
+      chamberName,
+      doctorId: docId,
+      doctorName,
+      doctorSpecialty: doc?.specialization || 'Consultant',
+      currentToken: token,
+      currentPatientName: patientName,
+      waitingQueue: remaining,
+      completedCount: 0
+    };
+    localStorage.setItem(`clinic_qds_${docId}`, JSON.stringify(chamberState));
+
+    try {
+      await storage.setMetadata('latest_queue_call', JSON.stringify(callData));
+    } catch (_) {}
+
+    notifyDataChanged('queue');
+    toast(`Calling Token #${token} (${patientName}) to ${chamberName}. Reception alerted!`, { type: 'success' });
+  };
+
+  // Call Next Waiting Patient from Today's Receipts
+  const handleDoctorCallNext = async () => {
+    if (waitingReceipts.length === 0) {
+      toast('No waiting patients in queue', { type: 'info' });
+      return;
+    }
+    await handleDoctorCallSpecificPatient(waitingReceipts[0]);
   };
 
   return (
@@ -557,9 +936,34 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
           {activeTab === 'queue' && (
             <div className="tab-pane">
               <div className="panel-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                   <h3 style={{ margin: 0 }}>Today's Patient Queue</h3>
                   <span className="date-badge">{format(new Date(), 'dd MMMM yyyy')}</span>
+
+                  <button
+                    type="button"
+                    onClick={handleDoctorCallNext}
+                    disabled={waitingReceipts.length === 0}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '7px',
+                      background: waitingReceipts.length > 0 ? 'linear-gradient(135deg, #0284c7, #0369a1)' : '#cbd5e1',
+                      color: 'white',
+                      border: 'none',
+                      padding: '7px 15px',
+                      borderRadius: '8px',
+                      fontWeight: 700,
+                      fontSize: '0.85rem',
+                      cursor: waitingReceipts.length > 0 ? 'pointer' : 'not-allowed',
+                      boxShadow: waitingReceipts.length > 0 ? '0 2px 8px rgba(2, 132, 199, 0.35)' : 'none',
+                      transition: 'all 0.15s ease'
+                    }}
+                    title={waitingReceipts.length > 0 ? 'Call next waiting patient into your chamber and notify reception' : 'Queue is empty'}
+                  >
+                    <Volume2 size={16} />
+                    <span>Call Next Patient {waitingReceipts[0] ? `(#${(waitingReceipts[0] as any).tokenNumber || waitingReceipts[0].receiptNumber})` : ''}</span>
+                  </button>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
@@ -778,13 +1182,25 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
                               </button>
                             </>
                           ) : (
-                            <button 
-                              className="btn-primary w-full"
-                              onClick={() => handleOpenWriter(r)}
-                            >
-                              <PlusCircle size={16} />
-                              Write Prescription
-                            </button>
+                            <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                              <button 
+                                type="button"
+                                className="btn-secondary"
+                                onClick={() => handleDoctorCallSpecificPatient(r)}
+                                title="Call this patient into chamber and alert reception"
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontWeight: 600, padding: '0.45rem 0.75rem', background: '#f0f9ff', color: '#0369a1', borderColor: '#bae6fd' }}
+                              >
+                                <Volume2 size={15} /> Call In
+                              </button>
+                              <button 
+                                className="btn-primary"
+                                style={{ flex: 1 }}
+                                onClick={() => handleOpenWriter(r)}
+                              >
+                                <PlusCircle size={16} />
+                                Write Prescription
+                              </button>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -840,18 +1256,23 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
                           </td>
                           <td className="text-center" style={{ textAlign: 'center' }}>{formatAgeGender(p.patientAge, p.patientGender)}</td>
                           <td style={{ textAlign: 'left' }}>{p.doctorName}</td>
-                          <td style={{ textAlign: 'left' }}>{p.diagnosis || 'N/A'}</td>
                           <td style={{ textAlign: 'left' }}>
-                            <MedicinesDropdown medicines={p.medicines || []} />
-                            {p.labInvestigations && p.labInvestigations.length > 0 && (
-                              <div style={{ marginTop: '4px', display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
-                                {p.labInvestigations.map((test, idx) => (
-                                  <span key={idx} style={{ fontSize: '0.7rem', background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe', padding: '1px 5px', borderRadius: '4px', fontWeight: 600 }}>
-                                    🧪 {test}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
+                            <DiagnosisDropdown
+                              diagnosis={p.diagnosis}
+                              symptoms={p.symptoms}
+                              notes={p.notes}
+                              followUpDate={p.followUpDate}
+                              followUpNotes={p.followUpNotes}
+                              doctorName={p.doctorName}
+                            />
+                          </td>
+                          <td style={{ textAlign: 'left' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
+                              <MedicinesDropdown medicines={p.medicines || []} />
+                              {p.labInvestigations && p.labInvestigations.length > 0 && (
+                                <LabOrdersDropdown tests={p.labInvestigations} />
+                              )}
+                            </div>
                           </td>
                           <td className="text-center" style={{ textAlign: 'center' }}>
                             <div className="table-actions" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem' }}>
@@ -907,113 +1328,133 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
 
             <form onSubmit={handleSaveAndPrint} className="writer-form">
               <div className="writer-modal-content">
-                <div className="writer-form-column">
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>Symptoms / Chief Complaints</label>
-                      <textarea 
-                        placeholder="Describe symptoms, complaints, duration..." 
-                        value={symptoms}
-                        onChange={e => setSymptoms(e.target.value)}
-                        rows={2}
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>Diagnosis / Clinical Impression</label>
-                      <textarea 
-                        placeholder="Enter diagnosis or findings..." 
-                        value={diagnosis}
-                        onChange={e => setDiagnosis(e.target.value)}
-                        rows={2}
-                      />
-                    </div>
+                {/* 1. Left Column: Clinical Evaluation & Follow-Up */}
+                <div className="writer-left-column">
+                  <div className="form-group">
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700, color: 'var(--text-main)', fontSize: '0.85rem' }}>
+                      <Activity size={15} style={{ color: '#0ea5e9' }} /> Symptoms / Chief Complaints
+                    </label>
+                    <textarea 
+                      placeholder="Describe symptoms, complaints, duration..." 
+                      value={symptoms}
+                      onChange={e => setSymptoms(e.target.value)}
+                      rows={3}
+                      style={{ resize: 'vertical', minHeight: '65px' }}
+                    />
                   </div>
 
+                  <div className="form-group">
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700, color: 'var(--text-main)', fontSize: '0.85rem' }}>
+                      <Stethoscope size={15} style={{ color: '#6366f1' }} /> Diagnosis / Clinical Impression
+                    </label>
+                    <textarea 
+                      placeholder="Enter diagnosis or findings..." 
+                      value={diagnosis}
+                      onChange={e => setDiagnosis(e.target.value)}
+                      rows={3}
+                      style={{ resize: 'vertical', minHeight: '65px' }}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700, color: 'var(--text-main)', fontSize: '0.85rem' }}>
+                      <FileText size={15} style={{ color: '#10b981' }} /> Advice / Additional Notes
+                    </label>
+                    <textarea 
+                      placeholder="Drink plenty of water, avoid cold items..." 
+                      value={notes}
+                      onChange={e => setNotes(e.target.value)}
+                      rows={3}
+                      style={{ resize: 'vertical', minHeight: '65px' }}
+                    />
+                  </div>
+
+                  {/* Next Visit / Patient Follow-Up */}
+                  <div className="followup-form-section" style={{ background: '#f8fafc', padding: '0.85rem', borderRadius: '10px', border: '1px solid var(--border)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                      <label style={{ margin: 0, fontWeight: 700, fontSize: '0.825rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <Calendar size={15} style={{ color: '#0284c7' }} /> Next Visit / Patient Follow-Up
+                      </label>
+                      {followUpDate && (
+                        <button
+                          type="button"
+                          onClick={() => { setFollowUpDate(''); setFollowUpNotes(''); }}
+                          style={{ background: 'transparent', border: 'none', color: '#ef4444', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 600 }}
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.65rem' }}>
+                      {[
+                        { label: '+3 Days', days: 3 },
+                        { label: '+5 Days', days: 5 },
+                        { label: '+1 Wk', days: 7 },
+                        { label: '+10 Days', days: 10 },
+                        { label: '+2 Wks', days: 14 },
+                        { label: '+1 Mo', days: 30 },
+                      ].map(preset => {
+                        const targetDate = format(addDays(new Date(), preset.days), 'yyyy-MM-dd');
+                        const isSelected = followUpDate === targetDate;
+                        return (
+                          <button
+                            key={preset.days}
+                            type="button"
+                            onClick={() => setFollowUpDate(targetDate)}
+                            style={{
+                              padding: '0.25rem 0.55rem',
+                              borderRadius: '16px',
+                              border: isSelected ? '1.5px solid #0284c7' : '1px solid var(--border)',
+                              background: isSelected ? '#e0f2fe' : 'white',
+                              color: isSelected ? '#0369a1' : 'var(--text-main)',
+                              fontWeight: isSelected ? 700 : 500,
+                              fontSize: '0.74rem',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            {preset.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      <div>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '3px' }}>Follow-Up Date</span>
+                        <input
+                          type="date"
+                          value={followUpDate}
+                          min={format(new Date(), 'yyyy-MM-dd')}
+                          onChange={e => setFollowUpDate(e.target.value)}
+                          className="sync-input-line"
+                          style={{ width: '100%', padding: '0.4rem 0.55rem', fontSize: '0.82rem', boxSizing: 'border-box' }}
+                        />
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '3px' }}>Reason / Notes</span>
+                        <input
+                          type="text"
+                          placeholder="e.g. Check BP & Fever, Review reports"
+                          value={followUpNotes}
+                          onChange={e => setFollowUpNotes(e.target.value)}
+                          className="sync-input-line"
+                          style={{ width: '100%', padding: '0.4rem 0.55rem', fontSize: '0.82rem', boxSizing: 'border-box' }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Center Column: Medicines & Rx Dosage & Diagnostic Laboratory Investigations */}
+                <div className="writer-center-column">
                   {/* Medicines Management */}
                   <div className="medicines-section">
                     <div className="section-title-row">
-                      <h4>Medicines & Rx Dosage</h4>
-                    </div>
-
-                    <div className="medicines-table-wrapper">
-                      <table className="medicines-table">
-                        <thead>
-                          <tr>
-                            <th style={{ width: '40%' }}>Medicine Name</th>
-                            <th style={{ width: '20%' }}>Dosage (e.g. 1-0-1)</th>
-                            <th style={{ width: '15%' }}>Duration</th>
-                            <th style={{ width: '20%' }}>Instructions</th>
-                            <th style={{ width: '5%', textAlign: 'center' }}></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {medicines.map((m, index) => (
-                            <tr key={index}>
-                              <td>
-                                <input 
-                                  type="text"
-                                  placeholder="Paracetamol 650mg"
-                                  value={m.name}
-                                  onChange={e => handleMedicineChange(index, 'name', e.target.value)}
-                                  list="medicine-names"
-                                  required
-                                />
-                                {(() => {
-                                  if (!m.name.trim()) return null;
-                                  const matched = pharmacyMedicines.find(pm => pm.name.toLowerCase() === m.name.trim().toLowerCase());
-                                  if (!matched) return null;
-                                  const stock = matched.currentStock || 0;
-                                  return (
-                                    <div style={{ fontSize: '0.68rem', fontWeight: 600, marginTop: '3px', color: stock > 0 ? '#15803d' : '#b91c1c', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                      <span>{stock > 0 ? `🟢 ${stock} in pharmacy` : '🔴 Out of stock'}</span>
-                                      {matched.genericName && <span style={{ color: '#64748b' }}>({matched.genericName})</span>}
-                                    </div>
-                                  );
-                                })()}
-                              </td>
-                              <td>
-                                <input 
-                                  type="text"
-                                  placeholder="1-0-1"
-                                  value={m.dosage}
-                                  onChange={e => handleMedicineChange(index, 'dosage', e.target.value)}
-                                  list="dosage-options"
-                                />
-                              </td>
-                              <td>
-                                <input 
-                                  type="text"
-                                  placeholder="5 days"
-                                  value={m.duration}
-                                  onChange={e => handleMedicineChange(index, 'duration', e.target.value)}
-                                  list="duration-options"
-                                />
-                              </td>
-                              <td>
-                                <input 
-                                  type="text"
-                                  placeholder="After food"
-                                  value={m.instructions}
-                                  onChange={e => handleMedicineChange(index, 'instructions', e.target.value)}
-                                  list="instruction-options"
-                                />
-                              </td>
-                              <td style={{ textAlign: 'center' }}>
-                                <button 
-                                  type="button" 
-                                  className="btn-remove-med"
-                                  onClick={() => handleRemoveMedicineRow(index)}
-                                  disabled={medicines.length === 1}
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
+                      <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', margin: 0 }}>
+                        <Pill size={16} style={{ color: '#4f46e5' }} /> Medicines &amp; Rx Dosage
+                      </h4>
                       <button 
                         type="button" 
                         className="btn-secondary-sm"
@@ -1023,10 +1464,75 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
                         <Plus size={14} /> Add Medicine
                       </button>
                     </div>
+
+                    <div className="medicines-table-wrapper">
+                      <table className="medicines-table">
+                        <thead>
+                          <tr>
+                            <th style={{ width: '38%' }}>Medicine Name</th>
+                            <th style={{ width: '22%' }}>Dosage</th>
+                            <th style={{ width: '18%' }}>Duration</th>
+                            <th style={{ width: '18%' }}>Instructions</th>
+                            <th style={{ width: '4%', textAlign: 'center' }}></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {medicines.map((m, index) => (
+                            <tr key={index}>
+                              <td>
+                                <MedicineAutocompleteInput
+                                  placeholder="Paracetamol 650mg"
+                                  value={m.name}
+                                  onChange={val => handleMedicineChange(index, 'name', val)}
+                                  suggestions={uniqueMedicineSuggestions}
+                                  pharmacyMedicines={pharmacyMedicines}
+                                  required
+                                />
+                              </td>
+                              <td>
+                                <QuickSuggestInput
+                                  placeholder="1-0-1"
+                                  value={m.dosage}
+                                  onChange={val => handleMedicineChange(index, 'dosage', val)}
+                                  suggestions={uniqueDosageSuggestions}
+                                />
+                              </td>
+                              <td>
+                                <QuickSuggestInput
+                                  placeholder="5 days"
+                                  value={m.duration}
+                                  onChange={val => handleMedicineChange(index, 'duration', val)}
+                                  suggestions={uniqueDurationSuggestions}
+                                />
+                              </td>
+                              <td>
+                                <QuickSuggestInput
+                                  placeholder="After food"
+                                  value={m.instructions}
+                                  onChange={val => handleMedicineChange(index, 'instructions', val)}
+                                  suggestions={uniqueInstructionsSuggestions}
+                                />
+                              </td>
+                              <td style={{ textAlign: 'center' }}>
+                                <button 
+                                  type="button" 
+                                  className="btn-remove-med"
+                                  onClick={() => handleRemoveMedicineRow(index)}
+                                  disabled={medicines.length === 1}
+                                  title="Remove medicine"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
 
                   {/* Diagnostic Laboratory Investigations */}
-                  <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '10px', border: '1px solid var(--border)', marginTop: '1rem', marginBottom: '1rem' }}>
+                  <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '12px', border: '1px solid var(--border)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                       <label style={{ margin: 0, fontWeight: 700, fontSize: '0.875rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                         <FlaskConical size={16} style={{ color: '#4f46e5' }} /> Diagnostic Laboratory Investigations ({selectedLabTestIds.length} Selected)
@@ -1092,7 +1598,7 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
                       }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                           <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#4338ca' }}>
-                            Add New Investigation to Library & Prescription
+                            Add New Investigation to Library &amp; Prescription
                           </span>
                           <button
                             type="button"
@@ -1137,7 +1643,7 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
                               cursor: 'pointer'
                             }}
                           >
-                            Save & Select
+                            Save &amp; Select
                           </button>
                           <button
                             type="button"
@@ -1284,91 +1790,6 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
                     </div>
                   </div>
 
-                  <div className="form-group">
-                    <label>Advice / Additional Notes</label>
-                    <textarea 
-                      placeholder="Drink plenty of water, avoid cold items..." 
-                      value={notes}
-                      onChange={e => setNotes(e.target.value)}
-                      rows={2}
-                    />
-                  </div>
-
-                  {/* Follow-Up / Revisit Schedule Section */}
-                  <div className="followup-form-section" style={{ background: '#f8fafc', padding: '1rem', borderRadius: '10px', border: '1px solid var(--border)', marginTop: '1rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
-                      <label style={{ margin: 0, fontWeight: 700, fontSize: '0.875rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                        <Calendar size={16} style={{ color: '#0284c7' }} /> Next Visit / Patient Follow-Up
-                      </label>
-                      {followUpDate && (
-                        <button
-                          type="button"
-                          onClick={() => { setFollowUpDate(''); setFollowUpNotes(''); }}
-                          style={{ background: 'transparent', border: 'none', color: '#ef4444', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 600 }}
-                        >
-                          Clear Follow-Up
-                        </button>
-                      )}
-                    </div>
-
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                      {[
-                        { label: '+3 Days', days: 3 },
-                        { label: '+5 Days', days: 5 },
-                        { label: '+1 Week', days: 7 },
-                        { label: '+10 Days', days: 10 },
-                        { label: '+2 Weeks', days: 14 },
-                        { label: '+1 Month', days: 30 },
-                      ].map(preset => {
-                        const targetDate = format(addDays(new Date(), preset.days), 'yyyy-MM-dd');
-                        const isSelected = followUpDate === targetDate;
-                        return (
-                          <button
-                            key={preset.days}
-                            type="button"
-                            onClick={() => setFollowUpDate(targetDate)}
-                            style={{
-                              padding: '0.35rem 0.75rem',
-                              borderRadius: '20px',
-                              border: isSelected ? '1.5px solid #0284c7' : '1px solid var(--border)',
-                              background: isSelected ? '#e0f2fe' : 'white',
-                              color: isSelected ? '#0369a1' : 'var(--text-main)',
-                              fontWeight: isSelected ? 700 : 500,
-                              fontSize: '0.8rem',
-                              cursor: 'pointer',
-                              transition: 'all 0.15s ease'
-                            }}
-                          >
-                            {preset.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '0.75rem' }}>
-                      <div>
-                        <input
-                          type="date"
-                          value={followUpDate}
-                          min={format(new Date(), 'yyyy-MM-dd')}
-                          onChange={e => setFollowUpDate(e.target.value)}
-                          className="sync-input-line"
-                          style={{ width: '100%', padding: '0.45rem 0.6rem', fontSize: '0.85rem' }}
-                        />
-                      </div>
-                      <div>
-                        <input
-                          type="text"
-                          placeholder="Follow-up advice / reason (e.g. Check BP & Fever, Suture removal, Review reports)"
-                          value={followUpNotes}
-                          onChange={e => setFollowUpNotes(e.target.value)}
-                          className="sync-input-line"
-                          style={{ width: '100%', padding: '0.45rem 0.6rem', fontSize: '0.85rem' }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
                   {/* Autocomplete Recommendation Datalists */}
                   <datalist id="medicine-names">
                     {uniqueMedicineSuggestions.map((med, idx) => (
@@ -1393,30 +1814,9 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
                       <option key={idx} value={inst} />
                     ))}
                   </datalist>
-
-                  <div className="writer-actions">
-                    <button type="button" className="btn-ghost" onClick={() => setSelectedReceipt(null)}>Cancel</button>
-                    <button 
-                      type="submit" 
-                      className="btn-secondary btn-save-rx" 
-                      onClick={() => setShouldPrintOnSubmit(false)}
-                      style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-                    >
-                      <Save size={16} />
-                      Save Prescription
-                    </button>
-                    <button 
-                      type="submit" 
-                      className="btn-primary btn-save-rx" 
-                      onClick={() => setShouldPrintOnSubmit(true)}
-                    >
-                      <Printer size={16} />
-                      Save & Print
-                    </button>
-                  </div>
                 </div>
 
-                {/* Right Column: History */}
+                {/* 3. Right Column: Patient Clinical History */}
                 <div className="writer-history-column">
                   <div className="history-title-row">
                     <History size={16} className="text-primary" />
@@ -1522,6 +1922,28 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
                   })()}
                 </div>
               </div>
+
+              {/* Bottom Actions Footer */}
+              <div className="writer-actions">
+                <button type="button" className="btn-ghost" onClick={() => setSelectedReceipt(null)}>Cancel</button>
+                <button 
+                  type="submit" 
+                  className="btn-secondary btn-save-rx" 
+                  onClick={() => setShouldPrintOnSubmit(false)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                >
+                  <Save size={16} />
+                  Save Prescription
+                </button>
+                <button 
+                  type="submit" 
+                  className="btn-primary btn-save-rx" 
+                  onClick={() => setShouldPrintOnSubmit(true)}
+                >
+                  <Printer size={16} />
+                  Save &amp; Print
+                </button>
+              </div>
             </form>
           </div>
         </div>
@@ -1529,7 +1951,7 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
 
       {/* Hidden Print Template for Prescription (Rx) */}
       {activePrintPrescription && (() => {
-        const doctorObj = doctors.find(d => d.id === activePrintPrescription.doctorId);
+        const doctorObj = doctors.find(d => String(d.id) === String(activePrintPrescription.doctorId));
         const printHeader = doctorObj ? (doctorObj.printHeader !== false) : true;
         const customTopMargin = doctorObj ? (doctorObj.customTopMargin || 0) : 0;
         const customBottomMargin = doctorObj ? (doctorObj.customBottomMargin || 0) : 0;
@@ -1537,6 +1959,12 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
           : prescriptionPaperType === 'Letter' ? '@page { size: letter portrait; margin: 0.8cm; }'
           : prescriptionPaperType === 'A6' ? '@page { size: A6 portrait; margin: 0.4cm; }'
           : '@page { size: A4 portrait; margin: 0.8cm; }';
+
+        const rawMeds = activePrintPrescription.medicines;
+        const medsList: PrescribedMedicine[] = Array.isArray(rawMeds) ? rawMeds : typeof rawMeds === 'string' ? JSON.parse(rawMeds || '[]') : [];
+
+        const rawLabs = activePrintPrescription.labInvestigations;
+        const labsList: string[] = Array.isArray(rawLabs) ? rawLabs : typeof rawLabs === 'string' ? JSON.parse(rawLabs || '[]') : [];
 
         return (
           <>
@@ -1630,7 +2058,7 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
                   </tr>
                 </thead>
                 <tbody>
-                  {activePrintPrescription.medicines.map((m, idx) => (
+                  {medsList.map((m, idx) => (
                     <tr key={idx}>
                       <td style={{ textAlign: 'center' }}>{idx + 1}</td>
                       <td style={{ textAlign: 'left' }}><strong>{m.name}</strong></td>
@@ -1643,7 +2071,7 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
               </table>
             </div>
 
-            {activePrintPrescription.labInvestigations && activePrintPrescription.labInvestigations.length > 0 && (
+            {labsList.length > 0 && (
               <div className="print-investigations-section" style={{ marginBottom: '0.6rem', padding: '0.45rem 0.75rem', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#f8fafc' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '0.3rem' }}>
                   <span style={{ fontSize: '0.74rem', fontWeight: 800, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
@@ -1651,7 +2079,7 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
                   </span>
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                  {activePrintPrescription.labInvestigations.map((testName, idx) => (
+                  {labsList.map((testName, idx) => (
                     <span key={idx} style={{
                       display: 'inline-flex',
                       alignItems: 'center',
@@ -1669,6 +2097,7 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
                 </div>
               </div>
             )}
+
 
             {activePrintPrescription.notes && (
               <div className="print-notes-section" style={{ marginBottom: '0.5rem', padding: '0.5rem 0.75rem' }}>

@@ -330,7 +330,13 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
 
       {/* Prescription print template */}
       {activePrintPrescription && (() => {
-        const doc = doctors.find(d => d.id === activePrintPrescription.doctorId);
+        const doc = doctors.find(d => String(d.id) === String(activePrintPrescription.doctorId));
+        const rawMeds = activePrintPrescription.medicines;
+        const medsList = Array.isArray(rawMeds) ? rawMeds : typeof rawMeds === 'string' ? JSON.parse(rawMeds || '[]') : [];
+
+        const rawLabs = activePrintPrescription.labInvestigations;
+        const labsList: string[] = Array.isArray(rawLabs) ? rawLabs : typeof rawLabs === 'string' ? JSON.parse(rawLabs || '[]') : [];
+
         return (
           <div id="prescription-print-template" className={`print-only ${prescriptionPaperClass}`}>
             <div
@@ -413,7 +419,7 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
                     </tr>
                   </thead>
                   <tbody>
-                    {(activePrintPrescription.medicines || []).map((m, idx) => (
+                    {medsList.map((m: any, idx: number) => (
                       <tr key={idx}>
                         <td style={{ textAlign: 'center' }}>{idx + 1}</td>
                         <td><strong>{m.name}</strong></td>
@@ -426,7 +432,7 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
                 </table>
               </div>
 
-              {activePrintPrescription.labInvestigations && activePrintPrescription.labInvestigations.length > 0 && (
+              {labsList.length > 0 && (
                 <div className="print-investigations-section" style={{ marginBottom: '0.6rem', padding: '0.45rem 0.75rem', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#f8fafc' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '0.3rem' }}>
                     <span style={{ fontSize: '0.74rem', fontWeight: 800, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
@@ -434,7 +440,7 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
                     </span>
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                    {activePrintPrescription.labInvestigations.map((testName, idx) => (
+                    {labsList.map((testName: string, idx: number) => (
                       <span key={idx} style={{
                         display: 'inline-flex',
                         alignItems: 'center',

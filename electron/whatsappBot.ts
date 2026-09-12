@@ -115,6 +115,9 @@ function generateAvailableBookingDates(allowedDays: string[]) {
 }
 
 let wasConnected = false;
+let isExplicitlyStopped = false;
+let reconnectTimeout: NodeJS.Timeout | null = null;
+let watchdogInterval: NodeJS.Timeout | null = null;
 let stateChangeListeners: Array<(newState: BotState) => void> = [];
 
 function notifyStateChange(newState: BotState) {
@@ -163,8 +166,29 @@ export const whatsappBot = {
       stateChangeListeners.push(onStateChange);
     }
 
-    if (state.status === 'CONNECTED') {
+    isExplicitlyStopped = false;
+
+    if (reconnectTimeout) {
+      clearTimeout(reconnectTimeout);
+      reconnectTimeout = null;
+    }
+
+    if (state.status === 'CONNECTED' && socket) {
       return state;
+    }
+
+    // Start background health watchdog if not already running
+    if (!watchdogInterval) {
+      watchdogInterval = setInterval(() => {
+        if (!isExplicitlyStopped && whatsappBot.hasSavedSession()) {
+          if (state.status !== 'CONNECTED' && state.status !== 'CONNECTING' && !reconnectTimeout) {
+            console.log('[WhatsApp Bot Watchdog] Session exists but disconnected. Auto-reconnecting...');
+            whatsappBot.start().catch((err) => {
+              console.error('[WhatsApp Bot Watchdog] Auto-reconnect error:', err);
+            });
+          }
+        }
+      }, 30000);
     }
 
     // Clean up any stale/broken existing socket
@@ -188,6 +212,12 @@ export const whatsappBot = {
       const makeWASocket = baileys.default || baileys.makeWASocket;
       const { useMultiFileAuthState, DisconnectReason } = baileys;
 
+      let logger: any = undefined;
+      try {
+        const pino = require('pino');
+        logger = pino({ level: 'silent' });
+      } catch (e) {}
+
       const authDir = path.join(app.getPath('userData'), 'whatsapp_auth');
       if (!fs.existsSync(authDir)) {
         fs.mkdirSync(authDir, { recursive: true });
@@ -198,7 +228,16 @@ export const whatsappBot = {
       socket = makeWASocket({
         auth: authState,
         printQRInTerminal: false,
-        browser: ['Buvora', 'Chrome', '1.0.0'],
+        browser: ['Buvora Clinic', 'Chrome', '124.0.0.0'],
+        logger,
+        keepAliveIntervalMs: 25000,
+        defaultQueryTimeoutMs: 60000,
+        connectTimeoutMs: 60000,
+        markOnlineOnConnect: true,
+        syncFullHistory: false,
+        generateHighQualityLinkPreview: false,
+        retryRequestDelayMs: 350,
+        maxMsgRetryCount: 5,
       });
 
       socket.ev.on('creds.update', saveCreds);
@@ -220,16 +259,18 @@ export const whatsappBot = {
 
         if (connection === 'close') {
           const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
-          const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-          const previouslyConnected = wasConnected;
+          const isLoggedOut = statusCode === DisconnectReason.loggedOut;
           
-          console.log('[WhatsApp Bot] Connection closed. Status code:', statusCode, 'Previously connected:', previouslyConnected);
-          
-          state.status = 'DISCONNECTED';
-          state.qrCodeDataUrl = null;
+          console.log('[WhatsApp Bot] Connection closed. Status code:', statusCode, 'isLoggedOut:', isLoggedOut, 'hasSession:', whatsappBot.hasSavedSession());
 
-          if (!shouldReconnect) {
+          if (isLoggedOut) {
             wasConnected = false;
+            isExplicitlyStopped = true;
+            state.status = 'DISCONNECTED';
+            state.qrCodeDataUrl = null;
+            state.phoneNumber = null;
+            state.errorMessage = 'Logged out from WhatsApp device';
+
             try {
               const authDir = path.join(app.getPath('userData'), 'whatsapp_auth');
               if (fs.existsSync(authDir)) {
@@ -240,24 +281,43 @@ export const whatsappBot = {
               console.error('[WhatsApp Bot] Failed to clear auth directory on logout:', err);
             }
             notifyStateChange(state);
-          } else if (previouslyConnected) {
-            // Only auto-reconnect if we were already authenticated & connected
-            console.log('[WhatsApp Bot] Session lost while connected. Reconnecting existing session...');
+          } else if (!isExplicitlyStopped && (whatsappBot.hasSavedSession() || wasConnected)) {
+            // Auto-reconnect on network jitter, server restart (515), or keep-alive ping drop
+            const delay = statusCode === 515 ? 1000 : 3500;
+            console.log(`[WhatsApp Bot] Connection dropped (code ${statusCode}). Auto-reconnecting in ${delay}ms...`);
+            
             state.status = 'CONNECTING';
+            state.qrCodeDataUrl = null;
             notifyStateChange(state);
-            setTimeout(() => whatsappBot.start(), 5000);
+
+            if (reconnectTimeout) {
+              clearTimeout(reconnectTimeout);
+            }
+            reconnectTimeout = setTimeout(() => {
+              reconnectTimeout = null;
+              if (!isExplicitlyStopped) {
+                whatsappBot.start().catch((e) => {
+                  console.error('[WhatsApp Bot] Auto-reconnect failed:', e);
+                });
+              }
+            }, delay);
           } else {
-            // Unauthenticated QR pairing phase ended/expired - stop and wait for user to click "Connect WhatsApp" again
-            console.log('[WhatsApp Bot] QR pairing stopped/expired. Waiting for user to click Connect WhatsApp.');
-            wasConnected = false;
+            console.log('[WhatsApp Bot] Stopped or QR pairing expired. Waiting for user action.');
+            state.status = 'DISCONNECTED';
+            state.qrCodeDataUrl = null;
             notifyStateChange(state);
           }
         } else if (connection === 'open') {
           state.status = 'CONNECTED';
           state.qrCodeDataUrl = null;
           state.errorMessage = null;
-          state.phoneNumber = socket.user?.id ? socket.user.id.split(':')[0] : 'Active';
+          state.phoneNumber = socket.user?.id ? socket.user.id.split(':')[0] : (socket.user?.name || 'Active');
           wasConnected = true;
+          isExplicitlyStopped = false;
+          if (reconnectTimeout) {
+            clearTimeout(reconnectTimeout);
+            reconnectTimeout = null;
+          }
           console.log('[WhatsApp Bot] Successfully connected to WhatsApp!');
           notifyStateChange(state);
         }
@@ -304,7 +364,12 @@ export const whatsappBot = {
   },
 
   stop: async () => {
+    isExplicitlyStopped = true;
     wasConnected = false;
+    if (reconnectTimeout) {
+      clearTimeout(reconnectTimeout);
+      reconnectTimeout = null;
+    }
     if (socket) {
       try {
         await socket.logout();

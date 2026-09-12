@@ -48,3 +48,8 @@ Desktop.ini
 LICENSE_GENERATOR.html
 tests/
 mind.md
+testsprite_tests/tmp/
+testsprite_tests/tmp/config.json
+testsprite_tests
+clinic_manual_testing_sheet.csv
+clinic_manual_testing_checklist.html

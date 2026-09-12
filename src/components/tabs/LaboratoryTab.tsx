@@ -9,6 +9,7 @@ import { useToast } from '../ui/Toast';
 import '../../styles/tabs/LaboratoryTab.css';
 import {
   storage,
+  notifyDataChanged,
   type LabTest,
   type LabTestParameter,
   type LabOrder,
@@ -17,6 +18,7 @@ import {
   type LabDashboardMetrics,
   type Doctor,
   type Receipt,
+  type GlobalPatientProfile,
   formatAgeGender
 } from '../../lib/storage';
 
@@ -71,6 +73,7 @@ export const LaboratoryTab: React.FC<LaboratoryTabProps> = ({ onRefresh }) => {
 
   // New Order Form State
   const [patientSearchTerm, setPatientSearchTerm] = useState('');
+  const [showPatientSuggestions, setShowPatientSuggestions] = useState(false);
   const [newOrderData, setNewOrderData] = useState({
     patientId: '',
     patientName: '',
@@ -140,6 +143,18 @@ export const LaboratoryTab: React.FC<LaboratoryTabProps> = ({ onRefresh }) => {
 
   useEffect(() => {
     loadData();
+    const handleSync = (e: any) => {
+      const dt = e?.detail?.dataType;
+      if (!dt || dt === 'lab' || dt === 'receipts' || dt === 'prescriptions' || dt === 'all') {
+        loadData();
+      }
+    };
+    window.addEventListener('buvora-data-updated', handleSync);
+    const interval = setInterval(loadData, 5000);
+    return () => {
+      window.removeEventListener('buvora-data-updated', handleSync);
+      clearInterval(interval);
+    };
   }, []);
 
   // Filtered Queue
@@ -178,23 +193,29 @@ export const LaboratoryTab: React.FC<LaboratoryTabProps> = ({ onRefresh }) => {
     });
   }, [tests, catalogCategoryFilter, catalogSearch]);
 
-  // Patient Autocomplete Suggestions
-  const patientSuggestions = useMemo(() => {
-    if (!patientSearchTerm || patientSearchTerm.length < 2) return [];
-    const term = patientSearchTerm.toLowerCase();
-    const map = new Map<string, Receipt>();
-    for (const r of recentReceipts) {
-      if (
-        r.patientName.toLowerCase().includes(term) ||
-        (r.patientPhone && r.patientPhone.includes(term)) ||
-        (r.patientId && r.patientId.toLowerCase().includes(term))
-      ) {
-        const key = r.patientId || r.patientPhone || r.patientName;
-        if (!map.has(key)) map.set(key, r);
+  // Global Patient Autocomplete Suggestions
+  const [patientSuggestions, setPatientSuggestions] = useState<GlobalPatientProfile[]>([]);
+  const [isSearchingPatient, setIsSearchingPatient] = useState(false);
+
+  const handlePatientSearchChange = async (val: string) => {
+    setPatientSearchTerm(val);
+    setNewOrderData(prev => ({ ...prev, patientName: val }));
+    if (val.trim().length >= 2) {
+      setIsSearchingPatient(true);
+      try {
+        const results = await storage.searchGlobalPatients(val.trim());
+        setPatientSuggestions(results || []);
+        setShowPatientSuggestions((results || []).length > 0);
+      } catch (_) {
+        setPatientSuggestions([]);
+      } finally {
+        setIsSearchingPatient(false);
       }
+    } else {
+      setPatientSuggestions([]);
+      setShowPatientSuggestions(false);
     }
-    return Array.from(map.values()).slice(0, 5);
-  }, [recentReceipts, patientSearchTerm]);
+  };
 
   // Helper: Total calculation for new order
   const calculatedTotal = useMemo(() => {
@@ -223,22 +244,26 @@ export const LaboratoryTab: React.FC<LaboratoryTabProps> = ({ onRefresh }) => {
       technicianNotes: ''
     });
     setPatientSearchTerm('');
+    setPatientSuggestions([]);
+    setShowPatientSuggestions(false);
     setShowNewOrderModal(true);
   };
 
-  // Action: Select Patient from Suggestions
-  const handleSelectPatient = (r: Receipt) => {
+  // Action: Select Patient from Suggestions (Autofill Demographic Data)
+  const handleSelectPatient = (p: GlobalPatientProfile) => {
+    const doc = doctors.find(d => d.id === p.lastDoctorId || d.name === p.previousDoctorName);
     setNewOrderData(prev => ({
       ...prev,
-      patientId: r.patientId || '',
-      patientName: r.patientName,
-      patientPhone: r.patientPhone || '',
-      patientAge: r.patientAge || '',
-      patientGender: r.patientGender || 'Male',
-      doctorId: r.doctorId || prev.doctorId,
-      doctorName: r.doctorName || prev.doctorName
+      patientId: p.patientUhid || p.patientId || '',
+      patientName: p.patientName,
+      patientPhone: p.patientPhone || '',
+      patientAge: p.patientAge || '',
+      patientGender: p.patientGender || 'Male',
+      doctorId: doc ? doc.id : prev.doctorId,
+      doctorName: doc ? doc.name : (p.previousDoctorName || prev.doctorName)
     }));
-    setPatientSearchTerm(r.patientName);
+    setPatientSearchTerm(p.patientName);
+    setShowPatientSuggestions(false);
   };
 
   // Action: Save New Order
@@ -1357,17 +1382,48 @@ export const LaboratoryTab: React.FC<LaboratoryTabProps> = ({ onRefresh }) => {
                   <Search size={15} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                   <input
                     type="text"
-                    placeholder="Search recent patient by name, phone, or PID-XXXX to auto-fill..."
+                    placeholder="Search patient database by name, phone, or UHID/PID to auto-fill..."
                     value={patientSearchTerm}
-                    onChange={e => {
-                      setPatientSearchTerm(e.target.value);
-                      setNewOrderData(prev => ({ ...prev, patientName: e.target.value }));
+                    onChange={e => handlePatientSearchChange(e.target.value)}
+                    onFocus={() => {
+                      if (patientSearchTerm && patientSearchTerm.length >= 2) {
+                        setShowPatientSuggestions(true);
+                      }
+                    }}
+                    onBlur={() => {
+                      setTimeout(() => setShowPatientSuggestions(false), 200);
                     }}
                     className="input-field"
-                    style={{ paddingLeft: '32px', width: '100%' }}
+                    style={{ paddingLeft: '32px', paddingRight: patientSearchTerm ? '32px' : '10px', width: '100%' }}
                   />
 
-                  {patientSuggestions.length > 0 && (
+                  {patientSearchTerm && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPatientSearchTerm('');
+                        setPatientSuggestions([]);
+                        setShowPatientSuggestions(false);
+                      }}
+                      style={{
+                        position: 'absolute',
+                        right: '10px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: 'var(--text-muted)',
+                        padding: '2px 6px',
+                        fontSize: '0.85rem'
+                      }}
+                      title="Clear search"
+                    >
+                      ✕
+                    </button>
+                  )}
+
+                  {showPatientSuggestions && patientSuggestions.length > 0 && (
                     <div style={{
                       position: 'absolute',
                       top: '100%',
@@ -1379,27 +1435,46 @@ export const LaboratoryTab: React.FC<LaboratoryTabProps> = ({ onRefresh }) => {
                       boxShadow: '0 10px 20px rgba(0,0,0,0.15)',
                       zIndex: 100,
                       marginTop: '4px',
-                      overflow: 'hidden'
+                      maxHeight: '220px',
+                      overflowY: 'auto'
                     }}>
-                      {patientSuggestions.map(r => (
+                      {patientSuggestions.map(p => (
                         <div
-                          key={r.id}
-                          onClick={() => handleSelectPatient(r)}
-                          style={{ padding: '0.5rem 0.75rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                          key={p.patientUhid || p.patientId || p.patientPhone || p.patientName}
+                          onMouseDown={e => {
+                            e.preventDefault();
+                            handleSelectPatient(p);
+                          }}
+                          onClick={() => handleSelectPatient(p)}
+                          style={{ padding: '0.55rem 0.75rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}
                           onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
                           onMouseLeave={e => e.currentTarget.style.background = 'white'}
                         >
                           <div>
-                            <strong>{r.patientName}</strong>
-                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: '8px' }}>
-                              {r.patientPhone}
-                            </span>
+                            <strong style={{ color: '#0f172a' }}>{p.patientName}</strong>
+                            {p.patientPhone && (
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: '8px' }}>
+                                📞 {p.patientPhone}
+                              </span>
+                            )}
+                            {p.patientAge && (
+                              <span style={{ fontSize: '0.72rem', color: '#64748b', marginLeft: '6px' }}>
+                                • {formatAgeGender(p.patientAge, p.patientGender)}
+                              </span>
+                            )}
                           </div>
-                          {r.patientId && (
-                            <span style={{ fontSize: '0.72rem', background: '#e0e7ff', color: '#4338ca', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>
-                              {r.patientId}
-                            </span>
-                          )}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            {(p.patientUhid || p.patientId) && (
+                              <span style={{ fontSize: '0.72rem', background: '#e0e7ff', color: '#4338ca', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                                {p.patientUhid || p.patientId}
+                              </span>
+                            )}
+                            {p.source && (
+                              <span style={{ fontSize: '0.68rem', background: '#f1f5f9', color: '#475569', padding: '1px 5px', borderRadius: '4px', fontWeight: 600 }}>
+                                {p.source}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>

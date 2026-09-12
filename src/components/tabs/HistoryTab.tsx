@@ -190,7 +190,19 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
       }
     };
     fetchReceipts();
-    return () => { active = false; };
+
+    const handleSync = (e: any) => {
+      const dt = e?.detail?.dataType;
+      if (!dt || dt === 'receipts' || dt === 'all') {
+        fetchReceipts();
+      }
+    };
+    window.addEventListener('buvora-data-updated', handleSync);
+
+    return () => {
+      active = false;
+      window.removeEventListener('buvora-data-updated', handleSync);
+    };
   }, [displayLimit, searchQuery, startDate, endDate]);
 
   const visibleReceipts = useMemo(() => {
@@ -509,49 +521,38 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
                               <td className="text-right" style={{ textAlign: 'right' }}>
                                 <span className="r-amt">₹{totalNum.toFixed(2)}</span>
                               </td>
-                              <td className="text-center" style={{ textAlign: 'center' }}>
-                                <div className="action-buttons" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
-                                  <button
-                                    className="btn-icon-xs history-btn"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleOpenPatientHistory(r);
-                                    }}
-                                    title={`View Complete Patient History for ${r.patientName}`}
-                                    style={{ color: '#0284c7', background: '#f0f9ff' }}
-                                  >
-                                    <History size={14} />
-                                  </button>
-                                  <button
-                                    className="btn-icon-xs whatsapp-btn"
-                                    onClick={() => handleOpenWhatsAppModal(r)}
-                                    title="Send Receipt via WhatsApp"
-                                  >
-                                    <MessageSquare size={14} />
-                                  </button>
-                                  <button
-                                    className="btn-icon-xs print-btn"
-                                    onClick={() => onPrint([r])}
-                                    title="Print Receipt"
-                                  >
-                                    <Printer size={14} />
-                                  </button>
-                                  <button
-                                    className="btn-icon-xs edit-btn"
-                                    onClick={() => onEdit(r)}
-                                    title="Edit Receipt"
-                                  >
-                                    <Edit2 size={14} />
-                                  </button>
-                                  <button
-                                    className="btn-icon-xs delete-btn"
-                                    onClick={() => handleDeleteReceipt(r.id)}
-                                    title="Delete Receipt"
-                                  >
-                                    <Trash2 size={14} />
-                                  </button>
-                                </div>
-                              </td>
+                                <td className="text-center" style={{ textAlign: 'center' }}>
+                                  <div className="action-buttons" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 28px)', gap: '4px', justifyContent: 'center', alignItems: 'center' }}>
+                                    <button
+                                      className="btn-icon-xs whatsapp-btn"
+                                      onClick={() => handleOpenWhatsAppModal(r)}
+                                      title="Send Receipt via WhatsApp"
+                                    >
+                                      <MessageSquare size={13} />
+                                    </button>
+                                    <button
+                                      className="btn-icon-xs print-btn"
+                                      onClick={() => onPrint([r])}
+                                      title="Print Receipt"
+                                    >
+                                      <Printer size={13} />
+                                    </button>
+                                    <button
+                                      className="btn-icon-xs edit-btn"
+                                      onClick={() => onEdit(r)}
+                                      title="Edit Receipt"
+                                    >
+                                      <Edit2 size={13} />
+                                    </button>
+                                    <button
+                                      className="btn-icon-xs delete-btn"
+                                      onClick={() => handleDeleteReceipt(r.id)}
+                                      title="Delete Receipt"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  </div>
+                                </td>
                             </tr>
                           );
                         })}

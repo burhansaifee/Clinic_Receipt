@@ -512,27 +512,44 @@
 
 /* Print Media Rules */
 @media print {
-  body * {
-    visibility: hidden;
-  }
-  .discharge-a4-paper,
-  .discharge-a4-paper * {
-    visibility: visible;
-  }
-  .discharge-a4-paper {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    margin: 0;
-    padding: 10mm 15mm;
-    box-shadow: none;
-  }
   .discharge-modal-header,
   .discharge-modal-footer,
-  .discharge-a4-preview-wrapper,
+  .discharge-header-actions {
+    display: none !important;
+  }
   .discharge-modal-overlay {
+    position: static !important;
     background: transparent !important;
     padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    display: block !important;
+    overflow: visible !important;
+  }
+  .discharge-modal-container,
+  .discharge-a4-preview-wrapper {
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    background: transparent !important;
+    overflow: visible !important;
+  }
+  .discharge-a4-paper {
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 10mm 15mm !important;
+    box-shadow: none !important;
+    border: none !important;
+    display: block !important;
+    visibility: visible !important;
+  }
+  .discharge-a4-paper * {
+    visibility: visible !important;
   }
 }

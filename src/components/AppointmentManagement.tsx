@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { storage, formatAgeGender, notifyDataChanged, type Doctor, type Appointment, type AppointmentStatus, type GlobalPatientProfile } from '../lib/storage';
 import { Calendar, Search, CheckCircle, XCircle, Clock, Plus, Trash2, MessageSquare, Phone, Tag, Save, Check, CalendarDays, RefreshCw } from 'lucide-react';
 import { useConfirm } from './ui/ConfirmDialog';
@@ -27,6 +27,7 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
   const [selectedDoctorId, setSelectedDoctorId] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
   const [filterDate, setFilterDate] = useState('');
+  const [filterTimeSlot, setFilterTimeSlot] = useState<string>('');
   
   const confirm = useConfirm();
   const toast = useToast();
@@ -106,7 +107,7 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
   const loadAppointments = async () => {
     try {
       const data = await storage.getAppointments();
-      setAppointments(data);
+      setAppointments(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
     } catch (err) {
       console.error('Failed to load appointments:', err);
     }
@@ -329,6 +330,42 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
     loadAppointments();
   };
 
+  const availableFilterSlots = useMemo(() => {
+    const set = new Set<string>();
+    if (selectedDoctorId) {
+      const doc = doctors.find((d) => d.id === selectedDoctorId);
+      if (doc?.timeSlots && doc.timeSlots.length > 0) {
+        doc.timeSlots.forEach((s) => {
+          if (s && s.trim()) set.add(s.trim());
+        });
+      } else {
+        timeSlots.forEach((s) => {
+          if (s && s.trim()) set.add(s.trim());
+        });
+      }
+      appointments
+        .filter((a) => a.doctorId === selectedDoctorId)
+        .forEach((a) => {
+          if (a.appointmentTime && a.appointmentTime.trim()) set.add(a.appointmentTime.trim());
+        });
+    } else {
+      timeSlots.forEach((s) => {
+        if (s && s.trim()) set.add(s.trim());
+      });
+      doctors.forEach((d) => {
+        d.timeSlots?.forEach((s) => {
+          if (s && s.trim()) set.add(s.trim());
+        });
+      });
+      appointments.forEach((a) => {
+        if (a.appointmentTime && a.appointmentTime.trim()) {
+          set.add(a.appointmentTime.trim());
+        }
+      });
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [timeSlots, appointments, selectedDoctorId, doctors]);
+
   const filteredAppointments = appointments.filter((apt) => {
     const query = searchQuery.toLowerCase();
     const matchesSearch =
@@ -342,8 +379,12 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
     const matchesDoctor = !selectedDoctorId || apt.doctorId === selectedDoctorId;
     const matchesStatus = selectedStatus === 'ALL' || apt.status === selectedStatus;
     const matchesDate = !filterDate || apt.appointmentDate === filterDate;
+    const matchesTimeSlot =
+      !filterTimeSlot ||
+      apt.appointmentTime === filterTimeSlot ||
+      (apt.appointmentTime && apt.appointmentTime.toLowerCase().includes(filterTimeSlot.toLowerCase()));
 
-    return matchesSearch && matchesDoctor && matchesStatus && matchesDate;
+    return matchesSearch && matchesDoctor && matchesStatus && matchesDate && matchesTimeSlot;
   }).sort((a, b) => {
     // Unapproved (PENDING) appointments come first at the top
     if (a.status === 'PENDING' && b.status !== 'PENDING') return -1;
@@ -509,8 +550,19 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
             <input type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} className="date-input" />
           </div>
 
-          {(searchQuery || selectedDoctorId || selectedStatus !== 'ALL' || filterDate) && (
-            <button className="btn-reset" onClick={() => { setSearchQuery(''); setSelectedDoctorId(''); setSelectedStatus('ALL'); setFilterDate(''); }}>
+          <div className="filter-input-wrapper" style={{ flex: 1.2, minWidth: '175px' }}>
+            <select value={filterTimeSlot} onChange={(e) => setFilterTimeSlot(e.target.value)}>
+              <option value="">All Time Slots</option>
+              {availableFilterSlots.map((slot) => (
+                <option key={slot} value={slot}>
+                  🕒 {slot}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {(searchQuery || selectedDoctorId || selectedStatus !== 'ALL' || filterDate || filterTimeSlot) && (
+            <button className="btn-reset" onClick={() => { setSearchQuery(''); setSelectedDoctorId(''); setSelectedStatus('ALL'); setFilterDate(''); setFilterTimeSlot(''); }}>
               Clear Filters
             </button>
           )}
@@ -771,26 +823,105 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ do
 
               <div>
                 <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>DOCTOR *</label>
-                <select required value={newDoctorId} onChange={(e) => setNewDoctorId(e.target.value)}>
+                <select 
+                  required 
+                  value={newDoctorId} 
+                  onChange={(e) => {
+                    const docId = e.target.value;
+                    setNewDoctorId(docId);
+                    const doc = doctors.find(d => d.id === docId);
+                    if (doc?.timeSlots && doc.timeSlots.length > 0) {
+                      setNewTime(doc.timeSlots[0]);
+                    }
+                  }}
+                >
                   <option value="">-- Choose Doctor --</option>
                   {doctors.map((d) => (
                     <option key={d.id} value={d.id}>
-                      {d.name} ({d.specialization})
+                      {d.name} ({d.specialization}) {d.consultationTimings ? `• ${d.consultationTimings}` : ''}
                     </option>
                   ))}
                 </select>
+
+                {/* Doctor Timing Info Banner */}
+                {(() => {
+                  const doc = doctors.find(d => d.id === newDoctorId);
+                  if (!doc) return null;
+                  return (
+                    <div style={{ marginTop: '6px', background: '#f0f9ff', padding: '6px 10px', borderRadius: '6px', border: '1px solid #bae6fd', fontSize: '0.78rem', color: '#0369a1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '4px' }}>
+                      <span>
+                        🕒 <strong>Timings:</strong> {doc.consultationTimings || 'General Clinic Hours'}
+                      </span>
+                      <span>
+                        📅 <strong>Days:</strong> {(doc.availableDays && doc.availableDays.length > 0 ? doc.availableDays : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']).join(', ')}
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
 
               <div style={{ display: 'flex', gap: '0.75rem' }}>
                 <div style={{ flex: 1 }}>
                   <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>DATE *</label>
                   <input type="date" required value={newDate} onChange={(e) => setNewDate(e.target.value)} />
+                  {(() => {
+                    if (!newDate || !newDoctorId) return null;
+                    const doc = doctors.find(d => d.id === newDoctorId);
+                    if (!doc || !doc.availableDays || doc.availableDays.length === 0) return null;
+                    const dayMap = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                    const pickedDate = new Date(`${newDate}T00:00:00`);
+                    const dayKey = dayMap[pickedDate.getDay()];
+                    if (!doc.availableDays.includes(dayKey)) {
+                      return (
+                        <div style={{ fontSize: '0.72rem', color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '4px', padding: '3px 6px', marginTop: '4px' }}>
+                          ⚠️ Dr. {doc.name} usually consults on: {doc.availableDays.join(', ')}
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
                 <div style={{ flex: 1 }}>
                   <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>TIME / SLOT *</label>
-                  <input type="text" required placeholder="e.g. 10:30 AM" value={newTime} onChange={(e) => setNewTime(e.target.value)} />
+                  <input type="text" required placeholder="e.g. 10:30 AM - 11:30 AM" value={newTime} onChange={(e) => setNewTime(e.target.value)} />
                 </div>
               </div>
+
+              {/* Quick Doctor Time Slot Chips */}
+              {(() => {
+                const doc = doctors.find(d => d.id === newDoctorId);
+                const slotsToOffer = (doc?.timeSlots && doc.timeSlots.length > 0) ? doc.timeSlots : timeSlots;
+                if (!slotsToOffer || slotsToOffer.length === 0) return null;
+
+                return (
+                  <div>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', display: 'block', marginBottom: '4px' }}>
+                      {doc?.timeSlots && doc.timeSlots.length > 0 ? `QUICK PICK: ${doc.name.toUpperCase()}'S SLOTS` : 'QUICK PICK CLINIC SLOTS'}
+                    </label>
+                    <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', maxHeight: '100px', overflowY: 'auto' }}>
+                      {slotsToOffer.map((slot, sIdx) => (
+                        <button
+                          key={sIdx}
+                          type="button"
+                          onClick={() => setNewTime(slot)}
+                          style={{
+                            fontSize: '0.74rem',
+                            padding: '3px 8px',
+                            borderRadius: '5px',
+                            border: newTime === slot ? '1px solid #0284c7' : '1px solid #cbd5e1',
+                            background: newTime === slot ? '#e0f2fe' : '#f8fafc',
+                            color: newTime === slot ? '#0284c7' : '#334155',
+                            fontWeight: newTime === slot ? 700 : 500,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          🕒 {slot}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div>
                 <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>NOTES / COMPLAINTS</label>

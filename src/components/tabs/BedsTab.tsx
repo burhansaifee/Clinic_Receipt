@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { format, differenceInMinutes, parseISO } from 'date-fns';
 import {
   Bed, Plus, Search, Clock,
@@ -231,14 +231,14 @@ export const BedsTab: React.FC<BedsTabProps> = ({
         storage.getIpdDashboardMetrics(),
         storage.getServices()
       ]);
-      setWards(w);
-      setBeds(b);
-      setAdmissions(a);
-      setMetrics(m);
-      setHospitalServices(s || []);
+      setWards(prev => JSON.stringify(prev) === JSON.stringify(w) ? prev : w);
+      setBeds(prev => JSON.stringify(prev) === JSON.stringify(b) ? prev : b);
+      setAdmissions(prev => JSON.stringify(prev) === JSON.stringify(a) ? prev : a);
+      setMetrics(prev => JSON.stringify(prev) === JSON.stringify(m) ? prev : m);
+      setHospitalServices(prev => JSON.stringify(prev) === JSON.stringify(s || []) ? prev : (s || []));
     } catch (err) {
       console.error('Failed to load IPD ward and bed matrix:', err);
-      toast('Failed to load bed occupancy data', { type: 'error' });
+      if (!silent) toast('Failed to load bed occupancy data', { type: 'error' });
     } finally {
       if (!silent) setIsLoading(false);
     }
@@ -283,10 +283,10 @@ export const BedsTab: React.FC<BedsTabProps> = ({
   useEffect(() => {
     loadData();
     const handleSync = () => {
-      loadData();
+      loadData(true);
     };
     window.addEventListener('buvora-data-updated', handleSync);
-    const interval = setInterval(loadData, 5000);
+    const interval = setInterval(() => loadData(true), 5000);
     return () => {
       window.removeEventListener('buvora-data-updated', handleSync);
       clearInterval(interval);
@@ -294,15 +294,19 @@ export const BedsTab: React.FC<BedsTabProps> = ({
   }, []);
 
   // Update default doctor if doctors list arrives
+  const hasInitializedDoctorRef = useRef(false);
   useEffect(() => {
-    if (doctors.length > 0 && !admissionForm.doctorId) {
+    if (doctors.length > 0 && !admissionForm.doctorId && !hasInitializedDoctorRef.current) {
+      hasInitializedDoctorRef.current = true;
       setAdmissionForm(prev => ({ ...prev, doctorId: doctors[0].id }));
     }
   }, [doctors]);
 
   // Set default ward for bed creation
+  const hasInitializedWardRef = useRef(false);
   useEffect(() => {
-    if (wards.length > 0 && !newBedData.wardId) {
+    if (wards.length > 0 && !newBedData.wardId && !hasInitializedWardRef.current) {
+      hasInitializedWardRef.current = true;
       setNewBedData(prev => ({ ...prev, wardId: wards[0].id, dailyRate: wards[0].dailyRate }));
     }
   }, [wards]);
@@ -405,18 +409,41 @@ export const BedsTab: React.FC<BedsTabProps> = ({
       recordedAt: admissionForm.admittedAt || new Date().toISOString()
     };
 
+    // Ensure patient PID is preserved if this is an existing patient
+    let effectivePid = (admissionForm.patientUhid || admissionForm.patientId || '').trim();
+    if (admissionForm.patientPhone && admissionForm.patientPhone.trim().length >= 10) {
+      try {
+        const match = await storage.findPatientByPhoneOrId(admissionForm.patientPhone.trim());
+        if (match?.patientId) {
+          effectivePid = match.patientId.trim();
+        }
+      } catch (_) {}
+    }
+    if (!effectivePid && admissionForm.patientName) {
+      try {
+        const globals = await storage.searchGlobalPatients(admissionForm.patientName.trim());
+        const exact = globals.find(g =>
+          g.patientName.trim().toLowerCase() === admissionForm.patientName.trim().toLowerCase() &&
+          (g.patientUhid || g.patientId)
+        );
+        if (exact) {
+          effectivePid = (exact.patientUhid || exact.patientId || '').trim();
+        }
+      } catch (_) {}
+    }
+
     try {
       let advanceReceiptNumber: string | undefined = undefined;
       const advanceVal = Number(admissionForm.advancePaid) || 0;
       if (advanceVal > 0) {
         try {
-          const nextRec = await storage.getNextReceiptNumber(false);
+          const nextRec = await storage.getNextReceiptNumber(false, admissionForm.doctorId);
           const payMethod: 'CASH' | 'ONLINE' = admissionForm.paymentMode === 'CASH' ? 'CASH' : 'ONLINE';
           const advanceReceipt: Receipt = {
             id: crypto.randomUUID(),
             receiptNumber: nextRec,
             date: admissionForm.admittedAt ? format(new Date(admissionForm.admittedAt), 'yyyy-MM-dd HH:mm') : format(new Date(), 'yyyy-MM-dd HH:mm'),
-            patientId: admissionForm.patientId || admissionForm.patientUhid,
+            patientId: effectivePid,
             patientName: admissionForm.patientName.trim(),
             patientAge: admissionForm.patientAge,
             patientGender: admissionForm.patientGender,
@@ -454,8 +481,8 @@ export const BedsTab: React.FC<BedsTabProps> = ({
       ].filter(Boolean).join(' | ');
 
       const admission = await storage.admitPatientToBed({
-        patientId: admissionForm.patientId || admissionForm.patientUhid,
-        patientUhid: admissionForm.patientUhid || admissionForm.patientId,
+        patientId: effectivePid,
+        patientUhid: effectivePid,
         patientName: admissionForm.patientName.trim(),
         patientPhone: admissionForm.patientPhone.trim(),
         patientAge: admissionForm.patientAge,
@@ -1928,8 +1955,43 @@ export const BedsTab: React.FC<BedsTabProps> = ({
                     type="tel"
                     placeholder="10-digit mobile"
                     value={admissionForm.patientPhone}
-                    onChange={e => setAdmissionForm({ ...admissionForm, patientPhone: e.target.value })}
+                    onChange={async e => {
+                      const val = e.target.value;
+                      setAdmissionForm(prev => ({ ...prev, patientPhone: val }));
+                      const clean = val.replace(/\D/g, '');
+                      if (clean.length === 10) {
+                        try {
+                          const match = await storage.findPatientByPhoneOrId(clean);
+                          if (match) {
+                            setAdmissionForm(prev => ({
+                              ...prev,
+                              patientId: match.patientId || prev.patientId,
+                              patientUhid: match.patientId || prev.patientUhid,
+                              patientName: prev.patientName || match.patientName,
+                              patientAge: prev.patientAge || match.patientAge || '',
+                              patientGender: prev.patientGender || match.patientGender || 'Male'
+                            }));
+                            toast(`Returning Patient Found: ${match.patientName} (${match.patientId})`, { type: 'info' });
+                          } else {
+                            const globals = await storage.searchGlobalPatients(clean);
+                            if (globals && globals.length > 0) {
+                              const g = globals[0];
+                              setAdmissionForm(prev => ({
+                                ...prev,
+                                patientId: g.patientUhid || g.patientId || prev.patientId,
+                                patientUhid: g.patientUhid || g.patientId || prev.patientUhid,
+                                patientName: prev.patientName || g.patientName,
+                                patientAge: prev.patientAge || g.patientAge || '',
+                                patientGender: prev.patientGender || g.patientGender || 'Male'
+                              }));
+                              toast(`Returning Patient Found: ${g.patientName} (${g.patientUhid || g.patientId})`, { type: 'info' });
+                            }
+                          }
+                        } catch (_) {}
+                      }
+                    }}
                     className="input-field"
+                    maxLength={10}
                   />
                 </div>
                 <div>

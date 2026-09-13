@@ -139,33 +139,34 @@ export const EmergencyTab: React.FC<EmergencyTabProps> = ({
     toast.show(`Auto-filled details for ${p.patientName}`, 'info');
   };
 
-  const loadEmergencyData = async () => {
+  const loadEmergencyData = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const [vList, mList, mData, bList] = await Promise.all([
         storage.getEmergencyVisits(),
         storage.getMlcRecords(),
         storage.getEmergencyDashboardMetrics(),
         storage.getBeds()
       ]);
-      setVisits(vList);
-      setMlcRecords(mList);
-      setMetrics(mData);
-      setAvailableBeds(bList.filter(b => b.status === 'available'));
+      const availBeds = bList.filter(b => b.status === 'available');
+      setVisits(prev => JSON.stringify(prev) === JSON.stringify(vList) ? prev : vList);
+      setMlcRecords(prev => JSON.stringify(prev) === JSON.stringify(mList) ? prev : mList);
+      setMetrics(prev => JSON.stringify(prev) === JSON.stringify(mData) ? prev : mData);
+      setAvailableBeds(prev => JSON.stringify(prev) === JSON.stringify(availBeds) ? prev : availBeds);
     } catch (e) {
       console.error('Failed to load emergency data:', e);
-      toast.show('Failed to load emergency registry', 'error');
+      if (!silent) toast.show('Failed to load emergency registry', 'error');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
     loadEmergencyData();
-    const interval = setInterval(loadEmergencyData, 5000); // 5s auto-refresh for LAN sync
+    const interval = setInterval(() => loadEmergencyData(true), 5000); // 5s auto-refresh for LAN sync
     const handleLiveSync = (e: CustomEvent) => {
       if (!e.detail?.dataType || e.detail.dataType === 'emergency' || e.detail.dataType === 'beds' || e.detail.dataType === 'mlc') {
-        loadEmergencyData();
+        loadEmergencyData(true);
       }
     };
     window.addEventListener('buvora-data-updated', handleLiveSync as EventListener);
@@ -340,6 +341,7 @@ export const EmergencyTab: React.FC<EmergencyTabProps> = ({
 
   return (
     <div className="er-tab-container">
+      <div className={`emergency-screen-ui ${selectedMlcToPrint ? 'no-print' : ''}`}>
       {/* ── Top Header ──────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
@@ -1218,11 +1220,12 @@ export const EmergencyTab: React.FC<EmergencyTabProps> = ({
           </div>
         </div>
       )}
+      </div>
 
       {/* ── Printable MLC Police Intimation Slip Preview ─────────────────────── */}
       {selectedMlcToPrint && (
         <div className="modal-backdrop" onClick={() => setSelectedMlcToPrint(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10600, padding: '1rem' }}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ background: 'white', borderRadius: '12px', width: '100%', maxWidth: '700px', maxHeight: '92vh', overflowY: 'auto', padding: '2rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
+          <div id="printable-mlc-slip" className="modal-card" onClick={(e) => e.stopPropagation()} style={{ background: 'white', borderRadius: '12px', width: '100%', maxWidth: '700px', maxHeight: '92vh', overflowY: 'auto', padding: '2rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #0f172a', paddingBottom: '0.75rem', marginBottom: '1.5rem' }}>
               <div>
                 <h2 style={{ margin: 0, fontSize: '1.4rem', color: '#0f172a' }}>POLICE INTIMATION SLIP</h2>

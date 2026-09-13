@@ -32,7 +32,7 @@ interface InpatientCensusTabProps {
 
 export const InpatientCensusTab: React.FC<InpatientCensusTabProps> = ({
   doctors,
-  onNavigateToBilling: _onNavigateToBilling,
+  onNavigateToBilling,
   onNavigateToBeds
 }) => {
   const toast = useToast();
@@ -157,14 +157,14 @@ export const InpatientCensusTab: React.FC<InpatientCensusTabProps> = ({
         storage.getIpdDashboardMetrics(),
         storage.getServices()
       ]);
-      setWards(w);
-      setBeds(b);
-      setAdmissions(a);
-      setMetrics(m);
-      setHospitalServices(s || []);
+      setWards(prev => JSON.stringify(prev) === JSON.stringify(w) ? prev : w);
+      setBeds(prev => JSON.stringify(prev) === JSON.stringify(b) ? prev : b);
+      setAdmissions(prev => JSON.stringify(prev) === JSON.stringify(a) ? prev : a);
+      setMetrics(prev => JSON.stringify(prev) === JSON.stringify(m) ? prev : m);
+      setHospitalServices(prev => JSON.stringify(prev) === JSON.stringify(s || []) ? prev : (s || []));
     } catch (err) {
       console.error('Failed to load Inpatient Census data:', err);
-      toast('Failed to load census data', { type: 'error' });
+      if (!silent) toast('Failed to load census data', { type: 'error' });
     } finally {
       if (!silent) setIsLoading(false);
     }
@@ -527,12 +527,28 @@ export const InpatientCensusTab: React.FC<InpatientCensusTabProps> = ({
       if (!confirmed) return;
 
       try {
+        const admissionForBilling = { ...activeAdmissionRecord };
+        // Resolve patient PID if missing from admission record
+        if (!admissionForBilling.patientUhid && !admissionForBilling.patientId && admissionForBilling.patientPhone) {
+          try {
+            const m = await storage.findPatientByPhoneOrId(admissionForBilling.patientPhone);
+            if (m?.patientId) {
+              admissionForBilling.patientUhid = m.patientId;
+              admissionForBilling.patientId = m.patientId;
+            }
+          } catch (_) {}
+        }
+
         await storage.updateAdmissionBillingStatus(activeAdmissionRecord.id, 'QUEUED', dischargeSummaryNotes);
         toast(`Patient ${patientName} added to Facility Billing Queue. Billing desk can now settle invoice.`, { type: 'success' });
         setSelectedBedForDetails(null);
         setActiveAdmissionRecord(null);
         setDischargeSummaryNotes('');
         await loadData(true);
+
+        if (onNavigateToBilling) {
+          onNavigateToBilling(admissionForBilling);
+        }
       } catch (err: any) {
         console.error('Failed to queue admission for billing:', err);
         toast('Failed to add patient to billing queue', { type: 'error' });
@@ -968,7 +984,7 @@ export const InpatientCensusTab: React.FC<InpatientCensusTabProps> = ({
       )}
 
       {/* ── Printable Header (Only visible on print) ─────────────────────────── */}
-      <div className="print-only" style={{ display: 'none', marginBottom: '1.5rem' }}>
+      <div className="print-only inpatient-census-printable" style={{ marginBottom: '1.5rem' }}>
         <div style={{ textAlign: 'center', borderBottom: '2px solid #0f172a', paddingBottom: '0.75rem' }}>
           <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 800 }}>HOSPITAL INPATIENT CENSUS REPORT</h2>
           <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#475569' }}>
@@ -983,7 +999,7 @@ export const InpatientCensusTab: React.FC<InpatientCensusTabProps> = ({
       </div>
 
       {/* ── Inpatient Census Table ────────────────────────────────────────────── */}
-      <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+      <div className="inpatient-census-table-wrapper" style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
         <div className="no-print" style={{ padding: '0.9rem 1.25rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
           <div>
             <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: '#0f172a' }}>
@@ -995,7 +1011,7 @@ export const InpatientCensusTab: React.FC<InpatientCensusTabProps> = ({
           </div>
         </div>
 
-        <div style={{ overflowX: 'auto' }}>
+        <div className="inpatient-census-scroll" style={{ overflowX: 'auto' }}>
           <table className="data-table" style={{ width: '100%', minWidth: '1080px', margin: 0, fontSize: '0.825rem' }}>
             <thead>
               <tr>

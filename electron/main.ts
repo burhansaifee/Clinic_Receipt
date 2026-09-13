@@ -222,7 +222,7 @@ function startHostServer() {
               camelMethod = 'getPharmacyDashboardMetrics';
             }
             const allowedMethods = [
-              'getDoctors', 'saveDoctor', 'deleteDoctor', 'getServices', 'saveService', 'deleteService',
+              'getDoctors', 'saveDoctor', 'deleteDoctor', 'getDoctorReceiptCount', 'getServices', 'saveService', 'deleteService',
               'getReceipts', 'getDashboardMetrics', 'saveReceipt', 'saveReceiptAtomic', 'updateReceipt',
               'deleteReceipt', 'getMetadata', 'setMetadata', 'batchImportDoctors', 'getPrescriptions',
               'savePrescription', 'deletePrescription', 'getAppointments', 'saveAppointment',
@@ -760,6 +760,10 @@ ipcMain.handle('db-save-doctor', (_, doctor) => {
 ipcMain.handle('db-delete-doctor', (_, id) => {
   if (workstationMode === 'client') return clientRequest('db-delete-doctor', id);
   return database.deleteDoctor(id);
+})
+ipcMain.handle('db-get-doctor-receipt-count', (_, doctorId) => {
+  if (workstationMode === 'client') return clientRequest('db-get-doctor-receipt-count', doctorId);
+  return database.getDoctorReceiptCount(doctorId);
 })
 
 ipcMain.handle('db-get-services', () => {

@@ -44,6 +44,7 @@ interface DatabaseBridge {
   getDoctors(): Promise<Doctor[]>;
   saveDoctor(doctor: Doctor): Promise<void>;
   deleteDoctor(id: string): Promise<void>;
+  getDoctorReceiptCount(doctorId: string): Promise<number>;
   getServices(): Promise<Service[]>;
   saveService(service: Service): Promise<void>;
   deleteService(id: string): Promise<void>;

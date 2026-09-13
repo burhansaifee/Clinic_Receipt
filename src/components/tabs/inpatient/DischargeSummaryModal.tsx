@@ -226,12 +226,19 @@ export const DischargeSummaryModal: React.FC<DischargeSummaryModalProps> = ({
     }
   };
 
+  useEffect(() => {
+    document.body.classList.add('printing-discharge-summary');
+    return () => {
+      document.body.classList.remove('printing-discharge-summary');
+    };
+  }, []);
+
   const handlePrint = () => {
     // Switch to preview mode then print
     setViewMode('PREVIEW');
     setTimeout(() => {
       window.print();
-    }, 200);
+    }, 350);
   };
 
   return (

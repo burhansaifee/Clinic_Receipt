@@ -76,8 +76,8 @@ export const StockIndentingTab: React.FC = () => {
   }[]>([]);
   const [fulfilledBy, setFulfilledBy] = useState<string>('Lead Pharmacist');
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const [indList, medList, batchList] = await Promise.all([
         storage.getHospitalIndents({
@@ -88,23 +88,23 @@ export const StockIndentingTab: React.FC = () => {
         storage.getMedicines ? storage.getMedicines() : [],
         storage.getMedicineBatches ? storage.getMedicineBatches() : []
       ]);
-      setIndents(indList);
-      setMedicines(medList);
-      setBatches(batchList);
+      setIndents(prev => JSON.stringify(prev) === JSON.stringify(indList) ? prev : indList);
+      setMedicines(prev => JSON.stringify(prev) === JSON.stringify(medList) ? prev : medList);
+      setBatches(prev => JSON.stringify(prev) === JSON.stringify(batchList) ? prev : batchList);
     } catch (e) {
       console.error('Failed to load stock indents:', e);
-      toast.show('Failed to load departmental requisitions', 'error');
+      if (!silent) toast.show('Failed to load departmental requisitions', 'error');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 5000); // 5s auto-refresh for LAN sync
+    const interval = setInterval(() => loadData(true), 5000); // 5s auto-refresh for LAN sync
     const handleLiveSync = (e: CustomEvent) => {
       if (!e.detail?.dataType || e.detail.dataType === 'indents' || e.detail.dataType === 'medicines') {
-        loadData();
+        loadData(true);
       }
     };
     window.addEventListener('buvora-data-updated', handleLiveSync as EventListener);

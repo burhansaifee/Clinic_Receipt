@@ -120,27 +120,123 @@ input:focus, select:focus {
 
 /* Print Styles */
 @media print {
-  html, body, #root, .app-container, .doctor-container, .main-content {
+  /* Universal reset for all main containers */
+  html, body, #root, .app-container, .doctor-container, .main-content, .content-inner {
     display: block !important;
     width: 100% !important;
     height: auto !important;
     min-height: 0 !important;
     background: white !important;
+    color: #000000 !important;
     padding: 0 !important;
     margin: 0 !important;
     box-shadow: none !important;
     overflow: visible !important;
     position: static !important;
+    float: none !important;
+    transform: none !important;
   }
-  .no-print, .modal-overlay, .doctor-header, .doctor-layout, .writer-overlay {
+
+  /* Universal print visibility guarantee */
+  body, #root {
+    visibility: visible !important;
+  }
+
+  /* Hide screen chrome, navigation, alerts & controls */
+  .no-print,
+  .sidebar,
+  .app-sidebar,
+  .content-header,
+  .mobile-header,
+  .doctor-header,
+  .doctor-tabs,
+  .doctor-layout,
+  .writer-overlay,
+  .toast-container,
+  .btn-signout,
+  .user-profile-container,
+  .rx-scope-toggle,
+  .btn-close,
+  .btn-close-ehr {
     display: none !important;
   }
+
+  /* Reset all modal backdrops, dialogs & containers so they never block or clip reports */
+  .modal-backdrop,
+  .modal-overlay,
+  .modal-content,
+  .modal-container,
+  .modal-card,
+  .discharge-modal-overlay,
+  .discharge-modal-container,
+  .discharge-a4-preview-wrapper,
+  .payout-modal-overlay,
+  .payout-modal-container {
+    position: static !important;
+    inset: auto !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    display: block !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* When printing discharge summary modal, hide background tabs */
+  body.printing-discharge-summary .main-content > .content-inner > *:not(:has(.discharge-modal-overlay)):not(.discharge-modal-overlay) {
+    display: none !important;
+  }
+
+  /* All dedicated printable templates must always be visible, display block, and full opacity */
   .print-only,
   #prescription-print-template,
-  #receipt-print-template {
+  #receipt-print-template,
+  #pharmacy-print-slip,
+  #printable-lab-report,
+  .discharge-a4-paper,
+  .payout-voucher-printable,
+  #printable-mlc-slip,
+  .inpatient-census-printable {
     display: block !important;
     visibility: visible !important;
     opacity: 1 !important;
+    position: static !important;
+    width: 100% !important;
+    margin: 0 auto !important;
+  }
+
+  /* Ensure all nested text and elements inside printable templates are visible and dark/contrasting */
+  #prescription-print-template *,
+  #receipt-print-template *,
+  #pharmacy-print-slip *,
+  #printable-lab-report *,
+  .discharge-a4-paper *,
+  .payout-voucher-printable *,
+  #printable-mlc-slip *,
+  .inpatient-census-printable * {
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
+  /* Inpatient Census & Data Tables print responsive unclipped rules */
+  .inpatient-census-table-wrapper,
+  .inpatient-census-scroll {
+    overflow: visible !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+  }
+  .inpatient-census-scroll .data-table {
+    min-width: 0 !important;
+    width: 100% !important;
   }
 }
 

@@ -5,7 +5,7 @@ import {
   History, User, Activity, Clock, Bed, Pill, Stethoscope
 } from 'lucide-react';
 import type { Receipt, PatientHistorySummary } from '../../lib/storage';
-import { storage } from '../../lib/storage';
+import { storage, isAdvanceDepositReceipt } from '../../lib/storage';
 import { useToast } from '../ui/Toast';
 import { sendReceiptViaWhatsApp, formatReceiptWhatsAppMessage } from '../../lib/whatsappReceipt';
 import '../../styles/tabs/HistoryTab.css';
@@ -93,12 +93,19 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
 
     // Receipts
     patientHistoryData.receipts.forEach(r => {
+      const isAdvance = isAdvanceDepositReceipt(r);
       const isFacility = r.billType === 'FACILITY';
+      let title = `OPD Receipt #${r.receiptNumber}`;
+      if (isAdvance) {
+        title = `Advance Deposit #${r.receiptNumber}${r.roomNumber ? ` (${r.roomNumber})` : ''}`;
+      } else if (isFacility) {
+        title = `Discharge Bill #${r.receiptNumber}${r.roomNumber ? ` (${r.roomNumber})` : ''}`;
+      }
       list.push({
         id: `receipt-${r.id}`,
         type: isFacility ? 'FACILITY_BILL' : 'OPD_RECEIPT',
         date: r.date,
-        title: isFacility ? `Facility Bill #${r.receiptNumber}${r.roomNumber ? ` (${r.roomNumber})` : ''}` : `OPD Receipt #${r.receiptNumber}`,
+        title,
         doctorName: r.doctorName,
         summary: `Total: ₹${Number(r.total || 0).toFixed(2)} (${r.paymentMethod}) • ${r.items?.length || 0} item(s)`,
         data: r
@@ -475,16 +482,45 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
                               </td>
                               <td>
                                 <span className="r-num">#{r.receiptNumber}</span>
-                                {r.billType === 'FACILITY' && (
+                                {isAdvanceDepositReceipt(r) ? (
                                   <div style={{ marginTop: '2px' }}>
                                     <span
-                                      title={r.roomNumber ? `Room/Bed: ${r.roomNumber}` : 'Facility & Inpatient Bill'}
-                                      style={{ fontSize: '0.65rem', background: '#f3e8ff', color: '#7e22ce', border: '1px solid #e9d5ff', padding: '1px 5px', borderRadius: '4px', fontWeight: 700, display: 'inline-block' }}
+                                      title={r.roomNumber ? `Room/Bed: ${r.roomNumber} • IPD Advance Deposit` : 'IPD Advance Payment Deposit'}
+                                      style={{
+                                        fontSize: '0.65rem',
+                                        background: '#fffbeb',
+                                        color: '#b45309',
+                                        border: '1px solid #fde68a',
+                                        padding: '1px 6px',
+                                        borderRadius: '4px',
+                                        fontWeight: 800,
+                                        display: 'inline-block',
+                                        letterSpacing: '0.02em'
+                                      }}
                                     >
-                                      FACILITY
+                                      ADVANCE DEPOSIT
                                     </span>
                                   </div>
-                                )}
+                                ) : r.billType === 'FACILITY' ? (
+                                  <div style={{ marginTop: '2px' }}>
+                                    <span
+                                      title={r.roomNumber ? `Room/Bed: ${r.roomNumber} • Inpatient & Discharge Bill` : 'Inpatient Facility & Discharge Bill'}
+                                      style={{
+                                        fontSize: '0.65rem',
+                                        background: '#f3e8ff',
+                                        color: '#7e22ce',
+                                        border: '1px solid #e9d5ff',
+                                        padding: '1px 6px',
+                                        borderRadius: '4px',
+                                        fontWeight: 800,
+                                        display: 'inline-block',
+                                        letterSpacing: '0.02em'
+                                      }}
+                                    >
+                                      DISCHARGE BILL
+                                    </span>
+                                  </div>
+                                ) : null}
                               </td>
                               <td
                                 className="patient-cell-clickable"
@@ -1091,16 +1127,31 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.65rem', marginBottom: '0.75rem' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <span style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>Receipt #{r.receiptNumber}</span>
-                                <span style={{
-                                  fontSize: '0.7rem',
-                                  fontWeight: 700,
-                                  padding: '1px 6px',
-                                  borderRadius: '4px',
-                                  background: r.billType === 'FACILITY' ? '#f3e8ff' : '#e0f2fe',
-                                  color: r.billType === 'FACILITY' ? '#7e22ce' : '#0284c7'
-                                }}>
-                                  {r.billType === 'FACILITY' ? 'FACILITY' : 'OPD CONSULTATION'}
-                                </span>
+                                {isAdvanceDepositReceipt(r) ? (
+                                  <span style={{
+                                    fontSize: '0.7rem',
+                                    fontWeight: 800,
+                                    padding: '2px 7px',
+                                    borderRadius: '4px',
+                                    background: '#fffbeb',
+                                    color: '#b45309',
+                                    border: '1px solid #fde68a'
+                                  }}>
+                                    ADVANCE DEPOSIT
+                                  </span>
+                                ) : (
+                                  <span style={{
+                                    fontSize: '0.7rem',
+                                    fontWeight: 800,
+                                    padding: '2px 7px',
+                                    borderRadius: '4px',
+                                    background: r.billType === 'FACILITY' ? '#f3e8ff' : '#e0f2fe',
+                                    color: r.billType === 'FACILITY' ? '#7e22ce' : '#0284c7',
+                                    border: r.billType === 'FACILITY' ? '1px solid #e9d5ff' : '1px solid #bae6fd'
+                                  }}>
+                                    {r.billType === 'FACILITY' ? 'DISCHARGE BILL' : 'OPD CONSULTATION'}
+                                  </span>
+                                )}
                               </div>
                               <span style={{ fontSize: '0.8rem', color: '#64748b' }}>📅 {r.date}</span>
                             </div>
@@ -1272,9 +1323,22 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
                           >
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f3e8ff', paddingBottom: '0.65rem', marginBottom: '0.75rem' }}>
                               <div>
-                                <span style={{ fontSize: '1rem', fontWeight: 800, color: '#7e22ce' }}>Inpatient Bill #{f.receiptNumber}</span>
-                                <span style={{ marginLeft: '8px', fontSize: '0.75rem', background: '#f3e8ff', color: '#7e22ce', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>
-                                  Room/Bed: {f.roomNumber || 'Assigned Ward'}
+                                {isAdvanceDepositReceipt(f) ? (
+                                  <span style={{ fontSize: '1rem', fontWeight: 800, color: '#b45309' }}>Advance Deposit #{f.receiptNumber}</span>
+                                ) : (
+                                  <span style={{ fontSize: '1rem', fontWeight: 800, color: '#7e22ce' }}>Discharge Bill #{f.receiptNumber}</span>
+                                )}
+                                <span style={{
+                                  marginLeft: '8px',
+                                  fontSize: '0.75rem',
+                                  background: isAdvanceDepositReceipt(f) ? '#fffbeb' : '#f3e8ff',
+                                  color: isAdvanceDepositReceipt(f) ? '#b45309' : '#7e22ce',
+                                  border: isAdvanceDepositReceipt(f) ? '1px solid #fde68a' : '1px solid #e9d5ff',
+                                  padding: '2px 7px',
+                                  borderRadius: '4px',
+                                  fontWeight: 800
+                                }}>
+                                  {isAdvanceDepositReceipt(f) ? 'ADVANCE DEPOSIT' : 'DISCHARGE SETTLEMENT'} {f.roomNumber ? `• Bed: ${f.roomNumber}` : ''}
                                 </span>
                               </div>
                               <span style={{ fontSize: '0.8rem', color: '#64748b' }}>📅 {f.date}</span>

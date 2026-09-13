@@ -573,7 +573,7 @@ async function handleIncomingBookingFlow(socket: any, jid: string, phone: string
     }
 
     case 2: {
-      // Step 2: Selected Doctor Choice -> Show Receptionist-Approved Days
+      // Step 2: Selected Doctor Choice -> Show Doctor-Approved Days
       const choiceIndex = parseInt(text) - 1;
       if (!isNaN(choiceIndex) && choiceIndex >= 0 && choiceIndex < doctors.length) {
         const selectedDoc = doctors[choiceIndex];
@@ -581,17 +581,23 @@ async function handleIncomingBookingFlow(socket: any, jid: string, phone: string
         userState.doctorName = selectedDoc.name;
 
         const schedule = getWhatsAppScheduleFromStore();
-        userState.availableDates = generateAvailableBookingDates(schedule.allowedDays || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
+        const docDays = (selectedDoc.availableDays && selectedDoc.availableDays.length > 0)
+          ? selectedDoc.availableDays
+          : (schedule.allowedDays || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
+
+        userState.availableDates = generateAvailableBookingDates(docDays);
 
         const dateListStr = userState.availableDates
           .map((d, idx) => `*${idx + 1}.* ${d.label}`)
           .join('\n');
 
+        const timingNote = selectedDoc.consultationTimings ? `\n🕒 _Doctor Timings: ${selectedDoc.consultationTimings}_` : '';
+
         const dateMsg =
-          `✅ Selected Doctor: *${selectedDoc.name}*\n\n` +
+          `✅ Selected Doctor: *${selectedDoc.name}* (${selectedDoc.specialization || 'Consultant'})\n\n` +
           `📅 *Please select your preferred Booking Date:*\n\n` +
           `${dateListStr}\n\n` +
-          `ℹ️ _Clinic Operating Days: ${(schedule.allowedDays || []).join(', ')}_\n` +
+          `ℹ️ _Available Days: ${docDays.join(', ')}_${timingNote}\n` +
           `_Reply with the date option number (1-${userState.availableDates.length})_`;
 
         userState.step = 3;
@@ -606,7 +612,7 @@ async function handleIncomingBookingFlow(socket: any, jid: string, phone: string
     }
 
     case 3: {
-      // Step 3: Date Selected -> Show Receptionist-Approved Time Slots
+      // Step 3: Date Selected -> Show Doctor-Specific Time Slots
       const choiceIndex = parseInt(text) - 1;
       let selectedDateObj: { label: string; dateStr: string; dayName: string } | null = null;
 
@@ -618,20 +624,24 @@ async function handleIncomingBookingFlow(socket: any, jid: string, phone: string
         userState.selectedDate = selectedDateObj.dateStr;
         userState.selectedDateFormatted = selectedDateObj.label;
 
+        const selectedDoc = doctors.find(d => d.id === userState.doctorId);
         const schedule = getWhatsAppScheduleFromStore();
-        userState.availableSlots = schedule.timeSlots || [
-          '09:00 AM - 10:00 AM',
-          '10:00 AM - 11:00 AM',
-          '11:00 AM - 12:00 PM',
-          '12:00 PM - 01:00 PM',
-          '04:00 PM - 05:00 PM',
-          '05:00 PM - 06:00 PM',
-          '06:00 PM - 07:00 PM',
-          '07:00 PM - 08:00 PM'
-        ];
+        const docSlots = (selectedDoc?.timeSlots && selectedDoc.timeSlots.length > 0)
+          ? selectedDoc.timeSlots
+          : (schedule.timeSlots || [
+            '09:00 AM - 10:00 AM',
+            '10:00 AM - 11:00 AM',
+            '11:00 AM - 12:00 PM',
+            '12:00 PM - 01:00 PM',
+            '04:00 PM - 05:00 PM',
+            '05:00 PM - 06:00 PM',
+            '06:00 PM - 07:00 PM',
+            '07:00 PM - 08:00 PM'
+          ]);
 
-        const availableSlots = userState.availableSlots || [];
-        const slotsListStr = availableSlots
+        userState.availableSlots = docSlots;
+
+        const slotsListStr = docSlots
           .map((slot, idx) => `*${idx + 1}.* ${slot}`)
           .join('\n');
 
@@ -639,8 +649,8 @@ async function handleIncomingBookingFlow(socket: any, jid: string, phone: string
           `📅 Selected Date: *${userState.selectedDateFormatted}*\n\n` +
           `⏰ *Please select an available Time Slot for ${userState.doctorName}:*\n\n` +
           `${slotsListStr}\n\n` +
-          `⚠️ _Bookings are strictly restricted to receptionist-approved clinic slots._\n` +
-          `_Reply with the slot number (1-${availableSlots.length})_`;
+          `⚠️ _Bookings are scheduled based on ${userState.doctorName}'s consultation timings._\n` +
+          `_Reply with the slot number (1-${docSlots.length})_`;
 
         userState.step = 4;
         conversationState[phone] = userState;
@@ -648,7 +658,7 @@ async function handleIncomingBookingFlow(socket: any, jid: string, phone: string
       } else {
         const schedule = getWhatsAppScheduleFromStore();
         await socket.sendMessage(jid, {
-          text: `⚠️ Invalid date selection. Please reply with a valid option number (1-${userState.availableDates?.length || 6}) for active operating days: ${(schedule.allowedDays || []).join(', ')}.`,
+          text: `⚠️ Invalid date selection. Please reply with a valid option number (1-${userState.availableDates?.length || 6}).`,
         });
       }
       break;

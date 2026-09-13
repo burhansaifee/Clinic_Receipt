@@ -413,24 +413,21 @@
 
 /* ── Printable Voucher Styling ─────────────────────────────────────────────── */
 @media print {
-  body * {
-    visibility: hidden;
-  }
-  .payout-voucher-printable,
-  .payout-voucher-printable * {
-    visibility: visible;
+  .payouts-screen-ui,
+  .payouts-container > :not(.payout-voucher-printable) {
+    display: none !important;
   }
   .payout-voucher-printable {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    padding: 2rem;
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    padding: 2rem !important;
     font-family: inherit;
     color: black !important;
     background: white !important;
+    visibility: visible !important;
   }
-  .no-print {
-    display: none !important;
+  .payout-voucher-printable * {
+    visibility: visible !important;
   }
 }

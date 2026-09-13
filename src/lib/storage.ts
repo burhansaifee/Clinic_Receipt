@@ -14,7 +14,29 @@ export interface Doctor {
   qrCodeText?: string;
   showQrCodeOnReceipt?: boolean;
   chamber?: string;
+  receiptPrefix?: string;
+  availableDays?: string[];
+  timeSlots?: string[];
+  consultationTimings?: string;
 }
+
+export const getDoctorReceiptPrefix = (doctor?: Partial<Doctor> | null, doctorNameFallback?: string): string => {
+  if (doctor?.receiptPrefix && doctor.receiptPrefix.trim()) {
+    return doctor.receiptPrefix.trim().toUpperCase();
+  }
+  const rawName = (doctor?.name || doctorNameFallback || '').trim();
+  if (!rawName) return 'DOC';
+  const clean = rawName.replace(/^(dr\.?|prof\.?|doctor|mr\.?|mrs\.?|ms\.?)\s+/i, '').trim();
+  if (!clean) return 'DOC';
+  const parts = clean.split(/[\s\-_\.]+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0][0].toUpperCase()}${parts[parts.length - 1][0].toUpperCase()}`;
+  } else if (parts.length === 1) {
+    const word = parts[0].toUpperCase();
+    return word.length >= 2 ? word.slice(0, 2) : `${word}D`;
+  }
+  return 'DOC';
+};
 
 export interface ReceiptItem {
   id: string;
@@ -104,6 +126,17 @@ export interface Receipt {
   advancePaid?: number;
   discount?: number;
 }
+
+export const isAdvanceDepositReceipt = (receipt?: Partial<Receipt> | null): boolean => {
+  if (!receipt) return false;
+  if (receipt.billType !== 'FACILITY') return false;
+  const items = receipt.items || [];
+  return items.some(i => {
+    const desc = (i.description || '').toLowerCase();
+    const unit = (i.unit || '').toLowerCase();
+    return unit === 'deposit' || desc.includes('advance deposit') || desc.includes('ipd advance');
+  });
+};
 
 export interface PrescribedMedicine {
   name: string;
@@ -1289,20 +1322,63 @@ export const storage = {
     return window.database?.getDashboardMetrics() || { totalReceipts: 0, totalRevenue: 0, avgPerReceipt: 0 };
   },
 
+  getDoctorReceiptCount: async (doctorId: string): Promise<number> => {
+    try {
+      if (window.database?.getDoctorReceiptCount) {
+        return await window.database.getDoctorReceiptCount(doctorId);
+      }
+      const allReceipts = await storage.getReceipts();
+      return allReceipts.filter(r => r.doctorId === doctorId).length;
+    } catch {
+      return 0;
+    }
+  },
+
   saveReceipt: async (receipt: Receipt) => {
     // Increment correct receipt number atomically
     const isFree = receipt.paymentMethod === 'FREE';
-    const key = isFree ? 'last_free_receipt_num' : 'last_receipt_num';
-    const nextNumValue = parseInt(receipt.receiptNumber.replace(/\D/g, '')) + 1;
-    const prefix = isFree ? 'F' : '';
-    const nextNum = prefix + nextNumValue.toString();
+    const doctorId = receipt.doctorId;
+    const key = doctorId 
+      ? (isFree ? `doctor_free_receipt_num_${doctorId}` : `doctor_receipt_num_${doctorId}`)
+      : (isFree ? 'last_free_receipt_num' : 'last_receipt_num');
+
+    // Parse the prefix and digits from the receipt number
+    const match = receipt.receiptNumber.match(/^(.*?)(\d+)$/);
+    let nextNum = '';
+    if (match) {
+      const pfx = match[1];
+      const digits = parseInt(match[2], 10);
+      nextNum = `${pfx}${digits + 1}`;
+    } else {
+      const digitsOnly = receipt.receiptNumber.replace(/\D/g, '');
+      const nextNumValue = (parseInt(digitsOnly, 10) || 1000) + 1;
+      nextNum = (isFree ? 'F' : '') + nextNumValue.toString();
+    }
     
     if (window.database?.saveReceiptAtomic) {
-        await window.database.saveReceiptAtomic(receipt, key, nextNum);
+      await window.database.saveReceiptAtomic(receipt, key, nextNum);
     } else {
       // Fallback for older host
-        await window.database.saveReceipt(receipt);
-        await window.database.setMetadata(key, nextNum);
+      await window.database.saveReceipt(receipt);
+      await window.database.setMetadata(key, nextNum);
+    }
+
+    // Also sync the global counter so fallback callers stay current
+    if (doctorId) {
+      try {
+        const numOnly = parseInt(receipt.receiptNumber.replace(/\D/g, ''), 10) || 0;
+        if (numOnly > 0) {
+          const globalKey = isFree ? 'last_free_receipt_num' : 'last_receipt_num';
+          const currentGlobal = await window.database?.getMetadata(globalKey);
+          const currentGlobalVal = currentGlobal ? (parseInt(currentGlobal.value.replace(/\D/g, ''), 10) || 0) : 0;
+          if (numOnly >= currentGlobalVal) {
+            const nextGlobal = (isFree ? 'F' : '') + (numOnly + 1).toString();
+            await window.database?.setMetadata(globalKey, nextGlobal);
+          }
+        }
+      } catch (e) {
+        console.warn('Could not sync global receipt counter:', e);
+      }
     }
 
     // Update last_patient_id metadata if a new PID number is higher
@@ -1334,7 +1410,28 @@ export const storage = {
     return true;
   },
 
-  getNextReceiptNumber: async (isFree: boolean = false): Promise<string> => {
+  getNextReceiptNumber: async (isFree: boolean = false, doctorId?: string): Promise<string> => {
+    if (doctorId) {
+      try {
+        const doctors = await storage.getDoctors();
+        const doctor = doctors.find(d => String(d.id) === String(doctorId));
+        const prefix = getDoctorReceiptPrefix(doctor);
+        const key = isFree ? `doctor_free_receipt_num_${doctorId}` : `doctor_receipt_num_${doctorId}`;
+
+        const meta = await window.database?.getMetadata(key);
+        if (meta && meta.value) {
+          return meta.value;
+        }
+
+        // If no metadata stored yet, calculate from count of existing receipts for this doctor
+        const count = await storage.getDoctorReceiptCount(doctorId);
+        const nextNumVal = 1000 + count + 1;
+        return isFree ? `F-${prefix}-${nextNumVal}` : `${prefix}-${nextNumVal}`;
+      } catch (err) {
+        console.warn('Failed to get doctor receipt number, falling back:', err);
+      }
+    }
+
     const key = isFree ? 'last_free_receipt_num' : 'last_receipt_num';
     const meta = await window.database.getMetadata(key);
     if (meta) return meta.value;

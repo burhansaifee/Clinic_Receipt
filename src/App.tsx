@@ -128,14 +128,77 @@ const MainApp: React.FC = () => {
         storage.getFollowUps(),
         storage.getPrintPaperSettings()
       ]);
-      setDoctors(d);
-      setServices(s);
-      setDashboardMetrics(metrics);
-      setPrescriptions(p);
-      setPendingAppointmentsCount(apts.filter((a: any) => a.status === 'PENDING').length);
-      setFollowUps(fus);
-      setReceiptPaperType(paperSettings.receiptPaper);
-      setPrescriptionPaperType(paperSettings.prescriptionPaper);
+
+      setDoctors(prev => {
+        if (
+          prev.length === d.length &&
+          prev.every((item, idx) =>
+            item.id === d[idx]?.id &&
+            item.name === d[idx]?.name &&
+            item.specialization === d[idx]?.specialization &&
+            item.phone === d[idx]?.phone &&
+            item.chamber === d[idx]?.chamber &&
+            item.showQrCodeOnReceipt === d[idx]?.showQrCodeOnReceipt
+          )
+        ) {
+          return prev;
+        }
+        return d;
+      });
+
+      setServices(prev => {
+        if (
+          prev.length === s.length &&
+          prev.every((item, idx) =>
+            item.id === s[idx]?.id &&
+            item.name === s[idx]?.name &&
+            item.amount === s[idx]?.amount &&
+            item.category === s[idx]?.category &&
+            item.serviceType === s[idx]?.serviceType &&
+            item.unit === s[idx]?.unit
+          )
+        ) {
+          return prev;
+        }
+        return s;
+      });
+
+      setDashboardMetrics(prev => {
+        if (
+          prev.totalReceipts === metrics.totalReceipts &&
+          prev.totalRevenue === metrics.totalRevenue &&
+          prev.avgPerReceipt === metrics.avgPerReceipt
+        ) {
+          return prev;
+        }
+        return metrics;
+      });
+
+      setPrescriptions(prev => {
+        if (
+          prev.length === p.length &&
+          (prev.length === 0 || prev[0]?.id === p[0]?.id)
+        ) {
+          return prev;
+        }
+        return p;
+      });
+
+      const pendingCount = apts.filter((a: any) => a.status === 'PENDING').length;
+      setPendingAppointmentsCount(prev => prev === pendingCount ? prev : pendingCount);
+
+      setFollowUps(prev => {
+        if (
+          prev.length === fus.length &&
+          prev.every((item, idx) => item.id === fus[idx]?.id && item.status === fus[idx]?.status)
+        ) {
+          return prev;
+        }
+        return fus;
+      });
+
+      setReceiptPaperType(prev => prev === paperSettings.receiptPaper ? prev : paperSettings.receiptPaper);
+      setPrescriptionPaperType(prev => prev === paperSettings.prescriptionPaper ? prev : paperSettings.prescriptionPaper);
     } finally {
       if (!silent) setIsLoadingData(false);
     }
@@ -251,11 +314,20 @@ const MainApp: React.FC = () => {
     return () => { window.removeEventListener('online', toggle); window.removeEventListener('offline', toggle); };
   }, []);
 
-  // Clear print state after print dialog closes
+  // Clear print state safely after print dialog closes (debounced to avoid unmounting before spooling)
   useEffect(() => {
-    const clear = () => { setReceiptsToPrint([]); setActivePrintPrescription(null); };
+    let timer: NodeJS.Timeout;
+    const clear = () => {
+      timer = setTimeout(() => {
+        setReceiptsToPrint([]);
+        setActivePrintPrescription(null);
+      }, 3000);
+    };
     window.addEventListener('afterprint', clear);
-    return () => window.removeEventListener('afterprint', clear);
+    return () => {
+      window.removeEventListener('afterprint', clear);
+      clearTimeout(timer);
+    };
   }, []);
 
   // WhatsApp bot status
@@ -342,13 +414,13 @@ const MainApp: React.FC = () => {
   const handlePrint = (input: ReceiptType | ReceiptType[]) => {
     setActivePrintPrescription(null);
     setReceiptsToPrint(Array.isArray(input) ? input : [input]);
-    setTimeout(() => window.print(), 250);
+    setTimeout(() => window.print(), 350);
   };
 
   const handlePrintRx = (rx: Prescription) => {
     setReceiptsToPrint([]);
     setActivePrintPrescription(rx);
-    setTimeout(() => window.print(), 250);
+    setTimeout(() => window.print(), 350);
   };
 
   const handleEditReceipt = (receipt: ReceiptType) => {
@@ -484,7 +556,7 @@ const MainApp: React.FC = () => {
         allowedTabs={allowedTabs as Tab[]}
       />
 
-      <main className="main-content">
+      <main className={`main-content ${receiptsToPrint.length > 0 || activePrintPrescription ? 'no-print' : ''}`}>
         <header className="content-header no-print">
           <div>
             <h1 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.01em' }}>
@@ -681,7 +753,7 @@ const MainApp: React.FC = () => {
               <ReceiptForm
                 doctors={doctors}
                 initialData={editingReceipt}
-                onSave={() => { refreshData(); setEditingReceipt(null); setActiveTab('history'); }}
+                onSave={() => { refreshData(); setEditingReceipt(null); }}
                 onPrintRequest={(receipt) => {
                   setReceiptsToPrint([receipt]);
                   setTimeout(() => window.print(), 150);
@@ -718,7 +790,7 @@ const MainApp: React.FC = () => {
                 doctors={doctors}
                 initialAdmission={billingInitialAdmission}
                 onClearInitialAdmission={() => setBillingInitialAdmission(null)}
-                onSave={() => { refreshData(); setActiveTab('history'); }}
+                onSave={() => { refreshData(); }}
                 onPrintRequest={(receipt) => {
                   setReceiptsToPrint([receipt]);
                   setTimeout(() => window.print(), 150);

@@ -117,8 +117,8 @@ export const LaboratoryTab: React.FC<LaboratoryTabProps> = ({ onRefresh }) => {
   });
 
   // Load All Data
-  const loadData = async () => {
-    setIsLoading(true);
+  const loadData = async (silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
       const [ordList, tstList, docList, recList, met] = await Promise.all([
         storage.getLabOrders(),
@@ -129,15 +129,19 @@ export const LaboratoryTab: React.FC<LaboratoryTabProps> = ({ onRefresh }) => {
       ]);
       setOrders(ordList);
       setTests(tstList);
-      setDoctors(docList);
+      setDoctors(prev => {
+        if (prev.length === docList.length && prev.every((d, i) => d.id === docList[i]?.id && d.name === docList[i]?.name)) {
+          return prev;
+        }
+        return docList;
+      });
       setRecentReceipts(recList);
       setMetrics(met);
-      if (onRefresh) onRefresh();
     } catch (err) {
       console.error('Failed to load laboratory data:', err);
-      toast('Failed to load lab records', { type: 'error' });
+      if (!silent) toast('Failed to load lab records', { type: 'error' });
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
@@ -146,11 +150,11 @@ export const LaboratoryTab: React.FC<LaboratoryTabProps> = ({ onRefresh }) => {
     const handleSync = (e: any) => {
       const dt = e?.detail?.dataType;
       if (!dt || dt === 'lab' || dt === 'receipts' || dt === 'prescriptions' || dt === 'all') {
-        loadData();
+        loadData(true);
       }
     };
     window.addEventListener('buvora-data-updated', handleSync);
-    const interval = setInterval(loadData, 5000);
+    const interval = setInterval(() => loadData(true), 5000);
     return () => {
       window.removeEventListener('buvora-data-updated', handleSync);
       clearInterval(interval);
@@ -624,6 +628,7 @@ export const LaboratoryTab: React.FC<LaboratoryTabProps> = ({ onRefresh }) => {
 
   return (
     <div style={{ padding: '1.5rem', maxWidth: '1400px', margin: '0 auto' }}>
+      <div className={`laboratory-screen-ui ${showReportModal ? 'no-print' : ''}`}>
       {/* ── Top Header ────────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
@@ -1901,6 +1906,7 @@ export const LaboratoryTab: React.FC<LaboratoryTabProps> = ({ onRefresh }) => {
           </div>
         </div>
       )}
+      </div>
 
       {/* ══════════════════════════════════════════════════════════════════════════
           MODAL 3: A4 DIAGNOSTIC REPORT PREVIEW & PRINT
@@ -1939,7 +1945,7 @@ export const LaboratoryTab: React.FC<LaboratoryTabProps> = ({ onRefresh }) => {
             }}
           >
             {/* Action Bar Header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem', marginBottom: '1.25rem' }}>
+            <div className="no-print" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem', marginBottom: '1.25rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <FileText size={20} color="#4f46e5" />
                 <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800 }}>A4 Diagnostic Investigation Report</h3>

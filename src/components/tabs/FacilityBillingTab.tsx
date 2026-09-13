@@ -5,7 +5,7 @@ import {
   Clock, FileText, CheckCircle, Search, ShieldCheck
 } from 'lucide-react';
 import { format, differenceInCalendarDays } from 'date-fns';
-import type { Doctor, Receipt, ReceiptItem, Service, ClinicProfile, BedAdmission, InsuranceClaim } from '../../lib/storage';
+import type { Doctor, Receipt, ReceiptItem, Service, ClinicProfile, BedAdmission, InsuranceClaim, GlobalPatientProfile } from '../../lib/storage';
 import { storage } from '../../lib/storage';
 import { sendReceiptViaWhatsApp } from '../../lib/whatsappReceipt';
 import { useToast } from '../ui/Toast';
@@ -54,30 +54,6 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
   const confirm = useConfirm();
   const formRef = useRef<HTMLDivElement>(null);
 
-  // Inpatient Bed Admission linkage & Billing Queue
-  const [activeLinkedAdmission, setActiveLinkedAdmission] = useState<BedAdmission | null>(null);
-  const [linkedClaim, setLinkedClaim] = useState<InsuranceClaim | null>(null);
-  const [showDischargeSummaryModal, setShowDischargeSummaryModal] = useState(false);
-  const [showInpatientSelector, setShowInpatientSelector] = useState(false);
-  const [activeInpatientsList, setActiveInpatientsList] = useState<BedAdmission[]>([]);
-  const [queuedInpatients, setQueuedInpatients] = useState<BedAdmission[]>([]);
-  const [queueSearchQuery, setQueueSearchQuery] = useState('');
-  const [isLoadingQueue, setIsLoadingQueue] = useState(false);
-
-  const filteredQueuedInpatients = useMemo(() => {
-    if (!queueSearchQuery.trim()) return queuedInpatients;
-    const q = queueSearchQuery.toLowerCase().trim();
-    return queuedInpatients.filter(adm =>
-      (adm.patientName && adm.patientName.toLowerCase().includes(q)) ||
-      (adm.patientUhid && adm.patientUhid.toLowerCase().includes(q)) ||
-      (adm.patientId && adm.patientId.toLowerCase().includes(q)) ||
-      (adm.patientPhone && adm.patientPhone.includes(q)) ||
-      (adm.bedNumber && adm.bedNumber.toLowerCase().includes(q)) ||
-      (adm.wardName && adm.wardName.toLowerCase().includes(q)) ||
-      (adm.doctorName && adm.doctorName.toLowerCase().includes(q))
-    );
-  }, [queuedInpatients, queueSearchQuery]);
-
   // Dynamic Clinic Services loaded from database
   const [facilityServices, setFacilityServices] = useState<Service[]>([]);
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<string>('ALL');
@@ -98,6 +74,11 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
   const [ageMonths, setAgeMonths] = useState('');
   const [patientGender, setPatientGender] = useState('Male');
   const [isReturningPatient, setIsReturningPatient] = useState(false);
+
+  // Global Patient Autocomplete State
+  const [patientSearchResults, setPatientSearchResults] = useState<GlobalPatientProfile[]>([]);
+  const [showPatientDropdown, setShowPatientDropdown] = useState(false);
+  const [isSearchingPatient, setIsSearchingPatient] = useState(false);
 
   // Admission & Facility details
   const [selectedDoctorId, setSelectedDoctorId] = useState(doctors[0]?.id || '');
@@ -131,23 +112,54 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
   const loadFacilityServices = async () => {
     try {
       const facilityOnly = await storage.getServices('FACILITY');
-      setFacilityServices(facilityOnly);
+      setFacilityServices(prev => JSON.stringify(prev) === JSON.stringify(facilityOnly) ? prev : facilityOnly);
     } catch (err) {
       console.error('Failed to load clinic facility services', err);
     }
   };
 
   // Load queued inpatients awaiting discharge billing settlement
-  const loadQueuedInpatients = async () => {
-    setIsLoadingQueue(true);
+  const [queuedInpatients, setQueuedInpatients] = useState<BedAdmission[]>([]);
+  const [isLoadingQueue, setIsLoadingQueue] = useState(false);
+  const [activeLinkedAdmission, setActiveLinkedAdmission] = useState<BedAdmission | null>(null);
+
+  // Modal to select from active admitted patients
+  const [showInpatientSelector, setShowInpatientSelector] = useState(false);
+  const [activeInpatientsList, setActiveInpatientsList] = useState<BedAdmission[]>([]);
+
+  // Linked TPA / Insurance Claim for this admission
+  const [linkedClaim, setLinkedClaim] = useState<InsuranceClaim | null>(null);
+
+  // Structured Clinical Discharge Summary Modal State
+  const [showDischargeSummaryModal, setShowDischargeSummaryModal] = useState(false);
+
+  const [queueSearchQuery, setQueueSearchQuery] = useState('');
+
+  const filteredQueuedInpatients = useMemo(() => {
+    if (!queueSearchQuery.trim()) return queuedInpatients;
+    const q = queueSearchQuery.toLowerCase().trim();
+    return queuedInpatients.filter(adm =>
+      (adm.patientName && adm.patientName.toLowerCase().includes(q)) ||
+      (adm.patientUhid && adm.patientUhid.toLowerCase().includes(q)) ||
+      (adm.patientId && adm.patientId.toLowerCase().includes(q)) ||
+      (adm.patientPhone && adm.patientPhone.includes(q)) ||
+      (adm.bedNumber && adm.bedNumber.toLowerCase().includes(q)) ||
+      (adm.wardName && adm.wardName.toLowerCase().includes(q)) ||
+      (adm.doctorName && adm.doctorName.toLowerCase().includes(q))
+    );
+  }, [queuedInpatients, queueSearchQuery]);
+
+  // Load queued inpatients awaiting discharge billing settlement
+  const loadQueuedInpatients = async (silent: boolean = false) => {
+    if (!silent) setIsLoadingQueue(true);
     try {
       const list = await storage.getBedAdmissions();
       const queued = list.filter((a: BedAdmission) => a.billingStatus === 'QUEUED');
-      setQueuedInpatients(queued);
+      setQueuedInpatients(prev => JSON.stringify(prev) === JSON.stringify(queued) ? prev : queued);
     } catch (err) {
       console.error('Failed to load queued inpatients:', err);
     } finally {
-      setIsLoadingQueue(false);
+      if (!silent) setIsLoadingQueue(false);
     }
   };
 
@@ -156,11 +168,14 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
     const init = async () => {
       try {
         const nextPid = await storage.getNextPatientId();
-        setPatientId(nextPid);
+        // CRITICAL RACE FIX: Only assign nextPid if no admission was passed and patientId was not already assigned
+        if (!initialAdmission) {
+          setPatientId(prev => (prev && prev.trim().length > 0 ? prev : nextPid));
+        }
         const nextRec = await storage.getNextReceiptNumber(false);
         setReceiptNumber(nextRec);
         await loadFacilityServices();
-        await loadQueuedInpatients();
+        await loadQueuedInpatients(false);
 
         // Load Clinic / Hospital profile & payment UPI QR
         const profile = await storage.getClinicProfile();
@@ -179,26 +194,72 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
     };
     init();
     const handleSync = () => {
-      loadQueuedInpatients();
+      loadQueuedInpatients(true);
     };
     window.addEventListener('buvora-data-updated', handleSync);
-    const interval = setInterval(loadQueuedInpatients, 5000);
+    const interval = setInterval(() => loadQueuedInpatients(true), 5000);
     return () => {
       window.removeEventListener('buvora-data-updated', handleSync);
       clearInterval(interval);
     };
-  }, []);
+  }, [initialAdmission]);
 
+  const hasInitializedDoctorRef = useRef(false);
   useEffect(() => {
-    if (doctors.length > 0 && !selectedDoctorId) {
+    if (doctors.length > 0 && !selectedDoctorId && !hasInitializedDoctorRef.current) {
+      hasInitializedDoctorRef.current = true;
       setSelectedDoctorId(doctors[0].id);
     }
   }, [doctors, selectedDoctorId]);
 
+  useEffect(() => {
+    if (selectedDoctorId) {
+      storage.getNextReceiptNumber(false, selectedDoctorId).then(rec => setReceiptNumber(rec));
+    }
+  }, [selectedDoctorId]);
+
   // Load Inpatient Bed Admission into Facility Billing
   const loadAdmissionData = async (adm: BedAdmission) => {
     setActiveLinkedAdmission(adm);
-    if (adm.patientUhid || adm.patientId) setPatientId(adm.patientUhid || adm.patientId || '');
+
+    // 1. Check admission record's own UHID / PID
+    let resolvedPid = (adm.patientUhid || adm.patientId || '').trim();
+
+    // 2. Cross-reference existing patient records to guarantee patient's established PID is retained
+    if (adm.patientPhone && adm.patientPhone.trim().length >= 10) {
+      try {
+        const match = await storage.findPatientByPhoneOrId(adm.patientPhone.trim());
+        if (match?.patientId) {
+          resolvedPid = match.patientId.trim();
+        } else {
+          const globals = await storage.searchGlobalPatients(adm.patientPhone.trim());
+          if (globals && globals.length > 0) {
+            const gMatch = globals.find(g => g.patientUhid || g.patientId);
+            if (gMatch) resolvedPid = (gMatch.patientUhid || gMatch.patientId || '').trim();
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 3. If still no PID, attempt exact match by patient name
+    if (!resolvedPid && adm.patientName) {
+      try {
+        const globals = await storage.searchGlobalPatients(adm.patientName.trim());
+        const exact = globals.find(g =>
+          g.patientName.trim().toLowerCase() === adm.patientName.trim().toLowerCase() &&
+          (g.patientUhid || g.patientId)
+        );
+        if (exact) {
+          resolvedPid = (exact.patientUhid || exact.patientId || '').trim();
+        }
+      } catch (_) {}
+    }
+
+    if (resolvedPid) {
+      setPatientId(resolvedPid);
+      setIsReturningPatient(true);
+      setTimeout(() => setIsReturningPatient(false), 4000);
+    }
     setPatientName(adm.patientName);
     if (adm.patientPhone) setPatientPhone(adm.patientPhone);
     if (adm.patientAge) {
@@ -252,12 +313,12 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
 
     // Auto-load Ward Consumables, Procedures, and Care items logged by Ward In-Charge
     try {
-      const wardCharges: any[] = JSON.parse(adm.wardChargesLog || '[]');
+      const wardCharges = JSON.parse(adm.wardChargesLog || '[]');
       if (Array.isArray(wardCharges) && wardCharges.length > 0) {
-        wardCharges.forEach((c: any) => {
+        wardCharges.forEach((c: { description?: string; category?: string; amount?: number; quantity?: number; rate?: number; unit?: string }) => {
           billedItems.push({
             id: crypto.randomUUID(),
-            description: `${c.description}${c.category ? ` (${c.category})` : ''}`,
+            description: `${c.description || 'Care item'}${c.category ? ` (${c.category})` : ''}`,
             amount: Number(c.amount) || ((Number(c.quantity) || 1) * (Number(c.rate) || 0)),
             rate: Number(c.rate) || 0,
             quantity: Number(c.quantity) || 1,
@@ -284,9 +345,12 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
     toast(`Loaded stay for ${adm.patientName} with ${billedItems.length} bill item${billedItems.length > 1 ? 's' : ''}`, { type: 'success' });
   };
 
+  const loadedInitialAdmissionIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (initialAdmission) {
+    if (initialAdmission && initialAdmission.id !== loadedInitialAdmissionIdRef.current) {
+      loadedInitialAdmissionIdRef.current = initialAdmission.id;
       loadAdmissionData(initialAdmission);
+      onClearInitialAdmission?.();
     }
   }, [initialAdmission]);
 
@@ -300,7 +364,7 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
       try {
         await storage.updateAdmissionBillingStatus(admission.id, 'NONE');
         toast(`Removed ${admission.patientName} from billing queue`, { type: 'info' });
-        await loadQueuedInpatients();
+        await loadQueuedInpatients(false);
       } catch (err) {
         console.error('Failed to dismiss admission from queue', err);
       }
@@ -320,8 +384,10 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
   // Calculate calculated stay duration
   const stayDurationDays = React.useMemo(() => {
     try {
+      if (!admissionDate || !dischargeDate) return 1;
       const d1 = new Date(admissionDate);
       const d2 = new Date(dischargeDate);
+      if (isNaN(d1.getTime()) || isNaN(d2.getTime())) return 1;
       const diff = differenceInCalendarDays(d2, d1);
       return diff > 0 ? diff : 1;
     } catch {
@@ -344,23 +410,91 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
     setPatientAge([yStr, mStr].filter(Boolean).join(' '));
   };
 
+  // Autocomplete patient search
+  const handlePatientNameChange = async (val: string) => {
+    setPatientName(val);
+    if (val.trim().length >= 2) {
+      setIsSearchingPatient(true);
+      try {
+        const results = await storage.searchGlobalPatients(val.trim());
+        setPatientSearchResults(results || []);
+        setShowPatientDropdown((results || []).length > 0);
+      } catch (_) {
+      } finally {
+        setIsSearchingPatient(false);
+      }
+    } else {
+      setPatientSearchResults([]);
+      setShowPatientDropdown(false);
+    }
+  };
+
+  const handleSelectPatientProfile = (p: GlobalPatientProfile) => {
+    setPatientName(p.patientName);
+    if (p.patientId || p.patientUhid) {
+      setPatientId(p.patientUhid || p.patientId || '');
+    }
+    if (p.patientPhone) setPatientPhone(p.patientPhone);
+    if (p.patientAge) {
+      setPatientAge(String(p.patientAge));
+      const y = String(p.patientAge).match(/(\d+)\s*Y/i);
+      const m = String(p.patientAge).match(/(\d+)\s*M/i);
+      if (y) setAgeYears(y[1]);
+      if (m) setAgeMonths(m[1]);
+      else if (!y && !m && /^\d+$/.test(String(p.patientAge))) setAgeYears(String(p.patientAge));
+    }
+    if (p.patientGender) setPatientGender(p.patientGender);
+    if (p.lastDoctorId && doctors.some(d => d.id === p.lastDoctorId)) {
+      setSelectedDoctorId(p.lastDoctorId);
+    }
+    setIsReturningPatient(true);
+    setTimeout(() => setIsReturningPatient(false), 4000);
+    setShowPatientDropdown(false);
+  };
+
   // Returning patient lookup by phone
   const handlePhoneChange = async (val: string) => {
     setPatientPhone(val);
-    if (val.length === 10) {
-      const match = await storage.findPatientByPhoneOrId(val);
-      if (match) {
-        if (match.patientId) setPatientId(match.patientId);
-        setPatientName(match.patientName);
-        setPatientAge(match.patientAge);
-        setPatientGender(match.patientGender || 'Male');
-        if (match.patientAge) {
-          const y = match.patientAge.match(/(\d+)\s*Y/i);
-          const m = match.patientAge.match(/(\d+)\s*M/i);
+    const clean = val.replace(/\D/g, '');
+    if (clean.length === 10) {
+      let foundPid = '';
+      let foundName = '';
+      let foundAge = '';
+      let foundGender = '';
+
+      try {
+        const match = await storage.findPatientByPhoneOrId(clean);
+        if (match) {
+          foundPid = match.patientId || '';
+          foundName = match.patientName || '';
+          foundAge = match.patientAge || '';
+          foundGender = match.patientGender || '';
+        } else {
+          const globals = await storage.searchGlobalPatients(clean);
+          if (globals && globals.length > 0) {
+            const g = globals[0];
+            foundPid = g.patientUhid || g.patientId || '';
+            foundName = g.patientName || '';
+            foundAge = g.patientAge || '';
+            foundGender = g.patientGender || '';
+          }
+        }
+      } catch (_) {}
+
+      if (foundPid) {
+        setPatientId(foundPid);
+        if (!patientName.trim() && foundName) setPatientName(foundName);
+        if (foundAge) {
+          setPatientAge(foundAge);
+          const y = foundAge.match(/(\d+)\s*Y/i);
+          const m = foundAge.match(/(\d+)\s*M/i);
           if (y) setAgeYears(y[1]);
           if (m) setAgeMonths(m[1]);
+          else if (!y && !m && /^\d+$/.test(foundAge)) setAgeYears(foundAge);
         }
+        if (foundGender) setPatientGender(foundGender);
         setIsReturningPatient(true);
+        toast(`Returning Patient Found: ${foundName || 'Patient'} (${foundPid})`, { type: 'info' });
         setTimeout(() => setIsReturningPatient(false), 4000);
       }
     }
@@ -497,7 +631,7 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
     if (onClearInitialAdmission) onClearInitialAdmission();
     const nextPid = await storage.getNextPatientId();
     setPatientId(nextPid);
-    const nextRec = await storage.getNextReceiptNumber(false);
+    const nextRec = await storage.getNextReceiptNumber(false, selectedDoctorId);
     setReceiptNumber(nextRec);
     await loadQueuedInpatients();
   };
@@ -517,11 +651,18 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
       }
     }
 
+    const effectivePid = (
+      patientId.trim() ||
+      activeLinkedAdmission?.patientUhid?.trim() ||
+      activeLinkedAdmission?.patientId?.trim() ||
+      undefined
+    );
+
     return {
       id: crypto.randomUUID(),
       receiptNumber,
       date: `${admissionDate} ${admissionTime}`,
-      patientId: patientId.trim() || undefined,
+      patientId: effectivePid,
       patientName: patientName.trim(),
       patientAge: patientAge.trim(),
       patientGender: patientGender || '',
@@ -556,6 +697,23 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
     setIsSaving(true);
     try {
       const receipt = buildReceiptData();
+
+      // Strict PID verification: If patient has an established PID from admission, phone, or name, preserve it
+      let confirmedPid = receipt.patientId;
+      if (activeLinkedAdmission?.patientUhid || activeLinkedAdmission?.patientId) {
+        confirmedPid = (activeLinkedAdmission.patientUhid || activeLinkedAdmission.patientId || '').trim();
+      } else if (receipt.patientPhone && receipt.patientPhone.trim().length >= 10) {
+        try {
+          const match = await storage.findPatientByPhoneOrId(receipt.patientPhone.trim());
+          if (match?.patientId) {
+            confirmedPid = match.patientId.trim();
+          }
+        } catch (_) {}
+      }
+      if (confirmedPid) {
+        receipt.patientId = confirmedPid;
+      }
+
       await storage.saveReceipt(receipt);
 
       // If this bill settles an active inpatient admission stay, link receipt and discharge patient
@@ -786,7 +944,7 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
             <button
               type="button"
               className="btn-secondary"
-              onClick={loadQueuedInpatients}
+              onClick={() => loadQueuedInpatients(false)}
               disabled={isLoadingQueue}
               style={{
                 fontSize: '0.75rem',
@@ -840,10 +998,13 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
                   const isCurrentlyActive = activeLinkedAdmission?.id === adm.id;
                   let days = 1;
                   try {
-                    const d1 = new Date(adm.admittedAt ? adm.admittedAt.split('T')[0] : '');
-                    const d2 = new Date();
-                    const diff = differenceInCalendarDays(d2, d1);
-                    days = diff > 0 ? diff : 1;
+                    if (adm.admittedAt) {
+                      const d1 = new Date(adm.admittedAt.split('T')[0]);
+                      if (!isNaN(d1.getTime())) {
+                        const diff = differenceInCalendarDays(new Date(), d1);
+                        days = diff > 0 ? diff : 1;
+                      }
+                    }
                   } catch (_) {}
 
                   let consumablesCount = 0;
@@ -1068,14 +1229,71 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
           </h3>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
-            <div className="form-group">
+            <div className="form-group" style={{ position: 'relative' }}>
               <label>Patient Name *</label>
               <input
                 value={patientName}
-                onChange={e => setPatientName(e.target.value)}
+                onChange={e => handlePatientNameChange(e.target.value)}
                 placeholder="Full Name"
                 required
+                autoComplete="off"
               />
+              {isSearchingPatient && (
+                <div style={{ position: 'absolute', right: '10px', top: '34px', fontSize: '0.75rem', color: 'var(--text-muted, #64748b)' }}>
+                  Searching...
+                </div>
+              )}
+              {showPatientDropdown && patientSearchResults.length > 0 && (
+                <div className="patient-autocomplete-dropdown" style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  zIndex: 100,
+                  background: 'var(--bg-surface, #ffffff)',
+                  border: '1px solid var(--border, #e2e8f0)',
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                  maxHeight: '220px',
+                  overflowY: 'auto'
+                }}>
+                  {patientSearchResults.map((p, idx) => (
+                    <div
+                      key={idx}
+                      className="patient-autocomplete-item"
+                      onClick={() => handleSelectPatientProfile(p)}
+                      style={{
+                        padding: '8px 12px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        borderBottom: '1px solid var(--border-light, #f1f5f9)'
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 700, color: 'var(--text-main, #0f172a)' }}>{p.patientName}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted, #64748b)' }}>
+                          {p.patientAge ? `${p.patientAge} Y` : ''} {p.patientGender || ''} {p.patientPhone ? `• 📞 ${p.patientPhone}` : ''}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <span style={{
+                          fontSize: '0.68rem',
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          fontWeight: 700,
+                          background: p.source === 'IPD' ? '#e0f2fe' : p.source === 'EMERGENCY' ? '#fee2e2' : '#f0fdf4',
+                          color: p.source === 'IPD' ? '#0369a1' : p.source === 'EMERGENCY' ? '#b91c1c' : '#15803d'
+                        }}>
+                          {p.source}
+                        </span>
+                        {p.patientUhid && <div style={{ fontSize: '0.68rem', color: 'var(--text-muted, #64748b)', marginTop: '2px' }}>{p.patientUhid}</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="form-group">
@@ -1890,7 +2108,7 @@ export const FacilityBillingTab: React.FC<FacilityBillingTabProps> = ({
                         <span style={{ fontSize: '0.75rem', color: '#64748b' }}>({adm.wardName})</span>
                       </div>
                       <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '3px' }}>
-                        UHID: {adm.patientUhid || adm.patientId} • {adm.doctorName ? (/^dr\.?\s*/i.test(adm.doctorName) ? adm.doctorName : ` ${adm.doctorName}`) : 'Attending Physician'} • Admitted: {adm.admittedAt ? format(new Date(adm.admittedAt), 'dd MMM yyyy') : 'Recently'}
+                        UHID: {adm.patientUhid || adm.patientId} • {adm.doctorName ? (/^dr\.?\s*/i.test(adm.doctorName) ? adm.doctorName : `Dr. ${adm.doctorName}`) : 'Attending Physician'} • Admitted: {adm.admittedAt ? format(new Date(adm.admittedAt), 'dd MMM yyyy') : 'Recently'}
                       </div>
                     </div>
 

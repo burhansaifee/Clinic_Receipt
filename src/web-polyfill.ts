@@ -153,7 +153,7 @@ if (typeof window !== 'undefined' && !(window as any).ipcRenderer) {
   };
 
   const dbMethods = [
-    'getDoctors', 'saveDoctor', 'deleteDoctor', 'getServices', 'saveService', 'deleteService',
+    'getDoctors', 'saveDoctor', 'deleteDoctor', 'getDoctorReceiptCount', 'getServices', 'saveService', 'deleteService',
     'getReceipts', 'getDashboardMetrics', 'saveReceipt', 'saveReceiptAtomic', 'updateReceipt',
     'deleteReceipt', 'getMetadata', 'setMetadata', 'batchImportDoctors', 'getPrescriptions',
     'savePrescription', 'deletePrescription', 'getAppointments', 'saveAppointment',

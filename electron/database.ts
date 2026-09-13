@@ -64,7 +64,8 @@ export const database = {
         upiId TEXT,
         qrCodeText TEXT,
         showQrCodeOnReceipt INTEGER DEFAULT 0,
-        chamber TEXT
+        chamber TEXT,
+        receiptPrefix TEXT
       );
 
       CREATE TABLE IF NOT EXISTS services (
@@ -1018,6 +1019,18 @@ export const database = {
       db.exec('ALTER TABLE doctors ADD COLUMN chamber TEXT;');
     } catch (e) {}
     try {
+      db.exec('ALTER TABLE doctors ADD COLUMN receiptPrefix TEXT;');
+    } catch (e) {}
+    try {
+      db.exec('ALTER TABLE doctors ADD COLUMN availableDays TEXT;');
+    } catch (e) {}
+    try {
+      db.exec('ALTER TABLE doctors ADD COLUMN timeSlots TEXT;');
+    } catch (e) {}
+    try {
+      db.exec('ALTER TABLE doctors ADD COLUMN consultationTimings TEXT;');
+    } catch (e) {}
+    try {
       db.exec('ALTER TABLE receipts ADD COLUMN showQrCode INTEGER DEFAULT 0;');
     } catch (e) {}
     try {
@@ -1282,32 +1295,63 @@ export const database = {
   // Doctors
   getDoctors: () => {
     const docs = db.prepare('SELECT * FROM doctors').all() as any[];
-    return docs.map(d => ({
-      ...d,
-      chamber: d.chamber || '',
-      printHeader: d.printHeader === 1 || d.printHeader === null || d.printHeader === undefined ? true : false,
-      showQrCodeOnReceipt: d.showQrCodeOnReceipt === 1 ? true : false,
-      upiId: d.upiId || '',
-      qrCodeText: d.qrCodeText || '',
-    }));
+    return docs.map(d => {
+      let parsedDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      if (d.availableDays) {
+        try {
+          parsedDays = typeof d.availableDays === 'string' ? JSON.parse(d.availableDays) : d.availableDays;
+        } catch (_) {}
+      }
+      let parsedSlots: string[] = [];
+      if (d.timeSlots) {
+        try {
+          parsedSlots = typeof d.timeSlots === 'string' ? JSON.parse(d.timeSlots) : d.timeSlots;
+        } catch (_) {}
+      }
+
+      return {
+        ...d,
+        chamber: d.chamber || '',
+        receiptPrefix: d.receiptPrefix || '',
+        printHeader: d.printHeader === 1 || d.printHeader === null || d.printHeader === undefined ? true : false,
+        showQrCodeOnReceipt: d.showQrCodeOnReceipt === 1 ? true : false,
+        upiId: d.upiId || '',
+        qrCodeText: d.qrCodeText || '',
+        consultationTimings: d.consultationTimings || '',
+        availableDays: Array.isArray(parsedDays) ? parsedDays : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+        timeSlots: Array.isArray(parsedSlots) ? parsedSlots : []
+      };
+    });
   },
   saveDoctor: (doctor: any) => {
     const stmt = db.prepare(`
-      INSERT OR REPLACE INTO doctors (id, name, specialization, qualifications, phone, address, printHeader, customTopMargin, customBottomMargin, upiId, qrCodeText, showQrCodeOnReceipt, chamber)
-      VALUES (@id, @name, @specialization, @qualifications, @phone, @address, @printHeader, @customTopMargin, @customBottomMargin, @upiId, @qrCodeText, @showQrCodeOnReceipt, @chamber)
+      INSERT OR REPLACE INTO doctors (id, name, specialization, qualifications, phone, address, printHeader, customTopMargin, customBottomMargin, upiId, qrCodeText, showQrCodeOnReceipt, chamber, receiptPrefix, availableDays, timeSlots, consultationTimings)
+      VALUES (@id, @name, @specialization, @qualifications, @phone, @address, @printHeader, @customTopMargin, @customBottomMargin, @upiId, @qrCodeText, @showQrCodeOnReceipt, @chamber, @receiptPrefix, @availableDays, @timeSlots, @consultationTimings)
     `);
     return stmt.run({
       ...doctor,
       chamber: doctor.chamber || '',
+      receiptPrefix: doctor.receiptPrefix || '',
       printHeader: doctor.printHeader !== false ? 1 : 0,
       customTopMargin: doctor.customTopMargin || 0,
       customBottomMargin: doctor.customBottomMargin || 0,
       upiId: doctor.upiId || '',
       qrCodeText: doctor.qrCodeText || '',
-      showQrCodeOnReceipt: doctor.showQrCodeOnReceipt ? 1 : 0
+      showQrCodeOnReceipt: doctor.showQrCodeOnReceipt ? 1 : 0,
+      consultationTimings: doctor.consultationTimings || '',
+      availableDays: doctor.availableDays ? (typeof doctor.availableDays === 'string' ? doctor.availableDays : JSON.stringify(doctor.availableDays)) : JSON.stringify(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']),
+      timeSlots: doctor.timeSlots ? (typeof doctor.timeSlots === 'string' ? doctor.timeSlots : JSON.stringify(doctor.timeSlots)) : JSON.stringify([])
     });
   },
   deleteDoctor: (id: string) => db.prepare('DELETE FROM doctors WHERE id = ?').run(id),
+  getDoctorReceiptCount: (doctorId: string) => {
+    try {
+      const row = db.prepare('SELECT COUNT(*) as count FROM receipts WHERE doctorId = ?').get(doctorId) as any;
+      return row?.count || 0;
+    } catch {
+      return 0;
+    }
+  },
 
   // Services
   getServices: () => db.prepare('SELECT * FROM services').all(),

@@ -1,11 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { format } from 'date-fns';
 import {
-  Volume2, Tv, Bell, CheckCircle2, Stethoscope, RotateCcw, Edit3
+  Volume2, Tv, Bell, CheckCircle2, Stethoscope, RotateCcw, Edit3, X
 } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 import '../../styles/tabs/QueueDisplayTab.css';
-import { storage, notifyDataChanged, type Doctor, type DoctorNextCallEvent } from '../../lib/storage';
+import {
+  storage,
+  notifyDataChanged,
+  playReceptionChime,
+  broadcastDoctorCallNext,
+  type Doctor,
+  type DoctorNextCallEvent,
+  type Receipt,
+  type Prescription,
+  type Appointment
+} from '../../lib/storage';
 
 interface QueueDisplayTabProps {
   doctors: Doctor[];
@@ -21,8 +31,23 @@ interface ChamberQueueState {
   currentToken: string | null;
   currentPatientName: string | null;
   waitingQueue: { token: string; patientName: string; time: string }[];
+  completedTokens: string[];
   completedCount: number;
 }
+
+export const sortQueueTokensAsc = <T extends { token: string; time?: string }>(items: T[]): T[] => {
+  return [...items].sort((a, b) => {
+    const matchA = a.token.match(/\d+/g);
+    const matchB = b.token.match(/\d+/g);
+    const numA = matchA ? parseInt(matchA[matchA.length - 1], 10) : null;
+    const numB = matchB ? parseInt(matchB[matchB.length - 1], 10) : null;
+    if (numA !== null && numB !== null && numA !== numB) return numA - numB;
+    if (a.time && b.time && a.time !== b.time && a.time !== 'Now' && b.time !== 'Now') {
+      return a.time.localeCompare(b.time);
+    }
+    return a.token.localeCompare(b.token, undefined, { numeric: true });
+  });
+};
 
 export const QueueDisplayTab: React.FC<QueueDisplayTabProps> = ({ doctors, isDirectTvMode = false }) => {
   const toast = useToast();
@@ -54,40 +79,198 @@ export const QueueDisplayTab: React.FC<QueueDisplayTabProps> = ({ doctors, isDir
     return () => clearInterval(timer);
   }, []);
 
-  // Initialize chambers from doctors & today's receipts
-  const loadQueueData = async () => {
+  // Announce Token using Web Speech API with Clinic Chime
+  const speakToken = useCallback((token: string, chamberName: string, patientName?: string | null) => {
+    playReceptionChime();
+    setAnnouncingBanner({ token, chamber: chamberName });
+    setTimeout(() => {
+      setAnnouncingBanner(null);
+    }, 4500);
+
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const message = patientName
+        ? `Token Number ${token}, ${patientName}, please proceed to ${chamberName}`
+        : `Token Number ${token}, please proceed to ${chamberName}`;
+      const utterance = new SpeechSynthesisUtterance(message);
+
+      // Attempt to find a clearer, natural voice
+      const voices = window.speechSynthesis.getVoices();
+      const bestVoice = voices.find(v => v.name.includes('Google UK English Female')) ||
+                        voices.find(v => v.name.includes('Google US English')) ||
+                        voices.find(v => v.name.includes('Siri')) ||
+                        voices.find(v => v.name.includes('Samantha')) ||
+                        voices.find(v => v.name.includes('Microsoft Zira')) ||
+                        voices.find(v => v.name.includes('Microsoft Mark')) ||
+                        voices.find(v => v.name.includes('Premium') && v.lang.startsWith('en')) ||
+                        voices.find(v => v.lang.startsWith('en-IN')) ||
+                        voices.find(v => v.lang.startsWith('en'));
+
+      if (bestVoice) {
+        utterance.voice = bestVoice;
+      }
+
+      utterance.rate = 0.85; // Slower rate for clearer pronunciation
+      utterance.pitch = 1.0;
+      utterance.lang = bestVoice ? bestVoice.lang : 'en-US';
+      window.speechSynthesis.speak(utterance);
+    }
+  }, []);
+
+  // Save changes to localStorage & shared SQLite metadata for 100% multi-user LAN persistence
+  const updateChamberState = useCallback((updated: ChamberQueueState[]) => {
+    setChambers(updated);
+    updated.forEach(c => {
+      localStorage.setItem(`clinic_qds_${c.doctorId}`, JSON.stringify(c));
+      storage.setMetadata(`clinic_qds_${c.doctorId}`, JSON.stringify(c)).catch(() => {});
+    });
+    notifyDataChanged('queue');
+  }, []);
+
+  // Initialize chambers from doctors, today's receipts, prescriptions, and confirmed appointments
+  const loadQueueData = useCallback(async () => {
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const receipts = await storage.getReceipts();
-      const todayReceipts = receipts.filter(r => r.date === today);
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const [receipts, prescriptions, appointments] = await Promise.all([
+        storage.getReceipts(),
+        storage.getPrescriptions(),
+        storage.getAppointments()
+      ]);
 
-      const initialChambers: ChamberQueueState[] = doctors.map((doc, idx) => {
-        const chamberId = `CH-${idx + 1}`;
+      const initialChambers: ChamberQueueState[] = await Promise.all(doctors.map(async (doc, idx) => {
+        const chamberId = `CH-${doc.id || idx + 1}`;
         const chamberName = doc.chamber?.trim() || `Chamber ${idx + 1}`;
-        const docReceipts = todayReceipts.filter(r => r.doctorId === doc.id);
 
-        const waiting = docReceipts.map(r => ({
-          token: String((r as any).tokenNumber || r.receiptNumber || '01'),
-          patientName: r.patientName,
-          time: (r as any).createdAt ? format(new Date((r as any).createdAt), 'hh:mm a') : (r.date || 'Now')
-        }));
+        // Restore saved chamber state from SQLite metadata first (cross-device LAN safe), fallback to localStorage
+        let savedState: any = null;
+        try {
+          const metaVal = await storage.getMetadata(`clinic_qds_${doc.id}`);
+          if (metaVal) {
+            savedState = JSON.parse(metaVal);
+          }
+        } catch (_) {}
 
-        // Try restoring saved chamber state from localStorage
-        const saved = localStorage.getItem(`clinic_qds_${doc.id}`);
-        if (saved) {
-          try {
-            const parsed = JSON.parse(saved);
-            return {
-              ...parsed,
-              chamberName: doc.chamber?.trim() || parsed.chamberName || chamberName,
-              doctorName: doc.name,
-              doctorSpecialty: doc.specialization || 'Consultant',
-            };
-          } catch (_) {}
+        if (!savedState) {
+          const localVal = localStorage.getItem(`clinic_qds_${doc.id}`);
+          if (localVal) {
+            try { savedState = JSON.parse(localVal); } catch (_) {}
+          }
         }
 
-        const current = waiting.length > 0 ? waiting[0] : null;
-        const remaining = waiting.length > 1 ? waiting.slice(1) : [];
+        // Aggregate completed tokens set for today
+        const completedTokensSet = new Set<string>(
+          Array.isArray(savedState?.completedTokens) ? savedState.completedTokens : []
+        );
+
+        // Also add tokens of all patients prescribed today for this doctor
+        prescriptions.forEach((p: Prescription) => {
+          if (p.doctorId === doc.id && (p.date || '').startsWith(todayStr)) {
+            if (p.receiptNumber) completedTokensSet.add(p.receiptNumber);
+            if ((p as any).tokenNumber) completedTokensSet.add(String((p as any).tokenNumber));
+          }
+        });
+
+        const isReceiptPrescribedOrFinished = (r: Receipt) => {
+          const tok = String((r as any).tokenNumber || r.receiptNumber || '01');
+          if (completedTokensSet.has(tok) || completedTokensSet.has(r.receiptNumber)) return true;
+          return prescriptions.some((p: Prescription) =>
+            p.receiptId === r.id ||
+            (Boolean(p.patientId && r.patientId) && p.patientId === r.patientId && (p.date || '').startsWith(todayStr))
+          );
+        };
+
+        const docReceipts = receipts
+          .filter((r: Receipt) => {
+            const isToday = (r.date || '').startsWith(todayStr);
+            return isToday && r.doctorId === doc.id;
+          })
+          .sort((a, b) => {
+            const tokenA = String((a as any).tokenNumber || a.receiptNumber || '');
+            const tokenB = String((b as any).tokenNumber || b.receiptNumber || '');
+            const matchA = tokenA.match(/\d+/g);
+            const matchB = tokenB.match(/\d+/g);
+            const numA = matchA ? parseInt(matchA[matchA.length - 1], 10) : null;
+            const numB = matchB ? parseInt(matchB[matchB.length - 1], 10) : null;
+            if (numA !== null && numB !== null && numA !== numB) return numA - numB;
+            const timeA = (a as any).createdAt ? new Date((a as any).createdAt).getTime() : (a.date ? new Date(a.date).getTime() : 0);
+            const timeB = (b as any).createdAt ? new Date((b as any).createdAt).getTime() : (b.date ? new Date(b.date).getTime() : 0);
+            if (timeA && timeB && timeA !== timeB) return timeA - timeB;
+            return tokenA.localeCompare(tokenB, undefined, { numeric: true });
+          });
+
+        const waitingFromReceipts = docReceipts
+          .filter((r: Receipt) => !isReceiptPrescribedOrFinished(r))
+          .map((r: Receipt) => ({
+            token: String((r as any).tokenNumber || r.receiptNumber || '01'),
+            patientName: r.patientName,
+            time: (r as any).createdAt ? format(new Date((r as any).createdAt), 'hh:mm a') : (r.date && r.date.includes(' ') ? r.date.split(' ')[1] : 'Now')
+          }));
+
+        // Confirmed appointments for today that have not generated a receipt yet and not finished
+        const docAppointments = appointments
+          .filter((a: Appointment) => {
+            const isToday = (a.appointmentDate || '').startsWith(todayStr);
+            const isConfirmed = a.status === 'CONFIRMED';
+            const matchesDoc = a.doctorId === doc.id;
+            const token = `A-${a.appointmentTime ? a.appointmentTime.replace(/[^0-9]/g, '').slice(0, 4) : '01'}`;
+            if (completedTokensSet.has(token)) return false;
+            const alreadyBilled = docReceipts.some((r: Receipt) => r.appointmentId === a.id || (r.patientPhone && r.patientPhone === a.patientPhone));
+            return isToday && isConfirmed && matchesDoc && !alreadyBilled;
+          })
+          .sort((a, b) => (a.appointmentTime || '').localeCompare(b.appointmentTime || ''));
+
+        const waitingFromAppointments = docAppointments.map((a: Appointment) => ({
+          token: `A-${a.appointmentTime ? a.appointmentTime.replace(/[^0-9]/g, '').slice(0, 4) : '01'}`,
+          patientName: `${a.patientName} (Appt)`,
+          time: a.appointmentTime || 'Appt'
+        }));
+
+        const combinedWaiting = sortQueueTokensAsc([...waitingFromReceipts, ...waitingFromAppointments]);
+
+        if (savedState) {
+          // If the currently served token is marked completed or was prescribed, clear active token
+          const isCurrentFinished = savedState.currentToken && (
+            completedTokensSet.has(savedState.currentToken) ||
+            prescriptions.some((p: Prescription) =>
+              p.doctorId === doc.id && (p.date || '').startsWith(todayStr) && (
+                p.receiptNumber === savedState.currentToken ||
+                (p.patientName && p.patientName.toLowerCase() === (savedState.currentPatientName || '').toLowerCase())
+              )
+            )
+          );
+
+          const currentToken = isCurrentFinished ? null : savedState.currentToken;
+          const currentPatientName = isCurrentFinished ? null : savedState.currentPatientName;
+
+          // Preserve manual walk-in tokens from saved waiting queue that aren't yet completed
+          const manualTokens = (savedState.waitingQueue || []).filter((item: any) =>
+            item.token &&
+            !completedTokensSet.has(item.token) &&
+            !combinedWaiting.some(w => w.token === item.token)
+          );
+
+          // Build remaining waiting queue sorted ascending (excluding currently served token and completed tokens)
+          const activeWaiting = sortQueueTokensAsc([
+            ...combinedWaiting.filter(w => w.token !== currentToken && !completedTokensSet.has(w.token)),
+            ...manualTokens.filter((m: any) => m.token !== currentToken && !completedTokensSet.has(m.token))
+          ]);
+
+          return {
+            chamberId,
+            chamberName: doc.chamber?.trim() || savedState.chamberName || chamberName,
+            doctorId: doc.id,
+            doctorName: doc.name,
+            doctorSpecialty: doc.specialization || 'Consultant',
+            currentToken,
+            currentPatientName,
+            waitingQueue: activeWaiting,
+            completedTokens: Array.from(completedTokensSet),
+            completedCount: savedState.completedCount || (isCurrentFinished ? (savedState.completedCount || 0) + 1 : completedTokensSet.size)
+          };
+        }
+
+        const current = combinedWaiting.length > 0 ? combinedWaiting[0] : null;
+        const remaining = combinedWaiting.length > 1 ? combinedWaiting.slice(1) : [];
 
         return {
           chamberId,
@@ -98,15 +281,16 @@ export const QueueDisplayTab: React.FC<QueueDisplayTabProps> = ({ doctors, isDir
           currentToken: current ? current.token : null,
           currentPatientName: current ? current.patientName : null,
           waitingQueue: remaining,
+          completedTokens: Array.from(completedTokensSet),
           completedCount: 0
         };
-      });
+      }));
 
-      setChambers(initialChambers);
+      setChambers(prev => JSON.stringify(prev) === JSON.stringify(initialChambers) ? prev : initialChambers);
     } catch (e) {
       console.error('Failed to load queue data:', e);
     }
-  };
+  }, [doctors]);
 
   // Chamber assignment modal state
   const [editingChamberDoc, setEditingChamberDoc] = useState<{ doctorId: string; doctorName: string; currentChamber: string } | null>(null);
@@ -163,7 +347,7 @@ export const QueueDisplayTab: React.FC<QueueDisplayTabProps> = ({ doctors, isDir
     loadQueueData();
     const interval = setInterval(loadQueueData, 5000);
     const handleLiveSync = (e: CustomEvent) => {
-      if (!e.detail?.dataType || e.detail.dataType === 'queue' || e.detail.dataType === 'receipts') {
+      if (!e.detail?.dataType || e.detail.dataType === 'queue' || e.detail.dataType === 'receipts' || e.detail.dataType === 'prescriptions') {
         loadQueueData();
       }
     };
@@ -172,9 +356,9 @@ export const QueueDisplayTab: React.FC<QueueDisplayTabProps> = ({ doctors, isDir
       clearInterval(interval);
       window.removeEventListener('buvora-data-updated', handleLiveSync as EventListener);
     };
-  }, [doctors]);
+  }, [loadQueueData]);
 
-  // Listen for doctor calling next patient from doctor workstation
+  // Listen for doctor calling next patient from doctor workstation or TV sync
   useEffect(() => {
     const handleDoctorCall = (e: any) => {
       const callData: DoctorNextCallEvent = e.detail;
@@ -185,7 +369,7 @@ export const QueueDisplayTab: React.FC<QueueDisplayTabProps> = ({ doctors, isDir
     };
     window.addEventListener('buvora-doctor-called-next', handleDoctorCall as EventListener);
     return () => window.removeEventListener('buvora-doctor-called-next', handleDoctorCall as EventListener);
-  }, [doctors]);
+  }, [speakToken, loadQueueData]);
 
   // Launch dedicated TV Display in independent window
   const handleLaunchTvWindow = async () => {
@@ -208,75 +392,44 @@ export const QueueDisplayTab: React.FC<QueueDisplayTabProps> = ({ doctors, isDir
     }
   };
 
-  // Save changes to localStorage for offline persistence & notify connected screens
-  const updateChamberState = (updated: ChamberQueueState[]) => {
-    setChambers(updated);
-    updated.forEach(c => {
-      localStorage.setItem(`clinic_qds_${c.doctorId}`, JSON.stringify(c));
-    });
-    notifyDataChanged('queue');
-  };
-
-  // Announce Token using Web Speech API
-  const speakToken = (token: string, chamberName: string, patientName?: string | null) => {
-    setAnnouncingBanner({ token, chamber: chamberName });
-    setTimeout(() => {
-      setAnnouncingBanner(null);
-    }, 4500);
-
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const message = patientName
-        ? `Token Number ${token}, ${patientName}, please proceed to ${chamberName}`
-        : `Token Number ${token}, please proceed to ${chamberName}`;
-      const utterance = new SpeechSynthesisUtterance(message);
-      
-      // Attempt to find a clearer, more natural voice
-      const voices = window.speechSynthesis.getVoices();
-      const bestVoice = voices.find(v => v.name.includes('Google UK English Female')) ||
-                        voices.find(v => v.name.includes('Google US English')) ||
-                        voices.find(v => v.name.includes('Siri')) ||
-                        voices.find(v => v.name.includes('Samantha')) ||
-                        voices.find(v => v.name.includes('Microsoft Zira')) ||
-                        voices.find(v => v.name.includes('Microsoft Mark')) ||
-                        voices.find(v => v.name.includes('Premium') && v.lang.startsWith('en')) ||
-                        voices.find(v => v.lang.startsWith('en-IN')) ||
-                        voices.find(v => v.lang.startsWith('en'));
-
-      if (bestVoice) {
-        utterance.voice = bestVoice;
-      }
-
-      utterance.rate = 0.85; // Slower rate for clearer pronunciation
-      utterance.pitch = 1.0;
-      utterance.lang = bestVoice ? bestVoice.lang : 'en-US';
-      window.speechSynthesis.speak(utterance);
-    }
-  };
-
   // Call Next Patient
   const handleCallNext = (chamberId: string) => {
-    const updated = chambers.map(c => {
-      if (c.chamberId === chamberId) {
-        if (c.waitingQueue.length === 0) {
-          toast.show(`No more waiting patients for ${c.doctorName}`, 'info');
-          return c;
-        }
-        const next = c.waitingQueue[0];
-        const remaining = c.waitingQueue.slice(1);
-        const newChamber = {
-          ...c,
-          currentToken: next.token,
-          currentPatientName: next.patientName,
-          waitingQueue: remaining,
-          completedCount: c.currentToken ? c.completedCount + 1 : c.completedCount
-        };
-        speakToken(next.token, c.chamberName, next.patientName);
-        return newChamber;
-      }
-      return c;
-    });
+    const chamber = chambers.find(c => c.chamberId === chamberId);
+    if (!chamber) return;
+    if (chamber.waitingQueue.length === 0) {
+      toast.show(`No more waiting patients for ${chamber.doctorName}`, 'info');
+      return;
+    }
+    const previousToken = chamber.currentToken;
+    const next = chamber.waitingQueue[0];
+    const remaining = chamber.waitingQueue.slice(1);
+    const newCompleted = previousToken
+      ? Array.from(new Set([...(chamber.completedTokens || []), previousToken]))
+      : (chamber.completedTokens || []);
+
+    const newChamber: ChamberQueueState = {
+      ...chamber,
+      currentToken: next.token,
+      currentPatientName: next.patientName,
+      waitingQueue: remaining,
+      completedTokens: newCompleted,
+      completedCount: previousToken ? chamber.completedCount + 1 : chamber.completedCount
+    };
+
+    const callData: DoctorNextCallEvent = {
+      callId: `call_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      doctorId: chamber.doctorId,
+      doctorName: chamber.doctorName,
+      chamberName: chamber.chamberName,
+      token: next.token,
+      patientName: next.patientName,
+      timestamp: Date.now()
+    };
+    broadcastDoctorCallNext(callData);
+
+    const updated = chambers.map(c => c.chamberId === chamberId ? newChamber : c);
     updateChamberState(updated);
+    speakToken(next.token, chamber.chamberName, next.patientName);
   };
 
   // Repeat Call
@@ -289,21 +442,44 @@ export const QueueDisplayTab: React.FC<QueueDisplayTabProps> = ({ doctors, isDir
     toast.show(`Re-calling Token #${chamber.currentToken}`, 'info');
   };
 
-  // Mark Completed
+  // Mark Completed / Finished
   const handleCompleteConsultation = (chamberId: string) => {
+    const chamber = chambers.find(c => c.chamberId === chamberId);
+    if (!chamber) return;
+    const tokenToFinish = chamber.currentToken;
     const updated = chambers.map(c => {
       if (c.chamberId === chamberId) {
+        const newCompleted = tokenToFinish
+          ? Array.from(new Set([...(c.completedTokens || []), tokenToFinish]))
+          : (c.completedTokens || []);
         return {
           ...c,
           currentToken: null,
           currentPatientName: null,
-          completedCount: c.currentToken ? c.completedCount + 1 : c.completedCount
+          completedTokens: newCompleted,
+          completedCount: tokenToFinish ? c.completedCount + 1 : c.completedCount
         };
       }
       return c;
     });
     updateChamberState(updated);
-    toast.show('Consultation marked completed', 'success');
+    toast.show(tokenToFinish ? `Token #${tokenToFinish} marked completed` : 'Consultation finished', 'success');
+  };
+
+  // Dismiss / Remove specific token from waiting queue
+  const handleDismissWaitingToken = (chamberId: string, token: string, patientName: string) => {
+    const updated = chambers.map(c => {
+      if (c.chamberId === chamberId) {
+        return {
+          ...c,
+          waitingQueue: c.waitingQueue.filter(item => item.token !== token),
+          completedTokens: Array.from(new Set([...(c.completedTokens || []), token]))
+        };
+      }
+      return c;
+    });
+    updateChamberState(updated);
+    toast.show(`Token #${token} (${patientName}) removed from queue`, 'info');
   };
 
   // Add Manual Walk-In Token
@@ -317,10 +493,10 @@ export const QueueDisplayTab: React.FC<QueueDisplayTabProps> = ({ doctors, isDir
       if (c.chamberId === chamberId) {
         return {
           ...c,
-          waitingQueue: [
+          waitingQueue: sortQueueTokensAsc([
             ...c.waitingQueue,
             { token, patientName: pName, time: format(new Date(), 'hh:mm a') }
-          ]
+          ])
         };
       }
       return c;
@@ -572,10 +748,33 @@ export const QueueDisplayTab: React.FC<QueueDisplayTabProps> = ({ doctors, isDir
                     </div>
                   ) : (
                     chamber.waitingQueue.map((item, idx) => (
-                      <div key={idx} className="qds-queue-item">
-                        <span style={{ fontWeight: 700, color: '#1e293b' }}>Token #{item.token}</span>
-                        <span style={{ color: '#475569' }}>{item.patientName}</span>
-                        <span style={{ color: '#94a3b8', fontSize: '0.72rem' }}>{item.time}</span>
+                      <div key={idx} className="qds-queue-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, overflow: 'hidden' }}>
+                          <span style={{ fontWeight: 700, color: '#1e293b', whiteSpace: 'nowrap' }}>Token #{item.token}</span>
+                          <span style={{ color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.patientName}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                          <span style={{ color: '#94a3b8', fontSize: '0.72rem' }}>{item.time}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleDismissWaitingToken(chamber.chamberId, item.token, item.patientName)}
+                            style={{
+                              background: '#f1f5f9',
+                              border: '1px solid #e2e8f0',
+                              color: '#64748b',
+                              cursor: 'pointer',
+                              padding: '2px 5px',
+                              borderRadius: '4px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              fontSize: '0.7rem',
+                              fontWeight: 600
+                            }}
+                            title="Mark Finished / Remove from Queue"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
                       </div>
                     ))
                   )}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { format, addDays } from 'date-fns';
 import { ClipboardList, FileText, Search, Plus, Trash2, Printer, PlusCircle, AlertCircle, LogOut, CheckCircle, Save, History, KeyRound, Calendar, MessageCircle, FlaskConical, X, Volume2, Bell, Pill, Activity, Stethoscope } from 'lucide-react';
 import { useToast } from './ui/Toast';
@@ -6,6 +7,7 @@ import { storage, formatAgeGender, notifyDataChanged, broadcastDoctorCallNext, t
 import { MedicinesDropdown } from './ui/MedicinesDropdown';
 import { LabOrdersDropdown } from './ui/LabOrdersDropdown';
 import { DiagnosisDropdown } from './ui/DiagnosisDropdown';
+import { PatientEhrModal, isSamePatientRecord, type PatientSummary } from './ui/PatientEhrModal';
 import '../styles/components/DoctorWorkstation.css';
 
 interface MedicineAutocompleteProps {
@@ -27,16 +29,67 @@ const MedicineAutocompleteInput: React.FC<MedicineAutocompleteProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number; width: number; placeAbove: boolean; maxHeight: number } | null>(null);
+
+  const updateCoords = () => {
+    if (!inputRef.current) return;
+    const rect = inputRef.current.getBoundingClientRect();
+    const dropdownWidth = Math.max(rect.width, 280);
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const placeAbove = spaceBelow < 240 && rect.top > 240;
+    const maxHeight = placeAbove ? Math.min(240, rect.top - 16) : Math.min(240, spaceBelow - 16);
+    
+    // Ensure left doesn't push dropdown outside the viewport
+    let left = rect.left;
+    if (left + dropdownWidth > window.innerWidth - 12) {
+      left = Math.max(8, window.innerWidth - dropdownWidth - 12);
+    }
+
+    setCoords({
+      top: placeAbove ? rect.top - 4 : rect.bottom + 4,
+      left,
+      width: dropdownWidth,
+      placeAbove,
+      maxHeight: Math.max(120, maxHeight)
+    });
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      updateCoords();
+      const handleScroll = () => updateCoords();
+      const handleResize = () => updateCoords();
+      window.addEventListener('scroll', handleScroll, true);
+      window.addEventListener('resize', handleResize);
+      return () => {
+        window.removeEventListener('scroll', handleScroll, true);
+        window.removeEventListener('resize', handleResize);
+      };
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     const handleClickOutside = (event: PointerEvent | MouseEvent | TouchEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(target) &&
+        dropdownRef.current &&
+        !dropdownRef.current.contains(target)
+      ) {
         setIsOpen(false);
       }
     };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsOpen(false);
+    };
     document.addEventListener('pointerdown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('pointerdown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
 
@@ -57,15 +110,23 @@ const MedicineAutocompleteInput: React.FC<MedicineAutocompleteProps> = ({
   return (
     <div ref={containerRef} style={{ position: 'relative', width: '100%' }}>
       <input
+        ref={inputRef}
         type="text"
         placeholder={placeholder || 'Paracetamol 650mg'}
         value={value}
         onChange={e => {
           onChange(e.target.value);
           setIsOpen(true);
+          updateCoords();
         }}
-        onFocus={() => setIsOpen(true)}
-        onClick={() => setIsOpen(true)}
+        onFocus={() => {
+          setIsOpen(true);
+          updateCoords();
+        }}
+        onClick={() => {
+          setIsOpen(true);
+          updateCoords();
+        }}
         required={required}
         style={{ width: '100%', boxSizing: 'border-box', fontSize: '0.88rem', padding: '0.5rem 0.65rem' }}
         autoComplete="off"
@@ -77,23 +138,24 @@ const MedicineAutocompleteInput: React.FC<MedicineAutocompleteProps> = ({
         </div>
       )}
 
-      {isOpen && filtered.length > 0 && (
+      {isOpen && filtered.length > 0 && coords && createPortal(
         <div
+          ref={dropdownRef}
           style={{
-            position: 'absolute',
-            top: 'calc(100% + 4px)',
-            left: 0,
-            right: 0,
-            minWidth: '240px',
-            maxWidth: '320px',
-            maxHeight: '240px',
+            position: 'fixed',
+            ...(coords.placeAbove 
+              ? { bottom: `${window.innerHeight - coords.top}px` } 
+              : { top: `${coords.top}px` }),
+            left: `${coords.left}px`,
+            width: `${coords.width}px`,
+            maxHeight: `${coords.maxHeight}px`,
             overflowY: 'auto',
             WebkitOverflowScrolling: 'touch',
             background: '#ffffff',
             border: '1px solid #cbd5e1',
             borderRadius: '8px',
             boxShadow: '0 12px 28px -4px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
-            zIndex: 99999,
+            zIndex: 999999,
             padding: '4px 0'
           }}
         >
@@ -149,7 +211,8 @@ const MedicineAutocompleteInput: React.FC<MedicineAutocompleteProps> = ({
               </div>
             );
           })}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -170,16 +233,66 @@ const QuickSuggestInput: React.FC<QuickSuggestProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number; width: number; placeAbove: boolean; maxHeight: number } | null>(null);
+
+  const updateCoords = () => {
+    if (!inputRef.current) return;
+    const rect = inputRef.current.getBoundingClientRect();
+    const dropdownWidth = Math.max(rect.width, 160);
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const placeAbove = spaceBelow < 200 && rect.top > 200;
+    const maxHeight = placeAbove ? Math.min(200, rect.top - 16) : Math.min(200, spaceBelow - 16);
+    
+    let left = rect.left;
+    if (left + dropdownWidth > window.innerWidth - 12) {
+      left = Math.max(8, window.innerWidth - dropdownWidth - 12);
+    }
+
+    setCoords({
+      top: placeAbove ? rect.top - 4 : rect.bottom + 4,
+      left,
+      width: dropdownWidth,
+      placeAbove,
+      maxHeight: Math.max(100, maxHeight)
+    });
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      updateCoords();
+      const handleScroll = () => updateCoords();
+      const handleResize = () => updateCoords();
+      window.addEventListener('scroll', handleScroll, true);
+      window.addEventListener('resize', handleResize);
+      return () => {
+        window.removeEventListener('scroll', handleScroll, true);
+        window.removeEventListener('resize', handleResize);
+      };
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     const handleClickOutside = (event: PointerEvent | MouseEvent | TouchEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(target) &&
+        dropdownRef.current &&
+        !dropdownRef.current.contains(target)
+      ) {
         setIsOpen(false);
       }
     };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsOpen(false);
+    };
     document.addEventListener('pointerdown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('pointerdown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
 
@@ -191,35 +304,44 @@ const QuickSuggestInput: React.FC<QuickSuggestProps> = ({
   return (
     <div ref={containerRef} style={{ position: 'relative', width: '100%' }}>
       <input
+        ref={inputRef}
         type="text"
         placeholder={placeholder}
         value={value}
         onChange={e => {
           onChange(e.target.value);
           setIsOpen(true);
+          updateCoords();
         }}
-        onFocus={() => setIsOpen(true)}
-        onClick={() => setIsOpen(true)}
+        onFocus={() => {
+          setIsOpen(true);
+          updateCoords();
+        }}
+        onClick={() => {
+          setIsOpen(true);
+          updateCoords();
+        }}
         style={{ width: '100%', boxSizing: 'border-box', fontSize: '0.88rem', padding: '0.5rem 0.65rem' }}
         autoComplete="off"
       />
-      {isOpen && filtered.length > 0 && (
+      {isOpen && filtered.length > 0 && coords && createPortal(
         <div
+          ref={dropdownRef}
           style={{
-            position: 'absolute',
-            top: 'calc(100% + 4px)',
-            left: 0,
-            right: 0,
-            minWidth: '140px',
-            maxWidth: '220px',
-            maxHeight: '200px',
+            position: 'fixed',
+            ...(coords.placeAbove 
+              ? { bottom: `${window.innerHeight - coords.top}px` } 
+              : { top: `${coords.top}px` }),
+            left: `${coords.left}px`,
+            width: `${coords.width}px`,
+            maxHeight: `${coords.maxHeight}px`,
             overflowY: 'auto',
             WebkitOverflowScrolling: 'touch',
             background: '#ffffff',
             border: '1px solid #cbd5e1',
             borderRadius: '8px',
             boxShadow: '0 12px 28px -4px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
-            zIndex: 99999,
+            zIndex: 999999,
             padding: '4px 0'
           }}
         >
@@ -249,7 +371,8 @@ const QuickSuggestInput: React.FC<QuickSuggestProps> = ({
               {item}
             </div>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -281,6 +404,8 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
   const [searchQuery, setSearchQuery] = useState('');
   const [queueSearchQuery, setQueueSearchQuery] = useState('');
   const [queueFilter, setQueueFilter] = useState<'WAITING' | 'PRESCRIBED' | 'ALL'>('WAITING');
+  const [rxHistoryScope, setRxHistoryScope] = useState<'ALL' | 'MY'>('ALL');
+  const [patientForHistoryModal, setPatientForHistoryModal] = useState<PatientSummary | null>(null);
   
   // Prescription Writer State
   const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
@@ -343,7 +468,9 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
         const todayReceipts = await storage.getReceipts({ startDate: todayStr, endDate: todayStr });
         setReceipts(prev => {
           const prevWithoutToday = prev.filter(r => !r.date.startsWith(todayStr));
-          return [...prevWithoutToday, ...todayReceipts].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+          const updated = [...prevWithoutToday, ...todayReceipts].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+          if (JSON.stringify(prev) === JSON.stringify(updated)) return prev;
+          return updated;
         });
       } catch (e) {
         console.error('Failed to poll queue:', e);
@@ -352,21 +479,42 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
     return () => clearInterval(interval);
   }, []);
 
+  // Safely clear print state after print dialog closes (debounced to avoid unmounting before Electron finishes spooling)
   useEffect(() => {
+    let timer: NodeJS.Timeout;
     const handleAfterPrint = () => {
-      setActivePrintPrescription(null);
+      timer = setTimeout(() => {
+        setActivePrintPrescription(null);
+      }, 3000);
     };
     window.addEventListener('afterprint', handleAfterPrint);
-    return () => window.removeEventListener('afterprint', handleAfterPrint);
+    return () => {
+      window.removeEventListener('afterprint', handleAfterPrint);
+      clearTimeout(timer);
+    };
   }, []);
 
-  // Filter today's patients (patient queue)
+  // Filter today's patients (patient queue) sorted in increasing order (FIFO)
   const todayStr = format(new Date(), 'yyyy-MM-dd');
-  const todayReceipts = receipts.filter(r => {
-    const isToday = r.date.startsWith(todayStr);
-    const matchesDoctor = currentUserDoctorId ? r.doctorId === currentUserDoctorId : false;
-    return isToday && matchesDoctor;
-  });
+  const todayReceipts = receipts
+    .filter(r => {
+      const isToday = r.date.startsWith(todayStr);
+      const matchesDoctor = currentUserDoctorId ? r.doctorId === currentUserDoctorId : false;
+      return isToday && matchesDoctor;
+    })
+    .sort((a, b) => {
+      const tokenA = String((a as any).tokenNumber || a.receiptNumber || '');
+      const tokenB = String((b as any).tokenNumber || b.receiptNumber || '');
+      const matchA = tokenA.match(/\d+/g);
+      const matchB = tokenB.match(/\d+/g);
+      const numA = matchA ? parseInt(matchA[matchA.length - 1], 10) : null;
+      const numB = matchB ? parseInt(matchB[matchB.length - 1], 10) : null;
+      if (numA !== null && numB !== null && numA !== numB) return numA - numB;
+      const timeA = (a as any).createdAt ? new Date((a as any).createdAt).getTime() : (a.date ? new Date(a.date).getTime() : 0);
+      const timeB = (b as any).createdAt ? new Date((b as any).createdAt).getTime() : (b.date ? new Date(b.date).getTime() : 0);
+      if (timeA && timeB && timeA !== timeB) return timeA - timeB;
+      return tokenA.localeCompare(tokenB, undefined, { numeric: true });
+    });
 
   const isReceiptPrescribed = (r: Receipt) => {
     return prescriptions.some(p => 
@@ -398,15 +546,22 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
     );
   });
 
-  // Prescription History filtered
+  // Prescription History filtered with cross-doctor scope
   const filteredPrescriptions = prescriptions.filter(p => {
-    const matchesSearch = !searchQuery ||
-      (p.patientId && p.patientId.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      p.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.patientPhone.includes(searchQuery) ||
-      p.doctorName.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesDoctor = currentUserDoctorId ? p.doctorId === currentUserDoctorId : false;
-    return matchesSearch && matchesDoctor;
+    const q = searchQuery.toLowerCase().trim();
+    const matchesSearch = !q ||
+      (p.patientId && p.patientId.toLowerCase().includes(q)) ||
+      (p.patientName && p.patientName.toLowerCase().includes(q)) ||
+      (p.patientPhone && p.patientPhone.includes(q)) ||
+      (p.doctorName && p.doctorName.toLowerCase().includes(q)) ||
+      (p.diagnosis && p.diagnosis.toLowerCase().includes(q)) ||
+      (p.medicines && p.medicines.some(m => m.name.toLowerCase().includes(q)));
+    
+    if (rxHistoryScope === 'MY') {
+      const matchesDoctor = currentUserDoctorId ? p.doctorId === currentUserDoctorId : false;
+      return matchesSearch && matchesDoctor;
+    }
+    return matchesSearch;
   });
 
   // Autocomplete Suggestions logic
@@ -638,6 +793,26 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
       });
       setSelectedLabTestIds(testIds);
     }
+    toast('Prescription details copied from past visit!', { type: 'success' });
+  };
+
+  const handleCopyMedsOnly = (pastMeds: PrescribedMedicine[]) => {
+    setMedicines(prev => {
+      const existingClean = prev.filter(m => m.name.trim() !== '');
+      const newItems = pastMeds.map(m => ({ ...m }));
+      return existingClean.length > 0 ? [...existingClean, ...newItems] : newItems;
+    });
+    toast(`Added ${pastMeds.length} medication(s) to current prescription`, { type: 'success' });
+  };
+
+  const handleCopyDiagnosisOnly = (pastDx: string) => {
+    if (!pastDx.trim()) return;
+    setDiagnosis(prev => {
+      if (!prev.trim()) return pastDx.trim();
+      if (prev.toLowerCase().includes(pastDx.toLowerCase().trim())) return prev;
+      return `${prev}, ${pastDx.trim()}`;
+    });
+    toast('Diagnosis copied to current prescription', { type: 'success' });
   };
 
   const handleSaveAndPrint = async (e: React.FormEvent) => {
@@ -677,6 +852,24 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
     };
 
     await storage.savePrescription(prescription);
+
+    // Update chamber queue state in storage and localStorage: clear active token if it matches
+    const docId = selectedReceipt.doctorId;
+    try {
+      const saved = localStorage.getItem(`clinic_qds_${docId}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const receiptToken = String((selectedReceipt as any).tokenNumber || selectedReceipt.receiptNumber || '01');
+        if (parsed.currentToken === receiptToken) {
+          parsed.currentToken = null;
+          parsed.currentPatientName = null;
+          parsed.completedCount = (parsed.completedCount || 0) + 1;
+          localStorage.setItem(`clinic_qds_${docId}`, JSON.stringify(parsed));
+          await storage.setMetadata(`clinic_qds_${docId}`, JSON.stringify(parsed));
+        }
+      }
+    } catch (_) {}
+
     notifyDataChanged('queue');
 
     // Automatically create & dispatch lab order to Laboratory & Diagnostics Desk if investigations were selected
@@ -761,7 +954,7 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
     setActivePrintPrescription(prescription);
     setTimeout(() => {
       window.print();
-    }, 250);
+    }, 350);
   };
 
   const handleShareWhatsapp = async (prescription: Prescription) => {
@@ -856,6 +1049,7 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
     localStorage.setItem(`clinic_qds_${docId}`, JSON.stringify(chamberState));
 
     try {
+      await storage.setMetadata(`clinic_qds_${docId}`, JSON.stringify(chamberState));
       await storage.setMetadata('latest_queue_call', JSON.stringify(callData));
     } catch (_) {}
 
@@ -1139,6 +1333,9 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
                 <div className="queue-grid">
                   {filteredQueue.map(r => {
                     const isPrescribed = isReceiptPrescribed(r);
+                    const pastRxList = prescriptions.filter(p => isSamePatientRecord(p, r) && p.receiptId !== r.id);
+                    const otherDoctorVisits = pastRxList.filter(p => currentUserDoctorId ? p.doctorId !== currentUserDoctorId : false);
+
                     return (
                       <div key={r.id} className={`queue-card ${isPrescribed ? 'prescribed' : ''}`}>
                         <div className="card-top">
@@ -1148,6 +1345,35 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
                             <span className="patient-specs">
                               {formatAgeGender(r.patientAge, r.patientGender)}
                             </span>
+                            {pastRxList.length > 0 && (
+                              <div 
+                                className="queue-history-pill" 
+                                onClick={() => setPatientForHistoryModal(r)}
+                                title="Click to view full cross-doctor clinical history & EHR dossier"
+                                style={{
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '5px',
+                                  fontSize: '0.74rem',
+                                  fontWeight: 600,
+                                  padding: '3px 8px',
+                                  borderRadius: '6px',
+                                  background: otherDoctorVisits.length > 0 ? '#eef2ff' : '#f0fdf4',
+                                  color: otherDoctorVisits.length > 0 ? '#4338ca' : '#15803d',
+                                  border: `1px solid ${otherDoctorVisits.length > 0 ? '#c7d2fe' : '#bbf7d0'}`,
+                                  marginTop: '6px'
+                                }}
+                              >
+                                <History size={12} />
+                                <span>
+                                  {otherDoctorVisits.length > 0 
+                                    ? `${pastRxList.length} past visit(s) • Last: Dr. ${otherDoctorVisits[0].doctorName.replace(/^Dr\.?\s+/i, '')}` 
+                                    : `${pastRxList.length} past visit(s) in clinic`}
+                                </span>
+                                <span style={{ fontSize: '0.66rem', textDecoration: 'underline' }}>View EHR</span>
+                              </div>
+                            )}
                           </div>
                           <span className={`status-tag ${isPrescribed ? 'success' : 'pending'}`}>
                             {isPrescribed ? 'Prescribed' : 'Waiting'}
@@ -1164,9 +1390,10 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
 
                         <div className="card-actions">
                           {isPrescribed ? (
-                            <>
+                            <div style={{ display: 'flex', gap: '6px', width: '100%' }}>
                               <button 
-                                className="btn-secondary w-full"
+                                className="btn-secondary"
+                                style={{ flex: 1 }}
                                 onClick={() => handleOpenWriter(r)}
                               >
                                 Edit Rx
@@ -1177,29 +1404,66 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
                                   const rx = prescriptions.find(p => p.receiptId === r.id);
                                   if (rx) handlePrintRx(rx);
                                 }}
+                                title="Print Prescription"
                               >
                                 <Printer size={16} />
                               </button>
-                            </>
-                          ) : (
-                            <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
-                              <button 
+                              <button
                                 type="button"
                                 className="btn-secondary"
-                                onClick={() => handleDoctorCallSpecificPatient(r)}
-                                title="Call this patient into chamber and alert reception"
-                                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontWeight: 600, padding: '0.45rem 0.75rem', background: '#f0f9ff', color: '#0369a1', borderColor: '#bae6fd' }}
+                                onClick={() => setPatientForHistoryModal(r)}
+                                title="View Cross-Doctor Clinical Timeline"
+                                style={{ padding: '0.45rem 0.65rem', color: '#0284c7' }}
                               >
-                                <Volume2 size={15} /> Call In
+                                <History size={16} />
                               </button>
-                              <button 
-                                className="btn-primary"
-                                style={{ flex: 1 }}
-                                onClick={() => handleOpenWriter(r)}
-                              >
-                                <PlusCircle size={16} />
-                                Write Prescription
-                              </button>
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%' }}>
+                              <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                                <button 
+                                  type="button"
+                                  className="btn-secondary"
+                                  onClick={() => handleDoctorCallSpecificPatient(r)}
+                                  title="Call this patient into chamber and alert reception"
+                                  style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontWeight: 600, padding: '0.45rem 0.75rem', background: '#f0f9ff', color: '#0369a1', borderColor: '#bae6fd' }}
+                                >
+                                  <Volume2 size={15} /> Call In
+                                </button>
+                                <button 
+                                  className="btn-primary"
+                                  style={{ flex: 1 }}
+                                  onClick={() => handleOpenWriter(r)}
+                                >
+                                  <PlusCircle size={16} />
+                                  Write Prescription
+                                </button>
+                              </div>
+                              {pastRxList.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setPatientForHistoryModal(r)}
+                                  style={{
+                                    width: '100%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '6px',
+                                    fontSize: '0.76rem',
+                                    fontWeight: 600,
+                                    color: '#4338ca',
+                                    background: '#eef2ff',
+                                    border: '1px solid #c7d2fe',
+                                    borderRadius: '6px',
+                                    padding: '4px 8px',
+                                    cursor: 'pointer'
+                                  }}
+                                  title="Review clinical records, past diagnoses & medications from other doctors"
+                                >
+                                  <History size={13} />
+                                  <span>Review Cross-Doctor History ({pastRxList.length} visit{pastRxList.length > 1 ? 's' : ''})</span>
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
@@ -1213,13 +1477,58 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
 
           {activeTab === 'history' && (
             <div className="tab-pane">
-              <div className="panel-header search-header">
-                <h3>Prescription Records</h3>
-                <div className="search-bar">
+              <div className="panel-header search-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                  <h3 style={{ margin: 0 }}>Prescription Records</h3>
+                  <div style={{ display: 'flex', background: '#f1f5f9', padding: '3px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                    <button
+                      type="button"
+                      onClick={() => setRxHistoryScope('ALL')}
+                      style={{
+                        background: rxHistoryScope === 'ALL' ? '#0ea5e9' : 'transparent',
+                        color: rxHistoryScope === 'ALL' ? '#ffffff' : '#64748b',
+                        border: 'none',
+                        padding: '4px 12px',
+                        borderRadius: '6px',
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <Stethoscope size={13} />
+                      <span>All Hospital Doctors (Cross-Doctor EHR)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRxHistoryScope('MY')}
+                      style={{
+                        background: rxHistoryScope === 'MY' ? '#0ea5e9' : 'transparent',
+                        color: rxHistoryScope === 'MY' ? '#ffffff' : '#64748b',
+                        border: 'none',
+                        padding: '4px 12px',
+                        borderRadius: '6px',
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <span>My Prescriptions Only</span>
+                    </button>
+                  </div>
+                </div>
+                <div className="search-bar" style={{ minWidth: '320px' }}>
                   <Search size={18} className="search-icon" />
                   <input 
                     type="text" 
-                    placeholder="Search by patient name or phone..." 
+                    placeholder="Search patient, phone, UHID, doctor, diagnosis..." 
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
                   />
@@ -1255,7 +1564,27 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
                             <strong>{p.patientName}</strong><br/><span className="sub-text">{p.patientPhone}</span>
                           </td>
                           <td className="text-center" style={{ textAlign: 'center' }}>{formatAgeGender(p.patientAge, p.patientGender)}</td>
-                          <td style={{ textAlign: 'left' }}>{p.doctorName}</td>
+                          <td style={{ textAlign: 'left' }}>
+                            {(() => {
+                              const doc = doctors.find(d => d.id === p.doctorId || d.name.toLowerCase() === p.doctorName.toLowerCase());
+                              const isOtherDoctor = currentUserDoctorId ? p.doctorId !== currentUserDoctorId : false;
+                              return (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <strong>{p.doctorName}</strong>
+                                    {isOtherDoctor && (
+                                      <span style={{ fontSize: '0.68rem', background: '#e0e7ff', color: '#4338ca', padding: '1px 5px', borderRadius: '4px', fontWeight: 600 }}>
+                                        Cross-Doctor
+                                      </span>
+                                    )}
+                                  </div>
+                                  {doc?.specialization && (
+                                    <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{doc.specialization}</span>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </td>
                           <td style={{ textAlign: 'left' }}>
                             <DiagnosisDropdown
                               diagnosis={p.diagnosis}
@@ -1290,6 +1619,20 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
                                 title="Share via WhatsApp"
                               >
                                 <MessageCircle size={16} />
+                              </button>
+                              <button 
+                                className="btn-icon text-primary" 
+                                style={{ color: '#0ea5e9' }}
+                                onClick={() => setPatientForHistoryModal({
+                                  patientId: p.patientId,
+                                  patientName: p.patientName,
+                                  patientPhone: p.patientPhone,
+                                  patientAge: p.patientAge,
+                                  patientGender: p.patientGender
+                                })}
+                                title="View Patient Full Cross-Doctor Clinical Timeline (EHR)"
+                              >
+                                <History size={16} />
                               </button>
                               <button 
                                 className="btn-icon text-danger" 
@@ -1818,20 +2161,36 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
 
                 {/* 3. Right Column: Patient Clinical History */}
                 <div className="writer-history-column">
-                  <div className="history-title-row">
-                    <History size={16} className="text-primary" />
-                    <span>Patient Clinical History</span>
+                  <div className="history-title-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <History size={16} className="text-primary" />
+                      <span>Patient Clinical History</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setPatientForHistoryModal(selectedReceipt)}
+                      style={{
+                        background: '#e0f2fe',
+                        border: '1px solid #bae6fd',
+                        color: '#0369a1',
+                        fontSize: '0.74rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        padding: '2px 8px',
+                        borderRadius: '6px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '3px'
+                      }}
+                      title="Open full expanded EHR hospital dossier"
+                    >
+                      <span>Full Dossier ↗</span>
+                    </button>
                   </div>
 
                   {(() => {
                     const history = prescriptions
-                      .filter(p => {
-                        const pidMatch = selectedReceipt.patientId && p.patientId && p.patientId.toLowerCase() === selectedReceipt.patientId.toLowerCase();
-                        const nameMatch = p.patientName.toLowerCase() === selectedReceipt.patientName.toLowerCase();
-                        const phoneMatch = selectedReceipt.patientPhone && p.patientPhone === selectedReceipt.patientPhone;
-                        const isCurrent = p.receiptId === selectedReceipt.id;
-                        return (pidMatch || nameMatch || phoneMatch) && !isCurrent;
-                      })
+                      .filter(p => isSamePatientRecord(p, selectedReceipt) && p.receiptId !== selectedReceipt.id)
                       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
                     if (history.length === 0) {
@@ -1845,78 +2204,131 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
 
                     return (
                       <div className="history-cards-list">
-                        {history.map(rx => (
-                          <div className="history-card" key={rx.id}>
-                            <div className="history-card-header">
-                              <span className="history-card-date">
-                                {(() => {
-                                  try {
-                                    return format(new Date(rx.date.split(' ')[0]), 'dd MMM yyyy');
-                                  } catch (e) {
-                                    return rx.date;
-                                  }
-                                })()}
-                              </span>
-                              <span className="history-card-doctor">
-                                By {rx.doctorName}
-                              </span>
-                            </div>
-                            
-                            {rx.symptoms && (
-                              <div className="history-card-section">
-                                <strong>Symptoms:</strong> {rx.symptoms}
-                              </div>
-                            )}
-                            
-                            {rx.diagnosis && (
-                              <div className="history-card-section">
-                                <strong>Diagnosis:</strong> {rx.diagnosis}
-                              </div>
-                            )}
-                            
-                            {rx.medicines && rx.medicines.length > 0 && (
-                              <div className="history-card-section">
-                                <strong>Rx Medicines:</strong>
-                                <ul className="history-med-list">
-                                  {rx.medicines.map((m, idx) => (
-                                    <li key={idx}>
-                                      {m.name} - {m.dosage} ({m.duration}){m.instructions ? ` [${m.instructions}]` : ''}
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            )}
+                        {history.map(rx => {
+                          const doc = doctors.find(d => d.id === rx.doctorId || d.name.toLowerCase() === rx.doctorName.toLowerCase());
+                          const isOtherDoctor = currentUserDoctorId ? rx.doctorId !== currentUserDoctorId : false;
+                          const rawMeds = rx.medicines;
+                          const medsList: PrescribedMedicine[] = Array.isArray(rawMeds) ? rawMeds : typeof rawMeds === 'string' ? JSON.parse(rawMeds || '[]') : [];
 
-                            {rx.labInvestigations && rx.labInvestigations.length > 0 && (
-                              <div className="history-card-section">
-                                <strong>Investigations:</strong>
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
-                                  {rx.labInvestigations.map((test, idx) => (
-                                    <span key={idx} style={{ fontSize: '0.72rem', background: '#eef2ff', color: '#4338ca', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
-                                      🧪 {test}
+                          return (
+                            <div 
+                              className="history-card" 
+                              key={rx.id}
+                              style={{
+                                borderLeft: isOtherDoctor ? '3px solid #6366f1' : '3px solid #0ea5e9',
+                                background: isOtherDoctor ? '#f8faff' : '#f8fafc'
+                              }}
+                            >
+                              <div className="history-card-header">
+                                <span className="history-card-date">
+                                  {(() => {
+                                    try {
+                                      return format(new Date(rx.date.split(' ')[0]), 'dd MMM yyyy');
+                                    } catch (e) {
+                                      return rx.date;
+                                    }
+                                  })()}
+                                </span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', textAlign: 'right' }}>
+                                  <span style={{ fontWeight: 600, color: isOtherDoctor ? '#4338ca' : '#0369a1' }}>
+                                    By {rx.doctorName}
+                                  </span>
+                                  {isOtherDoctor && (
+                                    <span style={{ fontSize: '0.65rem', background: '#e0e7ff', color: '#3730a3', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>
+                                      Cross-Doctor
                                     </span>
-                                  ))}
+                                  )}
                                 </div>
                               </div>
-                            )}
+                              {doc?.specialization && (
+                                <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '-2px', fontStyle: 'italic' }}>
+                                  Specialty: {doc.specialization}
+                                </div>
+                              )}
+                              
+                              {rx.diagnosis && (
+                                <div className="history-card-section" style={{ background: '#f0f9ff', padding: '5px 8px', borderRadius: '6px', border: '1px solid #e0f2fe' }}>
+                                  <strong style={{ color: '#0369a1' }}>Diagnosis:</strong> <span style={{ fontWeight: 600, color: '#0f172a' }}>{rx.diagnosis}</span>
+                                </div>
+                              )}
 
-                            {rx.notes && (
-                              <div className="history-card-section">
-                                <strong>Notes:</strong> {rx.notes}
+                              {rx.symptoms && (
+                                <div className="history-card-section">
+                                  <strong>Complaints:</strong> {rx.symptoms}
+                                </div>
+                              )}
+                              
+                              {medsList.length > 0 && (
+                                <div className="history-card-section">
+                                  <strong>Rx Medicines:</strong>
+                                  <ul className="history-med-list">
+                                    {medsList.map((m, idx) => (
+                                      <li key={idx}>
+                                        <span style={{ fontWeight: 600 }}>{m.name}</span> - {m.dosage} ({m.duration}){m.instructions ? ` [${m.instructions}]` : ''}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+
+                              {rx.labInvestigations && rx.labInvestigations.length > 0 && (
+                                <div className="history-card-section">
+                                  <strong>Investigations:</strong>
+                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
+                                    {rx.labInvestigations.map((test, idx) => (
+                                      <span key={idx} style={{ fontSize: '0.72rem', background: '#eef2ff', color: '#4338ca', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                                        🧪 {test}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {rx.notes && (
+                                <div className="history-card-section">
+                                  <strong>Advice / Notes:</strong> {rx.notes}
+                                </div>
+                              )}
+                              
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(95px, 1fr))', gap: '6px', marginTop: '0.5rem' }}>
+                                <button
+                                  type="button"
+                                  className="btn-secondary-sm btn-copy-rx"
+                                  onClick={() => handleCopyFromPast(rx)}
+                                  title="Copy entire prescription (symptoms, diagnosis, medicines, labs, advice)"
+                                  style={{ justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '0.25rem', fontWeight: 600 }}
+                                >
+                                  <Plus size={12} />
+                                  Copy All
+                                </button>
+                                {medsList.length > 0 && (
+                                  <button
+                                    type="button"
+                                    className="btn-secondary-sm"
+                                    onClick={() => handleCopyMedsOnly(medsList)}
+                                    title="Add these medicines to today's prescription"
+                                    style={{ justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#16a34a', borderColor: '#bbf7d0' }}
+                                  >
+                                    <Pill size={12} />
+                                    + Meds
+                                  </button>
+                                )}
+                                {rx.diagnosis && (
+                                  <button
+                                    type="button"
+                                    className="btn-secondary-sm"
+                                    onClick={() => handleCopyDiagnosisOnly(rx.diagnosis)}
+                                    title="Copy or append this diagnosis"
+                                    style={{ justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#0284c7', borderColor: '#bae6fd' }}
+                                  >
+                                    <Activity size={12} />
+                                    + Dx
+                                  </button>
+                                )}
                               </div>
-                            )}
-                            
-                            <button
-                              type="button"
-                              className="btn-secondary-sm btn-copy-rx"
-                              onClick={() => handleCopyFromPast(rx)}
-                              style={{ marginTop: '0.5rem', width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
-                            >
-                              <Plus size={12} />
-                              Copy to Current Rx
-                            </button>
-                          </div>
-                        ))}
+                            </div>
+                          );
+                        })}
                       </div>
                     );
                   })()}
@@ -1949,6 +2361,31 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
         </div>
       )}
 
+      {/* Patient Cross-Doctor Clinical History & EHR Timeline Modal */}
+      {patientForHistoryModal && (
+        <PatientEhrModal
+          patient={patientForHistoryModal}
+          prescriptions={prescriptions}
+          receipts={receipts}
+          doctors={doctors}
+          currentUserDoctorId={currentUserDoctorId}
+          onClose={() => setPatientForHistoryModal(null)}
+          onPrintRx={handlePrintRx}
+          onShareWhatsapp={handleShareWhatsapp}
+          onPrescribeWithPastRx={pastRx => {
+            const matchedReceipt = todayReceipts.find(r => isSamePatientRecord(r, patientForHistoryModal));
+            if (matchedReceipt) {
+              handleOpenWriter(matchedReceipt);
+              handleCopyFromPast(pastRx);
+              setPatientForHistoryModal(null);
+            } else {
+              toast(`Patient "${patientForHistoryModal.patientName}" does not have an active queue ticket in your chamber today.`, { type: 'info' });
+            }
+          }}
+          hasActiveTodayQueueTicket={todayReceipts.some(r => isSamePatientRecord(r, patientForHistoryModal))}
+        />
+      )}
+
       {/* Hidden Print Template for Prescription (Rx) */}
       {activePrintPrescription && (() => {
         const doctorObj = doctors.find(d => String(d.id) === String(activePrintPrescription.doctorId));
@@ -1968,7 +2405,7 @@ const DoctorWorkstation: React.FC<DoctorWorkstationProps> = ({ currentUser, curr
 
         return (
           <>
-            <style dangerouslySetInnerHTML={{ __html: `@media print { ${pageCss} }` }} />
+            <style dangerouslySetInnerHTML={{ __html: pageCss }} />
             <div id="prescription-print-template" className={`print-only paper-${prescriptionPaperType.toLowerCase()}`}>
               <div 
                 className="print-container"

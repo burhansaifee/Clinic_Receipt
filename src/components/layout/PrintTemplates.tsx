@@ -3,6 +3,7 @@ import { format } from 'date-fns';
 import {
   formatAgeGender,
   storage,
+  isAdvanceDepositReceipt,
   type Doctor,
   type Receipt,
   type Prescription,
@@ -95,11 +96,7 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
     <>
       {/* Dynamic @page style */}
       {dynamicPageCss && (
-        <style dangerouslySetInnerHTML={{ __html: `
-          @media print {
-            ${dynamicPageCss}
-          }
-        ` }} />
+        <style dangerouslySetInnerHTML={{ __html: dynamicPageCss }} />
       )}
 
       {/* Receipt print template — supports multi-receipt bulk print */}
@@ -183,7 +180,13 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
                 )}
 
                 <div className="print-title-bar">
-                  <h1>{r.billType === 'FACILITY' ? 'IN-PATIENT & FACILITY BILL' : 'PAYMENT RECEIPT (DUPLICATE)'}</h1>
+                  <h1>
+                    {isAdvanceDepositReceipt(r)
+                      ? 'ADVANCE DEPOSIT RECEIPT'
+                      : r.billType === 'FACILITY'
+                      ? 'IN-PATIENT & DISCHARGE BILL'
+                      : 'PAYMENT RECEIPT (DUPLICATE)'}
+                  </h1>
                 </div>
 
                 <div className="print-info-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
@@ -195,7 +198,13 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
                     <p><strong>Phone No.:</strong> {r.patientPhone || 'N/A'}</p>
                   </div>
                   <div className="info-section">
-                    <h3>{r.billType === 'FACILITY' ? 'STAY & BILL DETAILS' : 'BILL DETAILS'}</h3>
+                    <h3>
+                      {isAdvanceDepositReceipt(r)
+                        ? 'DEPOSIT DETAILS'
+                        : r.billType === 'FACILITY'
+                        ? 'STAY & BILL DETAILS'
+                        : 'BILL DETAILS'}
+                    </h3>
                     <p><strong>Receipt #:</strong> #{r.receiptNumber}</p>
                     {r.billType === 'FACILITY' && r.roomNumber && (
                       <p><strong>Room / Bed:</strong> {r.roomNumber}</p>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { format, parseISO } from 'date-fns';
 import {
   Scissors, Activity, Calendar, Clock, CheckCircle,
@@ -143,40 +143,49 @@ export const OtManagementTab: React.FC<OtManagementTabProps> = ({
     toast.show(`Auto-filled patient details for ${p.patientName}`, 'info');
   };
 
+  const hasInitializedOtFormRef = useRef(false);
+
   // Load Data
-  const loadOtData = async () => {
+  const loadOtData = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const [tList, cList, mData, bList] = await Promise.all([
         storage.getOperationTheatres(),
         storage.getSurgicalCases({ date: selectedDate }),
         storage.getOtDashboardMetrics(),
         storage.getBeds()
       ]);
-      setTheatres(tList);
-      setCases(cList);
-      setMetrics(mData);
-      setActiveBeds(bList.filter(b => b.status === 'occupied' && b.currentAdmissionId));
-      if (tList.length > 0 && !caseForm.theatreId) {
-        setCaseForm(prev => ({ ...prev, theatreId: tList[0].id }));
-      }
-      if (doctors.length > 0 && !caseForm.primarySurgeonId) {
-        setCaseForm(prev => ({ ...prev, primarySurgeonId: doctors[0].id }));
+      setTheatres(prev => JSON.stringify(prev) === JSON.stringify(tList) ? prev : tList);
+      setCases(prev => JSON.stringify(prev) === JSON.stringify(cList) ? prev : cList);
+      setMetrics(prev => JSON.stringify(prev) === JSON.stringify(mData) ? prev : mData);
+      const activeB = bList.filter(b => b.status === 'occupied' && b.currentAdmissionId);
+      setActiveBeds(prev => JSON.stringify(prev) === JSON.stringify(activeB) ? prev : activeB);
+
+      if (!hasInitializedOtFormRef.current) {
+        if (tList.length > 0 && !caseForm.theatreId) {
+          setCaseForm(prev => ({ ...prev, theatreId: tList[0].id }));
+        }
+        if (doctors.length > 0 && !caseForm.primarySurgeonId) {
+          setCaseForm(prev => ({ ...prev, primarySurgeonId: doctors[0].id }));
+        }
+        if (tList.length > 0 && doctors.length > 0) {
+          hasInitializedOtFormRef.current = true;
+        }
       }
     } catch (e) {
       console.error('Failed to load OT data:', e);
-      toast.show('Failed to load Operation Theatre data', 'error');
+      if (!silent) toast.show('Failed to load Operation Theatre data', 'error');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
     loadOtData();
-    const interval = setInterval(loadOtData, 5000); // 5s auto-refresh for LAN sync
+    const interval = setInterval(() => loadOtData(true), 5000); // 5s auto-refresh for LAN sync
     const handleLiveSync = (e: CustomEvent) => {
       if (!e.detail?.dataType || e.detail.dataType === 'ot' || e.detail.dataType === 'beds') {
-        loadOtData();
+        loadOtData(true);
       }
     };
     window.addEventListener('buvora-data-updated', handleLiveSync as EventListener);
@@ -316,7 +325,7 @@ export const OtManagementTab: React.FC<OtManagementTabProps> = ({
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <div className="no-print" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <button
             type="button"
             className="btn-secondary"

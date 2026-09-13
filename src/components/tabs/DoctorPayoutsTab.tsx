@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Wallet, DollarSign, Percent, FileCheck,
   Printer, Plus, Settings2, ArrowUpRight,
@@ -40,8 +40,10 @@ export const DoctorPayoutsTab: React.FC<DoctorPayoutsTabProps> = ({ doctors }) =
   const [voucherData, setVoucherData] = useState<DoctorPayoutTransaction | null>(null);
 
   // Default doctor select
+  const hasInitializedDoctorRef = useRef(false);
   useEffect(() => {
-    if (doctors.length > 0 && !selectedDoctorId) {
+    if (doctors.length > 0 && !selectedDoctorId && !hasInitializedDoctorRef.current) {
+      hasInitializedDoctorRef.current = true;
       setSelectedDoctorId(doctors[0].id);
     }
   }, [doctors, selectedDoctorId]);
@@ -61,27 +63,27 @@ export const DoctorPayoutsTab: React.FC<DoctorPayoutsTabProps> = ({ doctors }) =
     return { start: undefined, end: undefined };
   }, [dateRangeFilter]);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const [rules, payouts, m] = await Promise.all([
         storage.getDoctorCommissionRules(),
         storage.getDoctorPayoutTransactions(selectedDoctorId || undefined),
         storage.getHospitalTier3Metrics()
       ]);
-      setCommissionRules(rules);
-      setPayoutHistory(payouts);
-      setMetrics(m);
+      setCommissionRules(prev => JSON.stringify(prev) === JSON.stringify(rules) ? prev : rules);
+      setPayoutHistory(prev => JSON.stringify(prev) === JSON.stringify(payouts) ? prev : payouts);
+      setMetrics(prev => JSON.stringify(prev) === JSON.stringify(m) ? prev : m);
 
       if (selectedDoctorId) {
         const acc = await storage.calculateDoctorAccruedEarnings(selectedDoctorId, dateBounds.start, dateBounds.end);
-        setAccrued(acc);
+        setAccrued(prev => JSON.stringify(prev) === JSON.stringify(acc) ? prev : acc);
       }
     } catch (e) {
       console.error('Failed to load doctor payouts data:', e);
-      toast.show('Failed to load revenue share data', 'error');
+      if (!silent) toast.show('Failed to load revenue share data', 'error');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -90,11 +92,11 @@ export const DoctorPayoutsTab: React.FC<DoctorPayoutsTabProps> = ({ doctors }) =
     const handleSync = (e: any) => {
       const dt = e?.detail?.dataType;
       if (!dt || dt === 'receipts' || dt === 'admission' || dt === 'ot' || dt === 'lab' || dt === 'payouts' || dt === 'all') {
-        loadData();
+        loadData(true);
       }
     };
     window.addEventListener('buvora-data-updated', handleSync);
-    const interval = setInterval(loadData, 5000);
+    const interval = setInterval(() => loadData(true), 5000);
     return () => {
       window.removeEventListener('buvora-data-updated', handleSync);
       clearInterval(interval);
@@ -183,15 +185,30 @@ export const DoctorPayoutsTab: React.FC<DoctorPayoutsTabProps> = ({ doctors }) =
     }
   };
 
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    const handleAfterPrint = () => {
+      timer = setTimeout(() => {
+        setVoucherData(null);
+      }, 3000);
+    };
+    window.addEventListener('afterprint', handleAfterPrint);
+    return () => {
+      window.removeEventListener('afterprint', handleAfterPrint);
+      clearTimeout(timer);
+    };
+  }, []);
+
   const handlePrintVoucher = (tx: DoctorPayoutTransaction) => {
     setVoucherData(tx);
     setTimeout(() => {
       window.print();
-    }, 200);
+    }, 350);
   };
 
   return (
     <div className="payouts-container">
+      <div className={`payouts-screen-ui ${voucherData ? 'no-print' : ''}`}>
       {/* ── KPI Summary Cards ───────────────────────────────────────────────── */}
       <div className="payouts-stats-grid">
         <div className="payout-stat-card">
@@ -756,10 +773,11 @@ export const DoctorPayoutsTab: React.FC<DoctorPayoutsTabProps> = ({ doctors }) =
           </div>
         </div>
       )}
+      </div>
 
       {/* ── PRINTABLE VOUCHER (MEDIA PRINT) ─────────────────────────────────── */}
       {voucherData && (
-        <div className="payout-voucher-printable" style={{ display: 'none' }}>
+        <div className="payout-voucher-printable print-only">
           <div style={{ textAlign: 'center', borderBottom: '2px solid black', paddingBottom: '1rem', marginBottom: '1.5rem' }}>
             <h2 style={{ margin: 0 }}>HOSPITAL DOCTOR REVENUE SHARE VOUCHER</h2>
             <p style={{ margin: '0.25rem 0' }}>Payment Voucher #{voucherData.payoutNumber} | Date: {voucherData.payoutDate}</p>

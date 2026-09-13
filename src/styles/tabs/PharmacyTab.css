@@ -5,7 +5,6 @@
 /* ── Pharmacy Print Slip Styles ─────────────────────────────────────────── */
 @media print {
   .no-print,
-  .modal-overlay,
   .pharmacy-workstation {
     display: none !important;
   }

@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld('database', {
   getDoctors: () => ipcRenderer.invoke('db-get-doctors'),
   saveDoctor: (doctor: any) => ipcRenderer.invoke('db-save-doctor', doctor),
   deleteDoctor: (id: string) => ipcRenderer.invoke('db-delete-doctor', id),
+  getDoctorReceiptCount: (doctorId: string) => ipcRenderer.invoke('db-get-doctor-receipt-count', doctorId),
   getServices: () => ipcRenderer.invoke('db-get-services'),
   saveService: (service: any) => ipcRenderer.invoke('db-save-service', service),
   deleteService: (id: string) => ipcRenderer.invoke('db-delete-service', id),

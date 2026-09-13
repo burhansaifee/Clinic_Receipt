@@ -76,19 +76,19 @@ export const InsuranceTab: React.FC = () => {
     const handleSync = (e: any) => {
       const dt = e?.detail?.dataType;
       if (!dt || dt === 'insurance' || dt === 'admission' || dt === 'all') {
-        loadData();
+        loadData(true);
       }
     };
     window.addEventListener('buvora-data-updated', handleSync);
-    const interval = setInterval(loadData, 5000);
+    const interval = setInterval(() => loadData(true), 5000);
     return () => {
       window.removeEventListener('buvora-data-updated', handleSync);
       clearInterval(interval);
     };
   }, []);
 
-  const loadData = async () => {
-    setIsLoading(true);
+  const loadData = async (silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
       const [claimsData, providersData, metricsData, admissionsData] = await Promise.all([
         storage.getInsuranceClaims(),
@@ -96,14 +96,14 @@ export const InsuranceTab: React.FC = () => {
         storage.getInsuranceDashboardMetrics(),
         storage.getBedAdmissions({ status: 'admitted' })
       ]);
-      setClaims(claimsData);
-      setProviders(providersData);
-      setMetrics(metricsData);
-      setAdmissions(admissionsData);
+      setClaims(prev => JSON.stringify(prev) === JSON.stringify(claimsData) ? prev : claimsData);
+      setProviders(prev => JSON.stringify(prev) === JSON.stringify(providersData) ? prev : providersData);
+      setMetrics(prev => JSON.stringify(prev) === JSON.stringify(metricsData) ? prev : metricsData);
+      setAdmissions(prev => JSON.stringify(prev) === JSON.stringify(admissionsData) ? prev : admissionsData);
     } catch (e) {
       console.error('Failed to load insurance data:', e);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 

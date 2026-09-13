@@ -21,7 +21,7 @@ import {
   Wallet,
   Pill
 } from 'lucide-react';
-import { storage, type Doctor, type Receipt as ReceiptType, type Prescription, type ReceiptPaperType, type PrescriptionPaperType, type FollowUp } from '../lib/storage';
+import { storage, isAdvanceDepositReceipt, type Doctor, type Receipt as ReceiptType, type Prescription, type ReceiptPaperType, type PrescriptionPaperType, type FollowUp } from '../lib/storage';
 import type { Tab } from './layout/Sidebar';
 import '../styles/components/Dashboard.css';
 import { useToast } from './ui/Toast';
@@ -645,11 +645,15 @@ const Dashboard: React.FC<DashboardProps> = ({
                             {rec.patientId}
                           </span>
                         )}
-                        {rec.billType === 'FACILITY' && (
-                          <span style={{ fontSize: '0.65rem', background: '#f3e8ff', color: '#7e22ce', border: '1px solid #e9d5ff', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>
-                            FACILITY {rec.roomNumber ? `• ${rec.roomNumber}` : ''}
+                        {isAdvanceDepositReceipt(rec) ? (
+                          <span style={{ fontSize: '0.65rem', background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>
+                            ADVANCE DEPOSIT {rec.roomNumber ? `• ${rec.roomNumber}` : ''}
                           </span>
-                        )}
+                        ) : rec.billType === 'FACILITY' ? (
+                          <span style={{ fontSize: '0.65rem', background: '#f3e8ff', color: '#7e22ce', border: '1px solid #e9d5ff', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>
+                            DISCHARGE BILL {rec.roomNumber ? `• ${rec.roomNumber}` : ''}
+                          </span>
+                        ) : null}
                         <span className="activity-meta-tag">
                           {rec.patientAge ? `${rec.patientAge}y` : ''} {rec.patientGender ? `• ${rec.patientGender}` : ''}
                         </span>

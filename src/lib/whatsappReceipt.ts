@@ -1,5 +1,5 @@
 import { format } from 'date-fns';
-import type { Receipt } from './storage';
+import { type Receipt, isAdvanceDepositReceipt } from './storage';
 
 /**
  * Normalizes phone numbers to international format (defaulting to 91 for 10-digit Indian numbers)
@@ -22,6 +22,7 @@ export function cleanPhoneNumber(phone: string): string {
  */
 export function formatReceiptWhatsAppMessage(receipt: Receipt): string {
   const formattedDate = receipt.date ? receipt.date.split(' ')[0] : format(new Date(), 'yyyy-MM-dd');
+  const isAdvance = isAdvanceDepositReceipt(receipt);
   const isFacility = receipt.billType === 'FACILITY';
   const itemsText = (receipt.items || [])
     .filter(item => item.description)
@@ -33,9 +34,15 @@ export function formatReceiptWhatsAppMessage(receipt: Receipt): string {
 
   const totalNum = typeof receipt.total === 'number' ? receipt.total : parseFloat(receipt.total as any) || 0;
 
-  let message = `🏥 *BUVORA CLINIC - ${isFacility ? 'INPATIENT & FACILITY BILL' : 'MEDICAL INVOICE'}*\n`;
+  const headerTitle = isAdvance
+    ? 'IPD ADMISSION ADVANCE DEPOSIT RECEIPT'
+    : isFacility
+    ? 'INPATIENT & DISCHARGE BILL'
+    : 'MEDICAL INVOICE';
+
+  let message = `🏥 *BUVORA CLINIC - ${headerTitle}*\n`;
   message += `━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-  message += `📄 *Bill No:* #${receipt.receiptNumber}\n`;
+  message += `📄 *${isAdvance ? 'Deposit Receipt No' : 'Bill No'}:* #${receipt.receiptNumber}\n`;
   message += `📅 *Date:* ${formattedDate}\n`;
   if (isFacility && receipt.roomNumber) {
     message += `🛏️ *Room / Bed:* ${receipt.roomNumber}\n`;

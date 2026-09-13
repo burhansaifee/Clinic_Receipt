@@ -165,11 +165,12 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, onPrintReque
   useEffect(() => {
     const updateReceiptNum = async () => {
       if (!initialData || !initialData.id || !initialData.receiptNumber) {
-        setReceiptNumber(await storage.getNextReceiptNumber(paymentMethod === 'FREE'));
+        const docId = selectedDoctorId || (doctors.length > 0 ? doctors[0].id : undefined);
+        setReceiptNumber(await storage.getNextReceiptNumber(paymentMethod === 'FREE', docId));
       }
     };
     updateReceiptNum();
-  }, [paymentMethod, initialData]);
+  }, [paymentMethod, selectedDoctorId, initialData, doctors]);
 
   useEffect(() => {
     if (shouldFocusLastItem.current && formRef.current) {
@@ -280,6 +281,26 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, onPrintReque
 
   const effectiveQrText = getEffectiveQrText();
 
+  const resetForm = async () => {
+    setPatientName('');
+    setPatientPhone('');
+    setPatientAge('');
+    setAgeYears('');
+    setAgeMonths('');
+    setPatientGender('Male');
+    setPaymentMethod('CASH');
+    setItems([{ id: crypto.randomUUID(), description: 'Consultation Fee', amount: 500 }]);
+    setIsReturningPatient(false);
+    setAppointmentDate(format(new Date(), 'yyyy-MM-dd'));
+    try {
+      const nextPid = await storage.getNextPatientId();
+      setPatientId(nextPid);
+      const docId = selectedDoctorId || (doctors.length > 0 ? doctors[0].id : undefined);
+      const nextRec = await storage.getNextReceiptNumber(false, docId);
+      setReceiptNumber(nextRec);
+    } catch (_) {}
+  };
+
   const handleSave = async (e: React.FormEvent, shouldPrint: boolean = false, shouldSendWhatsApp: boolean = false) => {
     e.preventDefault();
     
@@ -299,10 +320,14 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, onPrintReque
 
     const doctor = doctors.find(d => d.id === selectedDoctorId);
     const isNew = !initialData || !initialData.id;
+    let finalReceiptNumber = receiptNumber;
+    if (isNew && (!finalReceiptNumber || finalReceiptNumber.trim() === '')) {
+      finalReceiptNumber = await storage.getNextReceiptNumber(paymentMethod === 'FREE', selectedDoctorId);
+    }
     
     const receipt: Receipt = {
       id: isNew ? crypto.randomUUID() : initialData.id,
-      receiptNumber,
+      receiptNumber: finalReceiptNumber,
       date: appointmentDate,
       patientId: patientId.trim() || undefined,
       patientName,
@@ -346,6 +371,14 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({ doctors, onSave, onPrintReque
       if (shouldPrint) {
         onPrintRequest(receipt);
       }
+
+      if (isNew) {
+        toast(`Receipt #${receipt.receiptNumber} saved successfully!`, { type: 'success' });
+        await resetForm();
+      } else {
+        toast(`Receipt #${receipt.receiptNumber} updated successfully!`, { type: 'success' });
+      }
+
       onSave();
     } catch (err: any) {
       console.error('Failed to save receipt:', err);

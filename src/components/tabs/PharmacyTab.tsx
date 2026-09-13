@@ -111,8 +111,8 @@ export const PharmacyTab: React.FC<PharmacyTabProps> = () => {
   const categories = ['All', 'Tablet', 'Capsule', 'Syrup', 'Injection', 'IV Fluid', 'Ointment', 'Drops', 'Inhaler', 'Surgical'];
 
   // Load all data
-  const loadData = async () => {
-    setIsLoading(true);
+  const loadData = async (silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
       const [medsData, batchesData, salesData, rxData, metricsData, indentsData, paperSettings, profileData] = await Promise.all([
         storage.getMedicines(),
@@ -124,12 +124,12 @@ export const PharmacyTab: React.FC<PharmacyTabProps> = () => {
         storage.getPrintPaperSettings().catch(() => ({ receiptPaper: 'A5' as const })),
         storage.getClinicProfile().catch(() => ({ clinicName: 'Buvora Clinic' }))
       ]);
-      setMedicines(medsData);
-      setBatches(batchesData);
-      setSales(salesData);
-      setPrescriptions(rxData);
-      setMetrics(metricsData);
-      setPendingIndents(indentsData || []);
+      setMedicines(prev => JSON.stringify(prev) === JSON.stringify(medsData) ? prev : medsData);
+      setBatches(prev => JSON.stringify(prev) === JSON.stringify(batchesData) ? prev : batchesData);
+      setSales(prev => JSON.stringify(prev) === JSON.stringify(salesData) ? prev : salesData);
+      setPrescriptions(prev => JSON.stringify(prev) === JSON.stringify(rxData) ? prev : rxData);
+      setMetrics(prev => JSON.stringify(prev) === JSON.stringify(metricsData) ? prev : metricsData);
+      setPendingIndents(prev => JSON.stringify(prev) === JSON.stringify(indentsData || []) ? prev : (indentsData || []));
       if (paperSettings?.receiptPaper) {
         setReceiptPaperType(paperSettings.receiptPaper as any);
       }
@@ -138,9 +138,9 @@ export const PharmacyTab: React.FC<PharmacyTabProps> = () => {
       }
     } catch (err: any) {
       console.error('Failed to load pharmacy data:', err);
-      toast('Failed to load pharmacy data', { type: 'error' });
+      if (!silent) toast('Failed to load pharmacy data', { type: 'error' });
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
@@ -149,11 +149,11 @@ export const PharmacyTab: React.FC<PharmacyTabProps> = () => {
     const handleSync = (e: any) => {
       const dt = e?.detail?.dataType;
       if (!dt || dt === 'medicines' || dt === 'prescriptions' || dt === 'sales' || dt === 'indents' || dt === 'all') {
-        loadData();
+        loadData(true);
       }
     };
     window.addEventListener('buvora-data-updated', handleSync);
-    const interval = setInterval(loadData, 5000);
+    const interval = setInterval(() => loadData(true), 5000);
     return () => {
       window.removeEventListener('buvora-data-updated', handleSync);
       clearInterval(interval);
@@ -2084,15 +2084,11 @@ export const PharmacyTab: React.FC<PharmacyTabProps> = () => {
       <>
         {/* Dynamic @page style for accurate printer margins */}
         <style dangerouslySetInnerHTML={{
-          __html: `
-            @media print {
-              ${receiptPaperType === 'Thermal80' ? '@page { size: 80mm auto; margin: 2mm 3mm; }' :
-                receiptPaperType === 'Thermal58' ? '@page { size: 58mm auto; margin: 1mm 2mm; }' :
-                receiptPaperType === 'A6' ? '@page { size: A6 portrait; margin: 0.5cm; }' :
-                receiptPaperType === 'A4' ? '@page { size: A4 portrait; margin: 1cm; }' :
-                '@page { size: A5 portrait; margin: 0.8cm; }'}
-            }
-          `
+          __html: receiptPaperType === 'Thermal80' ? '@page { size: 80mm auto; margin: 2mm 3mm; }' :
+            receiptPaperType === 'Thermal58' ? '@page { size: 58mm auto; margin: 1mm 2mm; }' :
+            receiptPaperType === 'A6' ? '@page { size: A6 portrait; margin: 0.5cm; }' :
+            receiptPaperType === 'A4' ? '@page { size: A4 portrait; margin: 1cm; }' :
+            '@page { size: A5 portrait; margin: 0.8cm; }'
         }} />
 
         <div id="pharmacy-print-slip" className={`print-only paper-${receiptPaperType.toLowerCase()}`}>

@@ -53,12 +53,12 @@ export const NursingStationTab: React.FC<NursingStationTabProps> = ({
         storage.getBeds(),
         storage.getBedAdmissions({ status: 'admitted', limit: 100 })
       ]);
-      setWards(w || []);
-      setBeds(b || []);
-      setAdmissions(a || []);
+      setWards(prev => JSON.stringify(prev) === JSON.stringify(w || []) ? prev : (w || []));
+      setBeds(prev => JSON.stringify(prev) === JSON.stringify(b || []) ? prev : (b || []));
+      setAdmissions(prev => JSON.stringify(prev) === JSON.stringify(a || []) ? prev : (a || []));
     } catch (err) {
       console.error('Failed to load nursing ward data:', err);
-      toast('Failed to refresh nursing roster', { type: 'error' });
+      if (!silent) toast('Failed to refresh nursing roster', { type: 'error' });
     } finally {
       if (!silent) setIsLoading(false);
     }

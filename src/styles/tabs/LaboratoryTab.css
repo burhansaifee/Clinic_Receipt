@@ -106,8 +106,49 @@
 }
 
 @media print {
-  .no-print,
-  .laboratory-container {
+  .laboratory-screen-ui,
+  .laboratory-header,
+  .lab-stats-grid,
+  .lab-nav-tabs,
+  .lab-content-pane,
+  .lab-filter-row {
     display: none !important;
+  }
+
+  .modal-backdrop {
+    position: static !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  .modal-content {
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    overflow: visible !important;
+    background: transparent !important;
+  }
+
+  #printable-lab-report {
+    display: block !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
+  #printable-lab-report * {
+    visibility: visible !important;
   }
 }
